@@ -645,6 +645,11 @@ function BotListItem({
         size={56}
         motion={mascotMotion?.kind ?? "none"}
         motionKey={mascotMotion?.nonce ?? 0}
+        // The list is as long as the bot roster and every animated mascot
+        // runs the morph engine on every frame. The ones worth the frames are
+        // the row you are in, the ones actually doing something, and whoever
+        // has a motion beat playing; the rest hold their resting face.
+        animated={selected || bot.busy === true || mascotMotion != null}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">

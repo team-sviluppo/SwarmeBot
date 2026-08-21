@@ -8,6 +8,11 @@ import { z } from "zod";
 
 import { writeFileAtomic } from "./atomic.ts";
 import type { InstanceConfigMap } from "./contracts.ts";
+import {
+  LITELLM_BASE_URL_ENV,
+  LITELLM_DEFAULT_BASE_URL,
+  normalizeGatewayBaseUrl,
+} from "./drivers/local-inject.ts";
 import { parseJson, schemaIssue, type JsonObject, type JsonValue } from "./schema.ts";
 
 const optionalText = z.string().optional();
@@ -65,7 +70,17 @@ const appConfigSchema = z.object({
   vps: vpsConfigSchema.optional(),
   /** OpenCode Go key; persisted write-only and passed only to its child. */
   opencodeGo: z.object({ apiKey: optionalText }).optional(),
-  litellmHextra: z.object({ apiKey: optionalText }).optional(),
+  /** LiteLLM gateway: the key, plus the endpoint it authenticates against —
+   * every user runs their own proxy, so the URL is a setting, not a build
+   * constant. Empty means "use the shipped default". */
+  litellmHextra: z
+    .object({
+      apiKey: optionalText,
+      baseUrl: z.string().refine((value) => value === "" || normalizeGatewayBaseUrl(value) !== null, {
+        message: "must be an http(s) URL",
+      }).optional(),
+    })
+    .optional(),
   /** Voice credentials and the selected voice id. */
   tts: z.object({ key: optionalText, voice: optionalText }).optional(),
   /** Non-secret profile details shown in the sidebar. */
@@ -83,7 +98,7 @@ export interface AppConfig {
   /** A named host from the user's SSH config. Authentication stays with SSH. */
   vps?: { sshAlias?: string };
   opencodeGo?: { apiKey?: string };
-  litellmHextra?: { apiKey?: string };
+  litellmHextra?: { apiKey?: string; baseUrl?: string };
   tts?: { key?: string; voice?: string };
   profile?: { name?: string; email?: string };
   rooms?: { turnTimeoutMinutes: number };
@@ -107,6 +122,22 @@ export function parseConfigPatch(value: JsonValue): ConfigPatch {
 
 export function vpsSshAlias(cfg: AppConfig): string | null {
   return isValidSshAlias(cfg.vps?.sshAlias) ? cfg.vps.sshAlias : null;
+}
+
+/** The LiteLLM endpoint this workspace talks to: the user's setting when it
+ * parses, the shipped gateway otherwise. */
+export function litellmBaseUrl(cfg: AppConfig): string {
+  return normalizeGatewayBaseUrl(cfg.litellmHextra?.baseUrl) ?? LITELLM_DEFAULT_BASE_URL;
+}
+
+/** Non-secret endpoints the config owns but code outside the fleet reads off
+ * the environment: every driver's Custom list probes the LiteLLM gateway
+ * through process.env, not through its own instance env, so a saved URL has
+ * to reach process.env as well — the mirror image of syncCredentialEnv. */
+export function syncEndpointEnv(cfg: AppConfig): void {
+  const baseUrl = normalizeGatewayBaseUrl(cfg.litellmHextra?.baseUrl);
+  if (baseUrl) process.env[LITELLM_BASE_URL_ENV] = baseUrl;
+  else delete process.env[LITELLM_BASE_URL_ENV];
 }
 
 export function roomTurnTimeoutMinutes(cfg: AppConfig): number {
@@ -226,9 +257,32 @@ export const PROVIDER_CREDENTIAL_ENV = [
   "CURSOR_AUTH_TOKEN",
 ] as const;
 
+/** Sections/fields the desktop shell keeps OS-encrypted, as `[section,
+ * field]` pairs saveConfig() can be asked to REMOVE from config.json.
+ *
+ * Removal, not a "" tombstone: the shell reads a plaintext "" at the next
+ * boot as "the user cleared this credential" and drops the encrypted copy
+ * (electron/workspace-credentials.mjs), which would delete the very key the
+ * user just saved. Absent means "already migrated — keep the stored one". */
+export const EXTERNAL_SECRET_FIELDS = [
+  ["xai", "key"],
+  ["composio", "apiKey"],
+  ["box", "token"],
+  ["opencodeGo", "apiKey"],
+  ["litellmHextra", "apiKey"],
+  ["tts", "key"],
+] as const;
+
 /** Merge a partial config into ~/.swarmebot/config.json (secrets never
- * echoed back — callers report configured-or-not booleans only). */
-export function saveConfig(patch: Partial<AppConfig>): void {
+ * echoed back — callers report configured-or-not booleans only).
+ *
+ * `remove` deletes fields after the merge — the only way to take a plaintext
+ * credential OUT of the file, since a merge can add or overwrite but never
+ * unset. */
+export function saveConfig(
+  patch: Partial<AppConfig>,
+  remove: ReadonlyArray<readonly [string, string]> = [],
+): void {
   const p = join(DATA_DIR, "config.json");
   let disk: JsonObject = {};
   try {
@@ -257,6 +311,13 @@ export function saveConfig(patch: Partial<AppConfig>): void {
       diskInstances[instanceId] = merged;
     }
     disk.instances = diskInstances;
+  }
+  for (const [section, field] of remove) {
+    const current = jsonObjectSchema.safeParse(disk[section]);
+    if (!current.success || !Object.hasOwn(current.data, field)) continue;
+    const rest = { ...current.data };
+    delete rest[field];
+    disk[section] = rest;
   }
   mkdirSync(DATA_DIR, { recursive: true });
   writeFileAtomic(p, JSON.stringify(disk, null, 2), { mode: 0o600 });
@@ -326,6 +387,10 @@ function injectedEnvironment(cfg: AppConfig, driver: string): Map<string, string
   if (driver === "opencodeGo" && cfg.opencodeGo?.apiKey) environment.set("OPENCODE_API_KEY", cfg.opencodeGo.apiKey);
   if (driver === "litellm" && cfg.litellmHextra?.apiKey) {
     environment.set("LITELLMHEXTRA_AUTH_KEY", cfg.litellmHextra.apiKey);
+  }
+  if (driver === "litellm") {
+    const baseUrl = litellmBaseUrl(cfg);
+    if (baseUrl !== LITELLM_DEFAULT_BASE_URL) environment.set(LITELLM_BASE_URL_ENV, baseUrl);
   }
   return environment;
 }

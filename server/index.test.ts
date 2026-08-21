@@ -470,8 +470,19 @@ describe("harness HTTP API", () => {
     const named = uploaded.bot.mascotAvatarImage;
     // A bare generated filename, which is exactly what the serve route takes.
     expect(named).toMatch(/^[A-Za-z0-9-]+\.png$/);
-    expect(uploaded.bot.mascotAvatarSheetRow).toBe(0);
+    // A 1x1 photo is not a 9x8 grid, so it stays a still image.
+    expect(uploaded.bot.mascotAvatarSheetRow ?? null).toBeNull();
     expect((await fetch(`${BASE}/api/attachments/${named}`)).status).toBe(200);
+
+    // A picture shaped like the 9x8 sheet arrives animated on its first row.
+    const sheetPng = Buffer.alloc(24);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(sheetPng, 0);
+    sheetPng.write("IHDR", 12, "ascii");
+    sheetPng.writeUInt32BE(8 * 32, 16);
+    sheetPng.writeUInt32BE(9 * 32, 20);
+    const sheet = await upload("image/png", new Uint8Array(sheetPng));
+    expect(sheet.status).toBe(200);
+    expect(((await sheet.json()) as { bot: { mascotAvatarSheetRow?: number } }).bot.mascotAvatarSheetRow).toBe(0);
 
     const row = await api("PATCH", `/api/bots/${bot.id}`, { mascotAvatarSheetRow: 3 });
     expect(row.status).toBe(200);
@@ -1201,14 +1212,18 @@ describe("harness HTTP API", () => {
     expect(saved.status).toBe(200);
     expect(saved.body.composio).toEqual({ configured: true, mode: "self-hosted" });
     expect(saved.body.opencodeGo).toEqual({ configured: true });
-    expect(saved.body.litellmHextra).toEqual({ configured: true });
+    expect(saved.body.litellmHextra).toMatchObject({ configured: true });
     expect(saved.body.profile).toEqual({ name: "External Store", email: "" });
     expect(JSON.stringify(saved.body)).not.toContain("ak_good");
 
+    // Externally stored secrets leave NO field behind — not the plaintext and
+    // not a "" tombstone, which the desktop shell would read at the next boot
+    // as "the user cleared it" and use to delete the encrypted copy.
     const disk = JSON.parse(readFileSync(join(home, ".swarmebot", "config.json"), "utf8"));
-    expect(disk.composio).toMatchObject({ apiKey: "", sessionId: "trs_config_test" });
-    expect(disk.opencodeGo).toEqual({ apiKey: "" });
-    expect(disk.litellmHextra).toEqual({ apiKey: "" });
+    expect(disk.composio).toMatchObject({ sessionId: "trs_config_test" });
+    expect(disk.composio).not.toHaveProperty("apiKey");
+    expect(disk.opencodeGo).toEqual({});
+    expect(disk.litellmHextra).toEqual({});
     expect(disk.profile).toEqual({ name: "External Store" });
     expect(JSON.stringify(disk)).not.toContain("ak_good");
     expect(JSON.stringify(disk)).not.toContain("opencode-external");
@@ -1299,12 +1314,27 @@ describe("harness HTTP API", () => {
   it("stores LiteLLM Hextra credentials as a configured-only status", async () => {
     const put = await api("PUT", "/api/config", { litellmHextra: { apiKey: "hextra-secret" } });
     expect(put.status).toBe(200);
-    expect(put.body.litellmHextra).toEqual({ configured: true });
+    expect(put.body.litellmHextra).toEqual({ configured: true, baseUrl: "https://litellm.hextra.it/v1" });
     expect(JSON.stringify(put.body)).not.toContain("hextra-secret");
 
     const after = await api("GET", "/api/config");
-    expect(after.body.litellmHextra).toEqual({ configured: true });
+    expect(after.body.litellmHextra).toEqual({ configured: true, baseUrl: "https://litellm.hextra.it/v1" });
     expect(JSON.stringify(after.body)).not.toContain("hextra-secret");
+  });
+
+  it("takes a per-user LiteLLM gateway URL and echoes it back normalized", async () => {
+    const bad = await api("PUT", "/api/config", { litellmHextra: { baseUrl: "not a url" } });
+    expect(bad.status).toBe(400);
+
+    // a bare origin is what users paste — /v1 is added for them
+    const saved = await api("PUT", "/api/config", { litellmHextra: { baseUrl: "https://llm.example.com" } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.litellmHextra.baseUrl).toBe("https://llm.example.com/v1");
+    expect((await api("GET", "/api/config")).body.litellmHextra.baseUrl).toBe("https://llm.example.com/v1");
+
+    const cleared = await api("PUT", "/api/config", { litellmHextra: { baseUrl: "" } });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.litellmHextra.baseUrl).toBe("https://litellm.hextra.it/v1");
   });
 
   it("rejects a non-string OpenCode Go API key", async () => {

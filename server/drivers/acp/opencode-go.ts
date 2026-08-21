@@ -93,7 +93,7 @@ export function ensureOpenCodeInjectModel(
 ): string {
   const inject = decodeInjectId(modelId);
   if (!inject) return modelId;
-  const host = localHost(inject.host);
+  const host = localHost(inject.host, env);
   if (!host) return modelId;
 
   const native = `${inject.host}/${inject.model}`;

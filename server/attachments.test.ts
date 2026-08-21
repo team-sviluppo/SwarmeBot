@@ -10,7 +10,72 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 const DATA_ROOT = mkdtempSync(join(tmpdir(), "omb-attachments-"));
 process.env.OMB_DATA_DIR = join(DATA_ROOT, "data");
 
-const { ATTACHMENTS_DIR, IMAGE_MAX_BYTES, extensionForMime, readAttachment, saveImage } = await import("./attachments.ts");
+const {
+  ATTACHMENTS_DIR,
+  IMAGE_MAX_BYTES,
+  extensionForMime,
+  imageDimensions,
+  looksLikeSpriteSheet,
+  readAttachment,
+  saveImage,
+} = await import("./attachments.ts");
+
+/** A PNG header of the given size — only the bytes the size reader looks at. */
+function png(width: number, height: number): Buffer {
+  const bytes = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0);
+  bytes.write("IHDR", 12, "ascii");
+  bytes.writeUInt32BE(width, 16);
+  bytes.writeUInt32BE(height, 20);
+  return bytes;
+}
+
+describe("imageDimensions", () => {
+  it("reads a PNG header", () => {
+    expect(imageDimensions(png(320, 360))).toEqual({ width: 320, height: 360 });
+  });
+
+  it("reads a GIF screen size", () => {
+    const gif = Buffer.alloc(10);
+    gif.write("GIF89a", 0, "ascii");
+    gif.writeUInt16LE(64, 6);
+    gif.writeUInt16LE(72, 8);
+    expect(imageDimensions(gif)).toEqual({ width: 64, height: 72 });
+  });
+
+  it("reads a JPEG frame header past its APP segments", () => {
+    const jpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      Buffer.from([0xff, 0xe0, 0x00, 0x04, 0x00, 0x00]), // APP0, skipped
+      Buffer.from([0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0x68, 0x02, 0x80]),
+      Buffer.alloc(4),
+    ]);
+    expect(imageDimensions(jpeg)).toEqual({ width: 640, height: 360 });
+  });
+
+  it("gives up on bytes it does not recognise", () => {
+    expect(imageDimensions(Buffer.from("not an image"))).toBeNull();
+  });
+});
+
+describe("looksLikeSpriteSheet", () => {
+  it("accepts a 9x8 grid of square frames", () => {
+    expect(looksLikeSpriteSheet(png(8 * 40, 9 * 40))).toBe(true);
+    expect(looksLikeSpriteSheet(png(8, 9))).toBe(true);
+  });
+
+  it("refuses a still photo — square, 3:2, or off-grid", () => {
+    expect(looksLikeSpriteSheet(png(512, 512))).toBe(false);
+    expect(looksLikeSpriteSheet(png(1200, 800))).toBe(false);
+    expect(looksLikeSpriteSheet(png(320, 359))).toBe(false);
+    // Divides the grid, but the frames would not be square.
+    expect(looksLikeSpriteSheet(png(8 * 40, 9 * 41))).toBe(false);
+  });
+
+  it("refuses bytes whose size it cannot read", () => {
+    expect(looksLikeSpriteSheet(Buffer.from("nope"))).toBe(false);
+  });
+});
 
 describe("extensionForMime", () => {
   it("maps the accepted image mimes to extensions", () => {

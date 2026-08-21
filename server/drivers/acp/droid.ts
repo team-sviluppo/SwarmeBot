@@ -79,7 +79,7 @@ export function ensureDroidInjectModel(
 ): string {
   const inject = decodeInjectId(modelId);
   if (!inject) return modelId;
-  const host = localHost(inject.host);
+  const host = localHost(inject.host, env);
   if (!host) return modelId;
 
   const id = droidInjectId(inject.host, inject.model);

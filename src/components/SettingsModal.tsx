@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Coins, KeyRound, Monitor, Smartphone, Terminal, User, Volume2, X } from "lucide-react";
 import { useStore, type AppSettingsSection } from "@/state/store";
 import { analyticsEnabled, setAnalyticsEnabled } from "@/lib/analytics";
-import { ApiKeyRow, VpsConnection } from "./ApiKeys";
+import { ApiKeyRow, LitellmEndpoint, VpsConnection } from "./ApiKeys";
 import { useUpdaterState } from "@/lib/updater";
 import { EnginesSettings } from "./EnginesSettings";
 import { LocalComputerSection } from "./LocalComputerSection";
@@ -264,6 +264,7 @@ export function SettingsModal() {
                   <VpsConnection />
                   <ApiKeyRow section="opencodeGo" />
                   <ApiKeyRow section="litellmHextra" />
+                  <LitellmEndpoint />
                   <details className="rounded-lg border border-hairline/40 bg-inset px-3 py-2">
                     <summary className="cursor-pointer text-[13px] text-ink-secondary">Self-host connected apps</summary>
                     <div className="mt-3">

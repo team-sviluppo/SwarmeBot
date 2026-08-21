@@ -85,3 +85,86 @@ function mimeForExt(ext: string): string {
       return "application/octet-stream";
   }
 }
+
+/**
+ * Pixel size of an image, read from its header — enough to tell an uploaded
+ * sprite sheet from an ordinary photo without decoding the whole file.
+ * Returns null for anything whose header we do not recognise, which the
+ * callers treat as "not a sheet".
+ */
+export function imageDimensions(bytes: Buffer): { width: number; height: number } | null {
+  // PNG: 8-byte signature, then an IHDR chunk whose first two fields are the
+  // dimensions as big-endian uint32s.
+  if (bytes.byteLength >= 24 && bytes.subarray(0, 8).equals(PNG_MAGIC)) {
+    if (bytes.subarray(12, 16).toString("ascii") !== "IHDR") return null;
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  }
+  // GIF: "GIF87a"/"GIF89a", then the logical screen size as little-endian
+  // uint16s.
+  if (bytes.byteLength >= 10 && bytes.subarray(0, 3).toString("ascii") === "GIF") {
+    return { width: bytes.readUInt16LE(6), height: bytes.readUInt16LE(8) };
+  }
+  // WebP: RIFF container, dimensions laid out differently per codec chunk.
+  if (
+    bytes.byteLength >= 30 &&
+    bytes.subarray(0, 4).toString("ascii") === "RIFF" &&
+    bytes.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    const chunk = bytes.subarray(12, 16).toString("ascii");
+    if (chunk === "VP8 ") return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
+    if (chunk === "VP8L") {
+      const bits = bytes.readUInt32LE(21);
+      return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+    }
+    if (chunk === "VP8X") {
+      return {
+        width: (bytes.readUIntLE(24, 3) & 0xffffff) + 1,
+        height: (bytes.readUIntLE(27, 3) & 0xffffff) + 1,
+      };
+    }
+    return null;
+  }
+  // JPEG: walk the marker segments to the first frame header (SOFn), whose
+  // payload carries height then width as big-endian uint16s.
+  if (bytes.byteLength >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let at = 2;
+    while (at + 9 < bytes.byteLength) {
+      if (bytes[at] !== 0xff) {
+        at++;
+        continue;
+      }
+      const marker = bytes[at + 1]!;
+      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+        at += 2;
+        continue;
+      }
+      const length = bytes.readUInt16BE(at + 2);
+      // SOF0..SOF15, minus the DHT/JPG/DAC markers interleaved in that range.
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { width: bytes.readUInt16BE(at + 7), height: bytes.readUInt16BE(at + 5) };
+      }
+      at += 2 + length;
+    }
+    return null;
+  }
+  return null;
+}
+
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** The grid an uploaded sprite sheet is always laid out on: 9 rows of 8
+ * square frames, mirroring SHEET_ROWS/SHEET_COLS in src/lib/sprite-sheet.ts. */
+const SHEET_ROWS = 9;
+const SHEET_COLS = 8;
+
+/**
+ * Whether an uploaded picture is a sprite sheet rather than a still photo:
+ * its pixels must divide into the 9x8 grid exactly, with square frames. A
+ * photo — square, 3:2, anything else — fails one of those and stays still.
+ */
+export function looksLikeSpriteSheet(bytes: Buffer): boolean {
+  const size = imageDimensions(bytes);
+  if (!size || size.width <= 0 || size.height <= 0) return false;
+  if (size.width % SHEET_COLS !== 0 || size.height % SHEET_ROWS !== 0) return false;
+  return size.width / SHEET_COLS === size.height / SHEET_ROWS;
+}

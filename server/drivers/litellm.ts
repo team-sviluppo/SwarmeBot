@@ -33,9 +33,11 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
 
   async create(input: DriverCreateInput<Record<string, never>>): Promise<ProviderInstance> {
     const { instanceId } = input;
-    const host = localHost(HOST_ID);
-    if (!host) throw new Error("litellm_hextra host is not registered");
     const env: Record<string, string | undefined> = { ...process.env, ...input.environment };
+    // env first: the gateway endpoint is a user setting the fleet injects
+    // here, so the host must be resolved against THIS instance's env.
+    const host = localHost(HOST_ID, env);
+    if (!host) throw new Error("litellm_hextra host is not registered");
     const apiKey = hostApiKey(host, env);
     const hasKey = Boolean(host.apiKeyEnv && env[host.apiKeyEnv]);
     let models = EMPTY;

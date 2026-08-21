@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -11,8 +11,11 @@ import {
   parseConfigPatch,
   parseStoredConfig,
   roomTurnTimeoutMinutes,
+  litellmBaseUrl,
+  saveConfig,
   stripWorkspaceCredentialEnv,
   syncCredentialEnv,
+  syncEndpointEnv,
   vpsSshAlias,
   withInstanceCli,
   WORKSPACE_CREDENTIAL_ENV,
@@ -171,6 +174,51 @@ describe("LiteLLM Hextra configuration", () => {
     expect(instances.litellm.environment).toEqual({ LITELLMHEXTRA_AUTH_KEY: "hextra-secret" });
     expect(instances.grok.environment).toEqual({});
   });
+
+  it("falls back to the shipped gateway and normalizes a user endpoint", () => {
+    expect(litellmBaseUrl({})).toBe("https://litellm.hextra.it/v1");
+    expect(litellmBaseUrl({ litellmHextra: { baseUrl: "" } })).toBe("https://litellm.hextra.it/v1");
+    expect(litellmBaseUrl({ litellmHextra: { baseUrl: "https://llm.example.com" } })).toBe(
+      "https://llm.example.com/v1",
+    );
+    // a broken setting must not point the fleet at nothing
+    expect(litellmBaseUrl({ litellmHextra: { baseUrl: "nonsense" } })).toBe("https://litellm.hextra.it/v1");
+  });
+
+  it("injects a custom endpoint into Litellm instances, and nothing when it is the default", () => {
+    const custom = instanceConfigs({
+      litellmHextra: { baseUrl: "https://llm.example.com/v1" },
+      instances: { litellm: { driver: "litellm" }, grok: { driver: "grokAgent" } },
+    });
+    expect(custom.litellm.environment).toEqual({ LITELLMHEXTRA_BASE_URL: "https://llm.example.com/v1" });
+    expect(custom.grok.environment).toEqual({});
+
+    const shipped = instanceConfigs({ instances: { litellm: { driver: "litellm" } } });
+    expect(shipped.litellm.environment).toEqual({});
+  });
+
+  it("mirrors the endpoint into process.env for the fleet-wide Custom probes", () => {
+    syncEndpointEnv({ litellmHextra: { baseUrl: "https://llm.example.com" } });
+    expect(process.env.LITELLMHEXTRA_BASE_URL).toBe("https://llm.example.com/v1");
+    syncEndpointEnv({});
+    expect(process.env.LITELLMHEXTRA_BASE_URL).toBeUndefined();
+  });
+});
+
+describe("externally stored secrets", () => {
+  it("removes a plaintext credential field instead of tombstoning it", () => {
+    // A "" left in config.json is read at the next desktop boot as "the user
+    // cleared this key" and deletes the encrypted copy — the field has to go.
+    mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(
+      join(DATA_DIR, "config.json"),
+      JSON.stringify({ litellmHextra: { apiKey: "old-plaintext" }, profile: { name: "Ada" } }),
+    );
+    saveConfig({ litellmHextra: {}, profile: { name: "Grace" } }, [["litellmHextra", "apiKey"]]);
+    const disk = JSON.parse(readFileSync(join(DATA_DIR, "config.json"), "utf8"));
+    expect(disk.litellmHextra).toEqual({});
+    expect(disk.profile).toEqual({ name: "Grace" });
+  });
 });
 
 describe("credential env narrowing", () => {
@@ -241,6 +289,7 @@ describe("credential env preference", () => {
     // the desktop shell hands secrets to this process as env (from its
     // OS-encrypted store) and leaves the file without them — env must win
     // even over a leftover plaintext value
+    mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(
       join(DATA_DIR, "config.json"),
       JSON.stringify({
@@ -265,6 +314,7 @@ describe("credential env preference", () => {
   });
 
   it("falls back to the config file when the env var is unset (dev mode)", () => {
+    mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(
       join(DATA_DIR, "config.json"),
       JSON.stringify({ xai: { key: "file-xai" }, tts: { key: "file-tts" } }),

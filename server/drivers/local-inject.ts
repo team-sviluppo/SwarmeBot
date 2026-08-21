@@ -14,7 +14,17 @@ export interface LocalHost {
   baseUrl: string;
   apiKey?: string;
   apiKeyEnv?: string;
+  /** Env var that overrides baseUrl — a hosted gateway is one deployment of
+   * many, so its endpoint is a per-user setting like the key, not a build
+   * constant. Set by config.instanceConfigs() from config.json. */
+  baseUrlEnv?: string;
 }
+
+/** Shipped default for the LiteLLM gateway, and the env var a user's own
+ * endpoint arrives in. Both are exported so config validation and the driver
+ * agree on one source of truth. */
+export const LITELLM_DEFAULT_BASE_URL = "https://litellm.hextra.it/v1";
+export const LITELLM_BASE_URL_ENV = "LITELLMHEXTRA_BASE_URL";
 
 export const LOCAL_HOSTS: LocalHost[] = [
   { id: "omlx", label: "oMLX", baseUrl: "http://127.0.0.1:8080/v1", apiKey: "omlx" },
@@ -24,7 +34,13 @@ export const LOCAL_HOSTS: LocalHost[] = [
   { id: "lmstudio", label: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", apiKey: "lm-studio" },
   { id: "unsloth", label: "Unsloth", baseUrl: "http://127.0.0.1:8888/v1", apiKeyEnv: "UNSLOTH_STUDIO_AUTH_TOKEN" },
   { id: "unsloth_api", label: "Unsloth", baseUrl: "http://127.0.0.1:8888/v1", apiKeyEnv: "UNSLOTH_STUDIO_AUTH_TOKEN" },
-  { id: "litellm_hextra", label: "Litellm Hextra", baseUrl: "https://litellm.hextra.it/v1", apiKeyEnv: "LITELLMHEXTRA_AUTH_KEY" },
+  {
+    id: "litellm_hextra",
+    label: "Litellm Hextra",
+    baseUrl: LITELLM_DEFAULT_BASE_URL,
+    apiKeyEnv: "LITELLMHEXTRA_AUTH_KEY",
+    baseUrlEnv: LITELLM_BASE_URL_ENV,
+  },
 ];
 
 export const INJECT_SEP = "::";
@@ -55,8 +71,48 @@ export function decodeInjectId(id: string | null | undefined): { host: string; m
   return { host, model };
 }
 
-export function localHost(id: string): LocalHost | undefined {
-  return HOST_BY_ID.get(id);
+/** Accept what a user actually pastes for a gateway endpoint and return the
+ * OpenAI-compatible base every consumer here expects, or null if it is not a
+ * usable http(s) URL. A bare origin gets `/v1` appended: LiteLLM, vLLM and
+ * friends all serve the OpenAI routes there, and typing the suffix is the
+ * mistake this saves. */
+export function normalizeGatewayBaseUrl(raw: string | null | undefined): string | null {
+  const text = raw?.trim();
+  if (!text) return null;
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  url.hash = "";
+  url.search = "";
+  const path = url.pathname.replace(/\/+$/, "");
+  url.pathname = path || "/v1";
+  return url.toString().replace(/\/+$/, "");
+}
+
+/** A host's endpoint for this environment: the user's configured override
+ * when it parses, the shipped default otherwise (a broken setting must not
+ * silently point the fleet at nothing). */
+export function hostBaseUrl(host: LocalHost, env: Record<string, string | undefined> = process.env): string {
+  if (!host.baseUrlEnv) return host.baseUrl;
+  return normalizeGatewayBaseUrl(env[host.baseUrlEnv]) ?? host.baseUrl;
+}
+
+function resolveHost(host: LocalHost, env: Record<string, string | undefined>): LocalHost {
+  const baseUrl = hostBaseUrl(host, env);
+  return baseUrl === host.baseUrl ? host : { ...host, baseUrl };
+}
+
+export function localHost(
+  id: string,
+  env: Record<string, string | undefined> = process.env,
+): LocalHost | undefined {
+  const host = HOST_BY_ID.get(id);
+  return host && resolveHost(host, env);
 }
 
 export function injectedApiModel(id: string | null | undefined): string | null {
@@ -91,7 +147,7 @@ export function codexLocalProviderArgs(
 ): string[] {
   const inject = decodeInjectId(modelId);
   if (!inject || CODEX_RESERVED_PROVIDERS.has(inject.host)) return [];
-  const host = localHost(inject.host);
+  const host = localHost(inject.host, env);
   if (!host) return [];
   const envKey = `SWARMEBOT_LOCAL_${host.id.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
   env[envKey] = hostApiKey(host, env);
@@ -242,7 +298,7 @@ export async function probeLocalInjects(
 ): Promise<InjectedModel[]> {
   const allowed = hostIds ? new Set(hostIds) : null;
   const seenHosts = new Set<string>();
-  const hosts = LOCAL_HOSTS.filter((host) => {
+  const hosts = LOCAL_HOSTS.map((host) => resolveHost(host, env)).filter((host) => {
     if (allowed && !allowed.has(host.id)) return false;
     const key = host.baseUrl.replace(/\/$/, "");
     if (seenHosts.has(key)) return false;
@@ -312,7 +368,7 @@ export function applyOpenAIInject(
 ): { model: string | null; injected: boolean } {
   const inject = decodeInjectId(modelId);
   if (!inject) return { model: modelId ?? null, injected: false };
-  const host = localHost(inject.host);
+  const host = localHost(inject.host, env);
   if (!host) return { model: modelId ?? null, injected: false };
   const key = hostApiKey(host, env);
   env.OPENAI_BASE_URL = host.baseUrl;
@@ -327,7 +383,7 @@ export function applyClaudeInject(
 ): { model: string | null; injected: boolean } {
   const inject = decodeInjectId(modelId);
   if (!inject) return { model: modelId ?? null, injected: false };
-  const host = localHost(inject.host);
+  const host = localHost(inject.host, env);
   if (!host) return { model: modelId ?? null, injected: false };
   const key = hostApiKey(host, env);
   env.ANTHROPIC_BASE_URL = anthropicBaseUrl(host);

@@ -68,7 +68,7 @@ const CREDENTIALS: Record<
   litellmHextra: {
     label: "LiteLLM Hextra API key",
     placeholder: "Paste your LiteLLM Hextra API key",
-    description: "List and run models from the Hextra LiteLLM gateway in the Litellm harness.",
+    description: "List and run models from your LiteLLM gateway in the Litellm harness. Set the gateway URL below.",
     href: "https://docs.litellm.ai/docs/proxy/virtual_keys",
     linkLabel: "Open LiteLLM virtual key docs",
     optional: true,
@@ -299,6 +299,78 @@ export function VpsConnection() {
           title={!alias.trim() && configured ? "Remove the saved alias" : "Save"}
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : !alias.trim() && configured ? "Clear" : <><Check size={13} />Save</>}
+        </button>
+      </div>
+      {error && <div className="mt-1 text-[12px] text-danger">{error}</div>}
+    </div>
+  );
+}
+
+/** The LiteLLM gateway endpoint. Not a secret and not per-install: every
+ * user points the harness at their own proxy, so it lives beside the key
+ * instead of being baked into the build. Empty = the shipped default. */
+export function LitellmEndpoint() {
+  const { state, dispatch } = useStore();
+  const saved = state.config?.litellmHextra?.baseUrl ?? "";
+  const [url, setUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUrl(saved);
+  }, [saved]);
+
+  const dirty = url.trim() !== saved;
+
+  const save = () => {
+    if (saving || !dirty) return;
+    setSaving(true);
+    setError(null);
+    api("/api/config", {
+      method: "PUT",
+      body: JSON.stringify({ litellmHextra: { baseUrl: url.trim() } }),
+    })
+      .then((status: ConfigStatus) => {
+        dispatch({ type: "configStatus", config: status });
+        setUrl(status.litellmHextra?.baseUrl ?? "");
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-2 text-[13px] text-ink-secondary">
+        <span>LiteLLM gateway URL</span>
+      </div>
+      <div className="mb-1.5 text-[12px] leading-relaxed text-ink-secondary">
+        The OpenAI-compatible endpoint the key above authenticates against. A bare
+        origin gets <code>/v1</code> appended. Clear it to go back to the default.
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          inputMode="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+          placeholder="https://litellm.example.com/v1"
+          aria-label="LiteLLM gateway URL"
+          autoComplete="off"
+          spellCheck={false}
+          className="w-full rounded-lg border border-hairline/40 bg-inset px-3 py-2 text-[13px] text-ink placeholder:text-ink-secondary focus:border-hairline focus:outline-none"
+        />
+        <button
+          onClick={save}
+          disabled={saving || !dirty}
+          className={cn(
+            "flex w-[72px] shrink-0 items-center justify-center gap-1.5 rounded-lg py-2 text-[13px]",
+            !url.trim() ? "bg-raised text-danger hover:bg-raised-hover" : "bg-raised text-ink hover:bg-raised-hover",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+          )}
+          title={!url.trim() ? "Go back to the default gateway" : "Save"}
+        >
+          {saving ? <Loader2 size={13} className="animate-spin" /> : !url.trim() ? "Reset" : <><Check size={13} />Save</>}
         </button>
       </div>
       {error && <div className="mt-1 text-[12px] text-danger">{error}</div>}

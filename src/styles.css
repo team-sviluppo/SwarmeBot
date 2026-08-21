@@ -800,7 +800,9 @@ body {
 
 @keyframes ogb-sprite-sheet {
   to {
-    background-position-x: calc(-8 * var(--sheet-size));
+    /* Only as far as the row actually draws: short rows stop before the
+       blank cells the sheet is padded out with. */
+    background-position-x: calc(-1 * var(--sheet-frames, 8) * var(--sheet-size));
   }
 }
 

@@ -119,7 +119,7 @@ export function ensureGrokInjectSlug(
 ): string {
   const inject = decodeInjectId(modelId);
   if (!inject) return modelId;
-  const host = localHost(inject.host);
+  const host = localHost(inject.host, env);
   if (!host) return modelId;
 
   const path = join(grokHome(env), "config.toml");

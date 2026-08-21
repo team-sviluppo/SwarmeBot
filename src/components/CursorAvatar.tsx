@@ -1435,7 +1435,6 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
     }, [state, autoBlink, paused])
 
     useEffect(() => {
-      let frame = 0
       engine.current.last = performance.now()
 
       const draw = (e: typeof engine.current, now: number, spinTurn: number) => {
@@ -1532,12 +1531,10 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       }
 
       const step = (now: number) => {
-        frame = requestAnimationFrame(step)
         const e = engine.current
         const p = e.props
         const dt = Math.min((now - e.last) / 1000, 0.1)
         e.last = now
-        if (p.paused) return
 
         const f = p.spring ?? 7
         e.velocity += (-2 * f * e.velocity - f * f * (e.morph - 1)) * dt
@@ -1557,9 +1554,15 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
         draw(e, now, spinTurn)
       }
 
-      frame = requestAnimationFrame(step)
-      return () => cancelAnimationFrame(frame)
-    }, [])
+      // One frame either way, so a paused mascot shows its face instead of
+      // an empty body — the old loop bailed out before ever drawing it.
+      draw(engine.current, performance.now(), 0)
+      // Paused means paused: no frame callback at all. A settings gallery is
+      // two dozen mascots and a sidebar is one per bot, and every loop that
+      // exists costs something on every frame the app draws.
+      if (paused) return
+      return onAvatarFrame(step)
+    }, [paused])
 
     const paint = `url(#${uid}-grad)`
     const paintRef = useRef(paint)
@@ -1629,6 +1632,34 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
 )
 
 /* ----------------------------------------------------------------- helpers */
+
+/**
+ * One animation frame for every mascot on screen. Each avatar used to own its
+ * own requestAnimationFrame, so a sidebar of bots plus an open panel meant a
+ * dozen independent callbacks competing every frame; a single pump costs one,
+ * and stops entirely when the last animated mascot unmounts or pauses.
+ */
+const animating = new Set<(now: number) => void>()
+let pumpFrame = 0
+
+function pump(now: number) {
+  pumpFrame = requestAnimationFrame(pump)
+  // A copy: an avatar may unsubscribe (unmount) from inside its own frame.
+  for (const tick of [...animating]) tick(now)
+}
+
+function onAvatarFrame(tick: (now: number) => void): () => void {
+  animating.add(tick)
+  if (!pumpFrame) pumpFrame = requestAnimationFrame(pump)
+  return () => {
+    animating.delete(tick)
+    if (!animating.size && pumpFrame) {
+      cancelAnimationFrame(pumpFrame)
+      pumpFrame = 0
+    }
+  }
+}
+
 
 function displayed(e: { current: Ring[]; target: Ring[]; morph: number }): Ring[] {
   const m = clamp(e.morph, 0, 1)

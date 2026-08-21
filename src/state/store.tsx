@@ -197,9 +197,26 @@ export interface Bot {
   activeLeafId?: string | null;
 }
 
-/** The visible conversation: walk parentId links from the active leaf back
- * to the root. Falls back to the flat list for pre-branching payloads. */
+/**
+ * Memo per bot frame: the sidebar asks for every bot's branch on every store
+ * update — one per streamed frame — and each answer walks the whole thread.
+ * A bot object is replaced whenever it changes, so keying on it invalidates
+ * itself, and a WeakMap drops the entry with the frame.
+ *
+ * The walk itself: parentId links from the active leaf back to the root,
+ * falling back to the flat list for pre-branching payloads.
+ */
+const visibleByBot = new WeakMap<Bot, Message[]>();
+
 export function visibleMessages(bot: Bot): Message[] {
+  const memo = visibleByBot.get(bot);
+  if (memo) return memo;
+  const path = walkVisibleMessages(bot);
+  visibleByBot.set(bot, path);
+  return path;
+}
+
+function walkVisibleMessages(bot: Bot): Message[] {
   const leafId = bot.activeLeafId;
   if (!leafId) return bot.messages;
   const byId = new Map(bot.messages.map((m) => [m.id, m]));
@@ -232,7 +249,9 @@ export interface ConfigStatus {
   vps: { configured: boolean; sshAlias: string };
   rooms: { turnTimeoutMinutes: number };
   opencodeGo?: { configured: boolean };
-  litellmHextra?: { configured: boolean };
+  /** `baseUrl` is the gateway this workspace talks to — a setting, not a
+   * secret, so it comes back echoed (the shipped default when unset). */
+  litellmHextra?: { configured: boolean; baseUrl?: string };
   /** Voice (ElevenLabs). `configured` = a key is saved; `ready` = a key AND
    * a voice, which is what it takes to actually speak. The key itself is
    * never echoed back. */

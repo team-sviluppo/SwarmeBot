@@ -534,44 +534,65 @@ function PictureSection({
         {bot.mascotAvatarImage && (
           <div className="mt-3">
             <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-              Spritesheet row
+              How to use it
             </div>
             <p className="mt-1 text-[12px] text-ink-secondary">
-              9 rows × 8 frames. Pick one row to loop as this bot's avatar.
+              A still picture, or a 9 rows × 8 frames spritesheet animated one row at a time.
+              Uploading picks whichever the image's own shape says it is.
             </p>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {Array.from({ length: SHEET_ROWS }, (_, row) => {
-                const selected = clampSheetRow(bot.mascotAvatarSheetRow) === row;
+            <div className="mt-2 flex gap-2">
+              {[
+                { label: "Still image", sheet: false },
+                { label: "Spritesheet", sheet: true },
+              ].map((mode) => {
+                const on = (clampSheetRow(bot.mascotAvatarSheetRow) != null) === mode.sheet;
                 return (
                   <button
-                    key={row}
+                    key={mode.label}
                     type="button"
-                    onClick={() => patch({ mascotAvatarSheetRow: row })}
+                    onClick={() => patch({ mascotAvatarSheetRow: mode.sheet ? 0 : null })}
+                    aria-pressed={on}
                     className={cn(
-                      "flex flex-col items-center gap-1 rounded-xl bg-inset px-2 py-2 hover:bg-raised",
-                      selected && "ring-2 ring-accent-border",
+                      "rounded-lg px-3 py-1.5 text-[13px] font-medium",
+                      on ? "bg-raised text-ink ring-2 ring-accent-border" : "bg-inset text-ink-secondary hover:bg-raised hover:text-ink",
                     )}
-                    aria-pressed={selected}
-                    aria-label={`Animate sheet row ${row + 1}`}
                   >
-                    <SpriteSheetAvatar
-                      src={`/api/attachments/${encodeURIComponent(bot.mascotAvatarImage!)}`}
-                      row={row}
-                      size={44}
-                    />
-                    <span className="text-[11px] text-ink-secondary">{row + 1}</span>
+                    {mode.label}
                   </button>
                 );
               })}
             </div>
             {clampSheetRow(bot.mascotAvatarSheetRow) != null && (
-              <button
-                type="button"
-                onClick={() => patch({ mascotAvatarSheetRow: null })}
-                className="mt-2 text-[12px] text-ink-secondary hover:text-ink"
-              >
-                Use as a still image
-              </button>
+              <>
+                <div className="mt-3 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+                  Spritesheet row
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {Array.from({ length: SHEET_ROWS }, (_, row) => {
+                    const selected = clampSheetRow(bot.mascotAvatarSheetRow) === row;
+                    return (
+                      <button
+                        key={row}
+                        type="button"
+                        onClick={() => patch({ mascotAvatarSheetRow: row })}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-xl bg-inset px-2 py-2 hover:bg-raised",
+                          selected && "ring-2 ring-accent-border",
+                        )}
+                        aria-pressed={selected}
+                        aria-label={`Animate sheet row ${row + 1}`}
+                      >
+                        <SpriteSheetAvatar
+                          src={`/api/attachments/${encodeURIComponent(bot.mascotAvatarImage!)}`}
+                          row={row}
+                          size={44}
+                        />
+                        <span className="text-[11px] text-ink-secondary">{row + 1}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -683,11 +704,38 @@ function PictureSection({
   );
 }
 
+/**
+ * False on the first render, true from the next frame. The appearance
+ * galleries below are twenty mascots and nine sheet previews — mounting them
+ * in the same commit as the panel is what makes opening it feel slow, so the
+ * panel paints first and they arrive a frame later into placeholders of the
+ * same size.
+ */
+function useAfterFirstPaint(): boolean {
+  const [painted, setPainted] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setPainted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return painted;
+}
+
+/** Same footprint as a gallery, none of its cost, for that one frame. */
+function GalleryPlaceholder({ count }: { count: number }) {
+  return (
+    <div className="grid grid-cols-5 gap-2" aria-hidden>
+      {Array.from({ length: count }, (_, cell) => (
+        <div key={cell} className="h-[58px] rounded-xl bg-inset" />
+      ))}
+    </div>
+  );
+}
+
 export function SettingsPanel({ bot }: { bot: Bot }) {
+  const painted = useAfterFirstPaint();
   const { state, dispatch } = useStore();
   const [voices, setVoices] = useState<Array<{ id: string; label: string; description?: string }>>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
-  const { capabilities } = useDesktopCapabilities();
   const patch = (
     p: Partial<
       Pick<
@@ -806,6 +854,9 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
               <div className="mb-2 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
                 Shape
               </div>
+              {!painted ? (
+                <GalleryPlaceholder count={MAUS_SILHOUETTE_IDS.length} />
+              ) : (
               <div className="grid grid-cols-5 gap-2">
                 {MAUS_SILHOUETTE_IDS.map((silhouette) => (
                   <button
@@ -828,10 +879,14 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                   </button>
                 ))}
               </div>
+              )}
 
               <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
                 Expression
               </div>
+              {!painted ? (
+                <GalleryPlaceholder count={PICKABLE_STATES.length} />
+              ) : (
               <div className="grid grid-cols-5 gap-2">
                 {PICKABLE_STATES.map((expression) => (
                   <button
@@ -854,6 +909,7 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                   </button>
                 ))}
               </div>
+              )}
 
               <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
                 Color

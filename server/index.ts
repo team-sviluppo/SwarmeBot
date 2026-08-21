@@ -21,6 +21,7 @@ import {
   AVATAR_IMAGE_MAX_BYTES,
   extensionForMime,
   IMAGE_MAX_BYTES,
+  looksLikeSpriteSheet,
   readAttachment,
   saveImage,
 } from "./attachments.ts";
@@ -46,11 +47,15 @@ import {
   roomTurnTimeoutMinutes,
   saveConfig,
   syncCredentialEnv,
+  syncEndpointEnv,
+  litellmBaseUrl,
+  EXTERNAL_SECRET_FIELDS,
   withInstanceCli,
   vpsSshAlias,
   DATA_DIR,
   EVENTS_DIR,
   NATIVE_DIR,
+  type AppConfig,
 } from "./config.ts";
 import { ComputerControl } from "./computer-control.ts";
 import { augmentedPath, findCliCandidates, resetPathCache } from "./env-path.ts";
@@ -118,6 +123,7 @@ const MIME: Record<string, string> = {
 
 ensureDirs();
 const cfg = loadConfig();
+syncEndpointEnv(cfg);
 const registry = new ProviderRegistry(BUILT_IN_DRIVERS);
 await registry.load(instanceConfigs(cfg));
 const bundledSkills = loadBundledSkills();
@@ -1431,7 +1437,9 @@ async function startTurn(
       const mountsComputerMcp = instance.adapter.capabilities.computerMcp === true;
       const mountsCloudComputer = mountsComputerMcp || instance.driverKind === "boxAgent";
       let previewCapture: (() => Promise<{ png: string; format: string }>) | null = null;
-      let computerKind: "box" | "vps" | "vm" | "local" | null = null;
+      // no "local": host CUA is disabled below, so nothing mounts the
+      // user's own desktop as a computer for a turn.
+      let computerKind: "box" | "vps" | "vm" | null = null;
 
       // Explicit destinations are strict. In particular, Local VM must never
       // fall through to host CUA and accidentally click on the user's Mac.
@@ -1581,8 +1589,6 @@ async function startTurn(
             ? " You have your own cloud computer. In Chrome, prefer browser_snapshot with browser_click/browser_fill for semantic, trusted actions; use screenshot/click/type_text for visual or non-browser UI, open_url for navigation, and computer_exec for Linux tasks. Every action already returns the resulting screen, so don't follow it with screenshot; batch predictable pixel actions with computer_batch."
             : computerKind === "vps"
               ? " You have your own self-hosted remote Linux computer through the official Cua tools. Its filesystem is disposable: everything on it is wiped whenever its container is recreated, so keep long-lived work somewhere durable — push it to a remote, or hand the results back in chat — instead of leaving it only on that computer. Inspect the desktop state before acting, prefer accessibility targets over raw coordinates, and act carefully."
-              : computerKind === "local"
-              ? " You can act on the user's computer through the computer tools — take a screenshot or read the desktop state first, prefer accessibility actions over raw coordinates, and act carefully."
               : "") +
           (computerKind
             ? " At a sign-in, password, MFA, CAPTCHA, or other protected-input step, stop and ask the user to complete it on the visible computer. Never type their password or ask them to paste a password or one-time code into chat."
@@ -2146,7 +2152,9 @@ function configStatus() {
     box: { configured: Boolean(cfg.box?.token) },
     vps: { configured: Boolean(vpsSshAlias(cfg)), sshAlias: vpsSshAlias(cfg) ?? "" },
     opencodeGo: { configured: Boolean(cfg.opencodeGo?.apiKey) },
-    litellmHextra: { configured: Boolean(cfg.litellmHextra?.apiKey) },
+    // the gateway URL is a setting, not a secret — echoed so Settings can
+    // show what this workspace is actually pointed at
+    litellmHextra: { configured: Boolean(cfg.litellmHextra?.apiKey), baseUrl: litellmBaseUrl(cfg) },
     // the chosen voice is a setting, not a secret; the key is reported the
     // same configured-or-not way as every other credential
     tts: tts.describeVoice(cfg),
@@ -3147,12 +3155,17 @@ const server = createServer(async (req, res) => {
       // Smaller than a chat attachment on purpose: a bot's picture is drawn
       // at 16 to 220 pixels in dozens of places at once, and every one of
       // them decodes the file it is given.
-      const saved = saveImage(await readRawBody(req, AVATAR_IMAGE_MAX_BYTES, "image"), mime);
+      const imageBytes = await readRawBody(req, AVATAR_IMAGE_MAX_BYTES, "image");
+      const saved = saveImage(imageBytes, mime);
       const patched = store.patchBot(bot.id, {
         mascotAvatarImage: basename(saved.path),
         mascotAvatar: null,
         mascotAvatarSvg: null,
-        mascotAvatarSheetRow: 0,
+        // A still photo and a 9x8 sprite sheet arrive through the same route,
+        // so the picture's own shape decides which it is: only a grid of
+        // square frames starts animated. Either way the appearance panel can
+        // switch it by hand afterwards.
+        mascotAvatarSheetRow: looksLikeSpriteSheet(imageBytes) ? 0 : null,
       });
       return json(res, 200, { bot: wireBot(patched!) });
     }
@@ -3850,19 +3863,22 @@ const server = createServer(async (req, res) => {
       if (externalSecretStorage) {
         // The packaged Electron caller commits supplied credentials to the
         // OS-encrypted store before entering this route. Persist every
-        // non-secret sibling in the same request, but replace each supplied
-        // credential with an empty tombstone so an older plaintext value can
-        // never survive the merge in config.json.
-        const persisted = structuredClone(patch);
-        if (persisted.xai?.key !== undefined) persisted.xai.key = "";
-        if (persisted.composio?.apiKey !== undefined) persisted.composio.apiKey = "";
-        if (persisted.box?.token !== undefined) persisted.box.token = "";
-        if (persisted.opencodeGo?.apiKey !== undefined) persisted.opencodeGo.apiKey = "";
-        if (persisted.litellmHextra?.apiKey !== undefined) persisted.litellmHextra.apiKey = "";
-        if (persisted.tts?.key !== undefined) persisted.tts.key = "";
-        saveConfig(persisted);
+        // non-secret sibling in the same request, and take each supplied
+        // credential OUT of config.json entirely — neither the old plaintext
+        // (which would overwrite the encrypted copy at the next boot) nor a ""
+        // tombstone (which the shell reads as "the user cleared it" and would
+        // delete the key that was just saved) may survive the merge.
+        const persisted = structuredClone(patch) as Record<string, Record<string, unknown> | undefined>;
+        const removed: Array<readonly [string, string]> = [];
+        for (const [section, field] of EXTERNAL_SECRET_FIELDS) {
+          if (persisted[section]?.[field] === undefined) continue;
+          delete persisted[section]![field];
+          removed.push([section, field]);
+        }
+        saveConfig(persisted as Partial<AppConfig>, removed);
         syncCredentialEnv(patch);
         Object.assign(cfg, loadConfig());
+        syncEndpointEnv(cfg);
       } else {
         saveConfig(patch);
         // loadConfig prefers env over the file for credentials, so the env
@@ -3870,6 +3886,7 @@ const server = createServer(async (req, res) => {
         // shadow the new key until the next launch
         syncCredentialEnv(patch);
         Object.assign(cfg, loadConfig());
+        syncEndpointEnv(cfg);
       }
       // Provider keys change the fleet. Profile, voice, VPS, and room timeout
       // changes do not rebuild it: no driver reads them, and they should not
