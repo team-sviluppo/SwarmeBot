@@ -139,6 +139,10 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
     const sendTurn = async (turn: SendTurnInput) => {
       const { threadId } = turn;
       if (active.has(threadId)) throw new Error("a turn is already running on this thread");
+      const controlsHost = turn.integrations?.localComputer?.scope === "local-computer";
+      if (controlsHost && config.fullAuto) {
+        throw new Error("local computer control requires interactive provider approvals");
+      }
       const turnId = newId();
 
       const env = childEnv();
@@ -547,6 +551,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           phoneMcp: true,
           images: true,
           effortLevels: ["low", "medium", "high", "xhigh", "max"],
+          localComputerMcp: !config.fullAuto,
         },
         sendTurn,
         interruptTurn: async (threadId) => active.get(threadId)?.stop(),

@@ -183,11 +183,18 @@ export async function startCua() {
       mcpEnv: { ...CUA_ENV },
     };
   } else {
-    nextConnection = {
-      mode: "unavailable",
-      reason:
-        "no running cua-driver daemon; run `cua-driver serve` or grant via `cua-driver permissions grant`",
-    };
+    // Unpackaged `npm run electron` often has the driver binary but no
+    // leftover `cua-driver serve`. Start an embedded host so This computer
+    // is actually selectable instead of staying gray for every bot.
+    try {
+      nextConnection = await startEmbedded(binary);
+    } catch (err) {
+      nextConnection = {
+        mode: "unavailable",
+        reason:
+          `no running cua-driver daemon (${err?.message ?? err}); run \`cua-driver serve\` or grant Accessibility and Screen Recording to SwarmeBot`,
+      };
+    }
   }
 
   return connectionStore.persist(nextConnection);

@@ -197,6 +197,7 @@ describe("CodexDriver turns (fake app-server)", () => {
     const dump = join(scratch, "local-computer.json");
     process.env.FAKE_CODEX_DUMP = dump;
     expect(instance.adapter.capabilities.computerMcp).toBe(true);
+    expect(instance.adapter.capabilities.localComputerMcp).toBe(true);
 
     await instance.adapter.sendTurn({
       threadId: "t-local-computer",
@@ -217,6 +218,26 @@ describe("CodexDriver turns (fake app-server)", () => {
     expect(seen.argv.join(" ")).toContain("OMB_VM_TOKEN");
     expect(seen.argv.join(" ")).not.toContain("vm-secret");
     expect(seen.env.OMB_VM_TOKEN).toBe("vm-secret");
+  });
+
+  it("does not advertise or accept host CUA in fullAuto", async () => {
+    await create({ fullAuto: true });
+    expect(instance.adapter.capabilities.localComputerMcp).toBe(false);
+    await expect(
+      instance.adapter.sendTurn({
+        threadId: "t-bypass-local",
+        text: "click",
+        integrations: {
+          localComputer: {
+            command: "/cua-driver",
+            args: ["mcp"],
+            env: {},
+            platform: "darwin",
+            scope: "local-computer",
+          },
+        },
+      }),
+    ).rejects.toThrow(/interactive provider approvals/);
   });
 
   it("mounts the remote computer proxy without placing its token in argv", async () => {

@@ -1037,9 +1037,7 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                   key={mode}
                   disabled={mode === "local" && !localSelectable}
                   title={mode === "local" && !localSelectable ? localDisabledReason ?? undefined : undefined}
-                  onClick={() =>
-                    patch(mode === "local" ? { computer: mode, autoApprove: false } : { computer: mode })
-                  }
+                  onClick={() => patch({ computer: mode })}
                   className={cn(
                     "flex-1 py-1.5 text-[13px] capitalize",
                     i > 0 && "border-l border-hairline/40",
@@ -1072,22 +1070,22 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
             <div>
               <div className="text-[15px] font-medium text-ink">Auto mode</div>
               <div className="mt-0.5 text-[13px] text-ink-secondary">
-                {bot.computer === "local"
-                  ? "Local computer actions always require your approval in this beta."
-                  : bot.autoApprove
-                  ? "Keeps going on its own — you'll still be asked about anything destructive, and about questions it asks you."
-                  : "Approve each action yourself. Turn on to let this bot keep working without stopping to ask."}
+                {bot.autoApprove
+                  ? bot.computer === "local"
+                    ? "Keeps going on its own — you'll still be asked about anything destructive, questions it asks you, and every action on this computer."
+                    : "Keeps going on its own — you'll still be asked about anything destructive, and about questions it asks you."
+                  : bot.computer === "local"
+                    ? "Approve each action yourself. Turn on to let this bot keep working without stopping to ask — clicks and typing on this computer still need your approval."
+                    : "Approve each action yourself. Turn on to let this bot keep working without stopping to ask."}
               </div>
             </div>
             <button
               role="switch"
               aria-checked={Boolean(bot.autoApprove)}
               aria-label="Auto mode"
-              disabled={bot.computer === "local"}
               onClick={() => patch({ autoApprove: !bot.autoApprove })}
               className={cn(
                 "relative h-[26px] w-[44px] shrink-0 rounded-full transition-colors",
-                bot.computer === "local" && "cursor-not-allowed opacity-40",
                 bot.autoApprove ? "bg-accent" : "bg-raised",
               )}
             >
