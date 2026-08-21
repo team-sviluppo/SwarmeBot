@@ -1,0 +1,296 @@
+// Bot avatar — the Blob Studio "Cursor" mascot (CursorAvatar.tsx), wrapped
+// in the app's historical MausAvatar API so no call site changes: per-bot
+// color becomes a body gradient, the app's one-shot motion beats borrow the
+// face/state for a moment, and the eyes follow the pointer. The previous
+// hand-built Maus body + face engine (maus-engine/face/driver) is gone;
+// CursorAvatar owns morphing, blinking, drift, body motion and effects.
+import {
+  forwardRef,
+  memo,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { wearsDicebearPicture } from "@/lib/dicebear";
+import {
+  MAUS_COLORS,
+  silhouetteFor,
+  type MausColor,
+  type MausMotion,
+  type MausState,
+} from "@/lib/mascot";
+import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
+import { DicebearAvatar } from "./DicebearAvatar";
+
+/**
+ * Everything about how one bot looks. Call sites pass the bot itself, so a
+ * new appearance field reaches every avatar in the app without touching the
+ * thirty places that render one.
+ */
+/**
+ * Whether a bot wears a picture at all: an uploaded file, imported markup, or
+ * a DiceBear style we can draw. A URL naming a style we lack and carrying no
+ * markup — a team file imported on a build without it — is not a picture, and
+ * the bot falls back to its mascot instead of an empty hole.
+ */
+export function wearsPicture(look: MausLook): boolean {
+  return Boolean(look.mascotAvatarImage) || wearsDicebearPicture(look);
+}
+
+export type MausLook = {
+  mascotSilhouette?: string | null;
+  /** A DiceBear picture, which replaces the mascot entirely when set. */
+  mascotAvatar?: string | null;
+  /** Its markup, for a style this build cannot draw itself. */
+  mascotAvatarSvg?: string | null;
+  /** A picture of your own, as an attachment filename on this machine. */
+  mascotAvatarImage?: string | null;
+  /** Seeds a picture whose stored URL carries no seed of its own. */
+  name?: string;
+};
+
+/**
+ * Legacy face-placement knobs from the Maus body era. The cursor mascot
+ * places its own face; these remain only so the preview harness's sliders
+ * keep compiling — the matching props are accepted and ignored.
+ */
+export const FACE_X = 80;
+export const FACE_Y = 102;
+export const FACE_SCALE = 0.47;
+export const EYE_SCALE = 1.12;
+export const MOUTH_WEIGHT = 11;
+
+/**
+ * How far the pointer may pull the eyes. Facing forward the full range is
+ * safe; with the expressions' authored gaze they already start off-centre.
+ */
+const POINTER_GAZE = { forward: 1, authored: 0.25 };
+
+/**
+ * What a one-shot motion does while it plays: CursorAvatar animates the body
+ * per state, so borrowing the state for a beat moves body and face together.
+ */
+interface MotionFaces
+  extends Partial<
+    Record<Exclude<MausMotion, "none">, { state?: MausState; blink?: boolean; spin?: number }>
+  > {}
+
+const MOTION_FACE: MotionFaces = {
+  arrive: { state: "spawning", spin: 900 },
+  switch: { state: "waking", spin: 620 },
+  customize: { state: "proud", blink: true },
+  alert: { state: "alerting" },
+  thinking: { state: "thinking" },
+  working: { state: "working" },
+  launch: { state: "loading" },
+  success: { state: "happy", blink: true },
+  celebrate: { state: "celebrate", spin: 700 },
+  blink: { blink: true },
+  surprise: { state: "surprised", blink: true },
+  failure: { state: "sad" },
+};
+
+/** How long a one-shot motion holds its state before the bot's own returns. */
+const MOTION_FACE_MS = 1400;
+
+/** Channel-wise mix of a hex color toward another, t in 0..1. */
+function mix(hex: string, toward: string, t: number): string {
+  const a = Number.parseInt(hex.slice(1), 16);
+  const b = Number.parseInt(toward.slice(1), 16);
+  const channel = (shift: number) => {
+    const va = (a >> shift) & 0xff;
+    const vb = (b >> shift) & 0xff;
+    return Math.round(va + (vb - va) * t);
+  };
+  return `#${[channel(16), channel(8), channel(0)]
+    .map((part) => part.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/**
+ * Bot color -> the mascot's three-stop body gradient (highlight, base,
+ * shadow), with the same light/dark spread as the pack's default green
+ * ["#9FE6B5", "#3FAE6E", "#1C7A4C"].
+ */
+const gradientFor = (color: MausColor): [string, string, string] => {
+  const fill = MAUS_COLORS[color] ?? MAUS_COLORS.green;
+  return [mix(fill, "#ffffff", 0.55), fill, mix(fill, "#000000", 0.42)];
+};
+
+export type MausAvatarHandle = CursorAvatarHandle;
+
+export type MausAvatarProps = {
+  color: MausColor;
+  /** Named behaviour — drives the expression pool, its cadence and blinking. */
+  state?: MausState;
+  /** Pin one of the 25 faces and stop the state's own drift. */
+  expression?: number;
+  /** Body shape to wear, from MAUS_SILHOUETTES. Unknown/absent = the default. */
+  silhouette?: string | null;
+  /**
+   * The bot being drawn. Supplies its shape and, when it has one, its
+   * picture — which is a still image, so state, motion and gaze stop
+   * applying. Explicit `silhouette` wins, which is how the appearance
+   * pickers preview one shape at a time.
+   */
+  look?: MausLook | null;
+  size?: number;
+  label?: string;
+  motion?: MausMotion;
+  motionKey?: number;
+  /** Head turn in degrees. */
+  turn?: number;
+  gaze?: { x?: number; y?: number };
+  spring?: number;
+  eyeScale?: number;
+  showMouth?: boolean;
+  mouthStroke?: number;
+  /**
+   * Face the viewer at turn 0, cancelling each expression's authored gaze
+   * direction. Off restores the engine's own drawn-in directions.
+   */
+  forward?: boolean;
+  /** Let the eyes follow the pointer across this avatar. */
+  trackPointer?: boolean;
+  /** Run the animation. Off renders the state's resting face. */
+  animated?: boolean;
+  /** Legacy Maus face-placement knobs — accepted, ignored. */
+  eyeSpacing?: number;
+  faceX?: number;
+  faceY?: number;
+  faceScale?: number;
+};
+
+function MausAvatarComponent(
+  {
+    color,
+    state = "idle",
+    expression,
+    silhouette,
+    look,
+    size = 44,
+    label,
+    motion = "none",
+    motionKey = 0,
+    turn,
+    gaze,
+    spring,
+    eyeScale,
+    showMouth,
+    mouthStroke,
+    forward = true,
+    trackPointer = true,
+    animated = true,
+  }: MausAvatarProps,
+  ref: React.Ref<MausAvatarHandle>,
+) {
+  const picture = silhouette === undefined && look != null && wearsPicture(look);
+  const inner = useRef<CursorAvatarHandle>(null);
+  useImperativeHandle(ref, () => ({
+    blink: () => inner.current?.blink(),
+    spin: (durationMs?: number) => inner.current?.spin(durationMs),
+    setExpression: (index: number) => inner.current?.setExpression(index),
+  }));
+
+  // A one-shot motion borrows the state for a moment, then hands it back.
+  const [motionState, setMotionState] = useState<MausState | null>(null);
+  useEffect(() => {
+    if (motion === "none" || !animated) return;
+    const beat = MOTION_FACE[motion];
+    if (!beat) return;
+    if (beat.blink) inner.current?.blink();
+    if (beat.spin) inner.current?.spin(beat.spin);
+    if (!beat.state) return;
+    setMotionState(beat.state);
+    const timer = setTimeout(() => setMotionState(null), MOTION_FACE_MS);
+    return () => clearTimeout(timer);
+  }, [motion, motionKey, animated]);
+
+  // Pointer-follow gaze, composed with any gaze the caller pins.
+  const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const range = forward ? POINTER_GAZE.forward : POINTER_GAZE.authored;
+  const onPointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (!trackPointer || !animated) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPointer({
+      x: Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1)) * range,
+      y: Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1)) * range,
+    });
+  };
+  const onPointerLeave = () => setPointer({ x: 0, y: 0 });
+
+  // A picture is a still image: the face engine, its states and the pointer
+  // gaze have nothing to drive. The hooks above still run, so switching
+  // between a picture and the mascot does not change the hook order.
+  if (picture && look?.mascotAvatarImage) {
+    return (
+      <img
+        className="inline-flex shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+        src={`/api/attachments/${encodeURIComponent(look.mascotAvatarImage)}`}
+        alt={label ?? ""}
+        aria-hidden={label ? undefined : true}
+        draggable={false}
+      />
+    );
+  }
+
+  if (picture) {
+    return (
+      <DicebearAvatar
+        avatar={look?.mascotAvatar}
+        svg={look?.mascotAvatarSvg}
+        seed={look?.name}
+        size={size}
+        label={label ?? null}
+      />
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex shrink-0"
+      onPointerMove={trackPointer && animated ? onPointerMove : undefined}
+      onPointerLeave={trackPointer && animated ? onPointerLeave : undefined}
+    >
+      <CursorAvatar
+        ref={inner}
+        state={motionState ?? state}
+        expression={expression}
+        size={size}
+        silhouette={silhouetteFor(silhouette ?? look?.mascotSilhouette)}
+        gradient={gradientFor(color)}
+        title={label ?? null}
+        lookAround={forward ? 0 : 1}
+        gaze={{ x: (gaze?.x ?? 0) + pointer.x, y: (gaze?.y ?? 0) + pointer.y }}
+        turn={turn}
+        spring={spring}
+        eyeScale={eyeScale}
+        showMouth={showMouth}
+        mouthStroke={mouthStroke}
+        paused={!animated}
+      />
+    </span>
+  );
+}
+
+export const MausAvatar = memo(forwardRef(MausAvatarComponent));
+
+export function InitialsAvatar({
+  initials,
+  size = 32,
+}: {
+  initials: string;
+  size?: number;
+}) {
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center rounded-full bg-raised text-ink-secondary font-medium"
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+    >
+      {initials}
+    </div>
+  );
+}
