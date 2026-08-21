@@ -43,9 +43,37 @@ let embeddedHost = null; // EmbeddedCuaDriverHost | null
 let linuxRuntime = null;
 let linuxBundleStage = null;
 let stateListener = () => {};
+let startLock = null;
 const connectionStore = createCuaConnectionStore({
   getUserData: () => app.getPath("userData"),
 });
+
+function publish(next) {
+  const stored = connectionStore.persist(next);
+  stateListener(stored);
+  return stored;
+}
+
+function liveCua(connection) {
+  return connection?.mode === "embedded" || connection?.mode === "standalone";
+}
+
+export function idleCuaConnection() {
+  const binary = resolveDriverBinary();
+  if (!binary) {
+    return publish({
+      mode: "unavailable",
+      status: "unavailable",
+      reason: "cua-driver binary not found",
+      reasonCode: "cua-driver-unavailable",
+    });
+  }
+  return publish({
+    mode: "idle",
+    status: "stopped",
+    reasonCode: "idle",
+  });
+}
 
 function ensureLinuxRuntime() {
   if (!linuxRuntime) {
@@ -152,11 +180,15 @@ async function startEmbedded(binary) {
 
 export async function startCua() {
   if (process.platform === "linux") return ensureLinuxRuntime().initialize();
+  const current = connectionStore.get();
+  if (liveCua(current)) return current;
   const binary = resolveDriverBinary();
   if (!binary) {
-    return connectionStore.persist({
+    return publish({
       mode: "unavailable",
+      status: "unavailable",
       reason: "cua-driver binary not found",
+      reasonCode: "cua-driver-unavailable",
     });
   }
 
@@ -170,11 +202,12 @@ export async function startCua() {
     } catch (err) {
       nextConnection = {
         mode: "unavailable",
+        status: "unavailable",
         reason: `embedded host failed: ${err?.message ?? err}`,
+        reasonCode: "cua-driver-unavailable",
       };
     }
   } else if (await socketAlive(STANDALONE_SOCKET)) {
-    // Dev machine with CuaDriver.app's daemon already running.
     nextConnection = {
       mode: "standalone",
       socketPath: STANDALONE_SOCKET,
@@ -183,21 +216,45 @@ export async function startCua() {
       mcpEnv: { ...CUA_ENV },
     };
   } else {
-    // Unpackaged `npm run electron` often has the driver binary but no
-    // leftover `cua-driver serve`. Start an embedded host so This computer
-    // is actually selectable instead of staying gray for every bot.
+    // On-demand only: a person picked This computer. Do not start this at boot.
     try {
       nextConnection = await startEmbedded(binary);
     } catch (err) {
       nextConnection = {
         mode: "unavailable",
+        status: "unavailable",
         reason:
-          `no running cua-driver daemon (${err?.message ?? err}); run \`cua-driver serve\` or grant Accessibility and Screen Recording to SwarmeBot`,
+          `embedded host failed: ${err?.message ?? err}; grant Accessibility and Screen Recording to SwarmeBot`,
+        reasonCode: "cua-driver-unavailable",
       };
     }
   }
 
-  return connectionStore.persist(nextConnection);
+  return publish(nextConnection);
+}
+
+export async function ensureCua() {
+  if (process.platform === "linux") return ensureLinuxRuntime().initialize();
+  return publish({
+    mode: "unavailable",
+    status: "unavailable",
+    reason: "host-cua-disabled",
+    reasonCode: "host-cua-disabled",
+  });
+}
+
+export async function parkCua() {
+  if (process.platform === "linux") return ensureLinuxRuntime().getStatus();
+  if (embeddedHost) {
+    try {
+      await embeddedHost.stop();
+      embeddedHost.uniffiDestroy?.();
+    } catch {
+      // parent-liveness pipe closes the child
+    }
+    embeddedHost = null;
+  }
+  return idleCuaConnection();
 }
 
 export function cuaPermissionsStatus() {
@@ -234,13 +291,15 @@ export async function stopCua() {
     embeddedHost = null;
   }
   if (connectionStore.get()) {
-    connectionStore.persist({ mode: "unavailable", reason: "desktop-host-stopped" });
+    publish({ mode: "unavailable", reason: "desktop-host-stopped" });
   }
 }
 
 export function registerCuaIpc() {
   ipcMain.handle("cua:connection", () => connectionStore.get());
   ipcMain.handle("cua:permissions", () => cuaPermissionsStatus());
+  ipcMain.handle("cua:ensure", () => ensureCua());
+  ipcMain.handle("cua:park", () => parkCua());
   ipcMain.handle("cua:linux-status", () =>
     process.platform === "linux"
       ? ensureLinuxRuntime().getStatus()

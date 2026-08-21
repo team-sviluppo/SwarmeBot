@@ -95,6 +95,23 @@ describe("desktop capabilities", () => {
     expect(linuxSession("linux", {})).toBe("headless");
   });
 
+  it("treats a parked macOS driver as startable, not ready", () => {
+    expect(localComputerReady("darwin", { mode: "idle", status: "stopped" })).toBe(false);
+    expect(
+      desktopCapabilities({
+        platform: "darwin",
+        packaged: true,
+        localConnection: { mode: "idle", status: "stopped", reasonCode: "idle" },
+      }).localComputer,
+    ).toMatchObject({
+      available: false,
+      support: "supported",
+      enabled: true,
+      status: "stopped",
+      reasonCode: "idle",
+    });
+  });
+
   it("never treats an embedded-looking Linux connection as local control", () => {
     expect(localComputerReady("linux", { mode: "embedded" })).toBe(false);
     expect(localComputerReady("darwin", { mode: "unavailable" })).toBe(false);

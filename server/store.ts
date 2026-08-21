@@ -258,12 +258,14 @@ export interface BotRecord {
    * /api/attachments. Local to this machine, so it does not travel in a
    * shared team file the way a generated picture does. */
   mascotAvatarImage?: string | null;
+  /** Row (0–8) of a 9×8 sprite sheet to animate. Absent means a still photo. */
+  mascotAvatarSheetRow?: number | null;
   unread: boolean;
   modelSelection: ModelSelection;
   /** provider-native continuation per instance (e.g. claude session id) */
   resumeCursors: Record<string, unknown>;
-  /** which computer the bot acts on: its cloud box, this Mac (local CUA),
-   * or none. Unset = auto (box when it exists, else local when available). */
+  /** which computer the bot acts on: Local VM, or none. Host CUA and cloud
+   * boxes are disabled. Unset/legacy values migrate to off. */
   computer?: "cloud" | "vm" | "local" | "off";
   /** Which cloud computer backs `computer: "cloud"`; absent means Box. */
   cloudBackend?: CloudBackend;
@@ -452,6 +454,10 @@ export class Store {
       b.activity = "idle";
       if (b.cloudBackend !== undefined && b.cloudBackend !== "box" && b.cloudBackend !== "vps") {
         delete b.cloudBackend;
+        botsMigrated = true;
+      }
+      if (b.computer !== "vm" && b.computer !== "off") {
+        b.computer = "off";
         botsMigrated = true;
       }
     }
@@ -794,6 +800,7 @@ export class Store {
       ...(profile.mascotAvatar ? { mascotAvatar: profile.mascotAvatar } : {}),
       ...(profile.mascotAvatarSvg ? { mascotAvatarSvg: profile.mascotAvatarSvg } : {}),
       unread: false,
+      computer: "off",
       modelSelection: profile.modelSelection ?? this.defaultSelection(),
       resumeCursors: {},
       createdAt: Date.now(),

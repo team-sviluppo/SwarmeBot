@@ -10,6 +10,22 @@ export function instanceSupportsLocalComputer(
   );
 }
 
+export function localComputerAssignable({
+  capabilities,
+  providerSupportsLocal,
+}: {
+  capabilities: DesktopCapabilities;
+  providerSupportsLocal: boolean;
+}): boolean {
+  if (!providerSupportsLocal) return false;
+  if (capabilities.localComputer.available) return true;
+  return (
+    capabilities.host.platform === "darwin" &&
+    capabilities.localComputer.support === "supported" &&
+    capabilities.localComputer.status === "stopped"
+  );
+}
+
 export function localComputerDisabledReason({
   capabilities,
   providerSupportsLocal,
@@ -21,6 +37,7 @@ export function localComputerDisabledReason({
     return "The selected provider cannot request approvals for local computer actions.";
   }
   if (capabilities.localComputer.available) return null;
+  if (localComputerAssignable({ capabilities, providerSupportsLocal })) return null;
   if (capabilities.host.platform === "linux") {
     if (capabilities.localComputer.reasonCode === "wayland-compositor-unsupported") {
       return "Wayland local control is currently limited to GNOME. Xorg remains available on supported desktops.";

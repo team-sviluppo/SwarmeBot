@@ -859,16 +859,20 @@ app.whenReady().then(async () => {
   registerCuaIpc();
   androidDevice.registerIpc(ipcMain);
   registerUpdaterIpc();
-  // Start the CUA daemon before the window so the harness can pick up the
-  // connection descriptor on first render. Never blocks window creation on
-  // failure — computer use degrades to "unavailable", the rest still works.
+  // Host CUA is fully disabled: it captured the desktop and made the UI
+  // stutter. Computer destinations are Local VM or Off only.
   cuaReady =
-    process.platform === "darwin" || process.platform === "linux"
+    process.platform === "linux"
       ? startCua().catch((e) => {
           console.error("[cua] start failed:", e);
           return { mode: "unavailable", reason: String(e) };
         })
-      : Promise.resolve({ mode: "unavailable", reason: "unsupported-platform" });
+      : Promise.resolve({
+          mode: "unavailable",
+          status: "unavailable",
+          reason: "host-cua-disabled",
+          reasonCode: "host-cua-disabled",
+        });
   if (app.isPackaged) serverReady = await startServerPackaged();
   // The companion the user left on comes back without anyone finding the
   // toggle again — one attempt, after the harness port is settled, with the

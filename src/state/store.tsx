@@ -157,6 +157,8 @@ export interface Bot {
   mascotAvatarSvg?: string | null;
   /** An uploaded picture: an attachment filename served by the local server. */
   mascotAvatarImage?: string | null;
+  /** Which row of a 9×8 sprite sheet to loop. Absent = still image. */
+  mascotAvatarSheetRow?: number | null;
   unread: boolean;
   busy?: boolean;
   /** what the bot is doing, as the harness sees it; busy is derived from it */
@@ -452,6 +454,7 @@ export type Action =
           | "mascotAvatar"
           | "mascotAvatarSvg"
           | "mascotAvatarImage"
+          | "mascotAvatarSheetRow"
           | "autoApprove"
           | "speakReplies"
           | "voice"
@@ -835,7 +838,8 @@ export function reducer(state: AppState, action: Action): AppState {
         Object.prototype.hasOwnProperty.call(action.patch, "mascotExpression") ||
         Object.prototype.hasOwnProperty.call(action.patch, "mascotSilhouette") ||
         Object.prototype.hasOwnProperty.call(action.patch, "mascotAvatar") ||
-        Object.prototype.hasOwnProperty.call(action.patch, "mascotAvatarImage");
+        Object.prototype.hasOwnProperty.call(action.patch, "mascotAvatarImage") ||
+        Object.prototype.hasOwnProperty.call(action.patch, "mascotAvatarSheetRow");
       const animated = mascotChanged
         ? withMascotMotion(state, action.botId, "customize")
         : state;

@@ -22,16 +22,14 @@ import { useStore, type Bot } from "@/state/store";
 import type { Routine } from "@/lib/routines";
 import { ApiKeyRow } from "./ApiKeys";
 import { cn } from "@/lib/cn";
-import { CloudBackendPicker } from "./CloudBackendPicker";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { RoutineEditor } from "./RoutinesPage";
 import { AndroidDevicePanel, useAndroidUsbDevices } from "./AndroidDevicePanel";
 import { LocalScreenPreview } from "./LocalScreenPreview";
-import { LinuxLocalControl } from "./LinuxLocalControl";
 import {
   autoSelectsLocalComputer,
   instanceSupportsLocalComputer,
-  linuxAutoDescription,
+  localComputerAssignable,
   localComputerDisabledReason,
 } from "@/lib/local-computer";
 
@@ -90,7 +88,8 @@ export function ComputerPanel({ bot }: { bot: Bot }) {
   const localAvailable = capabilities.localComputer.available;
   const isLinux = capabilities.host.platform === "linux";
   const providerSupportsLocal = instanceSupportsLocalComputer(state.instances, bot);
-  const localSelectable = localAvailable && providerSupportsLocal;
+  const localReady = localAvailable && providerSupportsLocal;
+  const localSelectable = localComputerAssignable({ capabilities, providerSupportsLocal });
   const localDisabledReason = localComputerDisabledReason({ capabilities, providerSupportsLocal });
   const [phase, setPhase] = useState<Phase>("checking");
   const [boxState, setBoxState] = useState<string | null>(null);
@@ -175,7 +174,7 @@ export function ComputerPanel({ bot }: { bot: Bot }) {
       if (!providerSupportsLocal) {
         setError("This model engine cannot control this computer. Choose Claude or an ACP engine.");
       }
-      setPhase(capabilitiesReady && localSelectable ? "local" : "local-unavailable");
+      setPhase(capabilitiesReady && localReady ? "local" : localSelectable ? "local" : "local-unavailable");
       return;
     }
     if (bot.computer === "vm") {
@@ -213,7 +212,7 @@ export function ComputerPanel({ bot }: { bot: Bot }) {
     if (bot.computer !== "cloud" && !capabilitiesReady) return;
     if (cloudBackend === "vps") {
       const autoLocal =
-        !isLinux && bot.computer !== "cloud" && capabilitiesReady && localSelectable;
+        !isLinux && bot.computer !== "cloud" && capabilitiesReady && localReady;
       if (!vpsSupported) {
         if (autoLocal) setPhase("local");
         else {
@@ -275,7 +274,7 @@ export function ComputerPanel({ bot }: { bot: Bot }) {
           platform: capabilities.host.platform,
           computer: bot.computer,
           capabilitiesReady,
-          localSelectable,
+          localSelectable: localReady,
         });
         if (!status.configured) {
           setPhase(autoLocal ? "local" : "unconfigured");
@@ -307,6 +306,7 @@ export function ComputerPanel({ bot }: { bot: Bot }) {
     retry,
     capabilitiesReady,
     localSelectable,
+    localReady,
     isLinux,
     providerSupportsLocal,
     vmSupported,
@@ -805,46 +805,27 @@ export function ComputerPanel({ bot }: { bot: Bot }) {
         )}
 
         <LocalScreenPreview />
-        <LinuxLocalControl />
 
         {/* Computer source */}
           <div className="mt-4 rounded-xl bg-card p-4">
             <div className="text-[15px] font-medium text-ink">Runs on</div>
             <div className="mt-0.5 text-[13px] text-ink-secondary">
-              {!bot.computer &&
-                (isLinux || !localSelectable
-                  ? cloudBackend === "vps"
-                    ? "Auto reuses a ready VPS when one is configured; otherwise computer use stays off. "
-                    : `${linuxAutoDescription()} `
-                  : cloudBackend === "vps"
-                    ? "Auto reuses a ready VPS when one exists, otherwise this computer. "
-                    : "Auto uses a cloud box when one exists, otherwise this computer. ")}
-              Pick where this bot's computer lives. <b className="text-ink">Local VM</b> is a Cua-controlled Linux desktop
-              in a container on this machine — free and separate from your own desktop. Set it up in App
-              Settings → Local VM.
+              Pick where this bot's computer lives. <b className="text-ink">Off</b> is the default.
+              <b className="text-ink"> Local VM</b> is a Linux desktop in a container on this machine — set it up
+              in App Settings → Local VM.
           </div>
           <div className="mt-3 flex overflow-hidden rounded-lg border border-hairline/40">
             {(
               [
-                ["cloud", "Cloud"],
                 ["vm", "Local VM"],
-                ["local", "This computer"],
                 ["off", "Off"],
               ] as const
-            ).map(([mode, label], i) => (
-              (() => {
-                const disabled =
-                  (mode === "cloud" && !cloudSupported) ||
-                  (mode === "vm" && !vmSupported) ||
-                  (mode === "local" && !localSelectable);
+            ).map(([mode, label], i) => {
+                const disabled = mode === "vm" && !vmSupported;
                 const unavailableTitle =
                   mode === "vm" && !vmSupported
                     ? "This model engine cannot use the Local VM"
-                    : mode === "cloud" && !cloudSupported
-                      ? "This model engine cannot use cloud computer tools"
-                      : mode === "local" && !localSelectable
-                        ? localDisabledReason ?? "Local computer control isn't ready"
-                          : undefined;
+                    : undefined;
                 return (
               <button
                 key={mode}
@@ -855,7 +836,7 @@ export function ComputerPanel({ bot }: { bot: Bot }) {
                   "flex-1 py-1.5 text-[13px]",
                   i > 0 && "border-l border-hairline/40",
                   disabled && "cursor-not-allowed opacity-40",
-                  bot.computer === mode
+                  bot.computer === mode || (mode === "off" && bot.computer !== "vm")
                     ? "bg-raised text-ink"
                     : "text-ink-secondary hover:bg-raised/60 hover:text-ink",
                 )}
@@ -863,16 +844,8 @@ export function ComputerPanel({ bot }: { bot: Bot }) {
                 {label}
               </button>
                 );
-              })()
-            ))}
+            })}
           </div>
-          {(!bot.computer || bot.computer === "cloud") && (
-            <CloudBackendPicker
-              value={cloudBackend}
-              vpsSupported={vpsSupported}
-              onChange={(backend) => dispatch({ type: "updateBot", botId: bot.id, patch: { cloudBackend: backend } })}
-            />
-          )}
         </div>
 
         {/* Routines */}

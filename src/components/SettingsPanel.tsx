@@ -20,14 +20,14 @@ import {
   MAUS_SILHOUETTE_IDS,
   normalizeSilhouette,
 } from "@/lib/mascot";
-import { CloudBackendPicker } from "./CloudBackendPicker";
-import { ModelPicker } from "./ModelPicker";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
+import { ModelPicker } from "./ModelPicker";
 import { cn } from "@/lib/cn";
 import { requestNotificationPermission } from "@/lib/notify";
 import { botUsage, costCaption, formatTokens, formatUsd } from "@/lib/usage";
 import { shortPath } from "@/lib/short-path";
-import { instanceSupportsLocalComputer, localComputerDisabledReason } from "@/lib/local-computer";
+import { SHEET_ROWS, clampSheetRow } from "@/lib/sprite-sheet";
+import { SpriteSheetAvatar } from "./SpriteSheetAvatar";
 
 function Field({
   label,
@@ -390,6 +390,7 @@ function PictureSection({
     mascotAvatar?: string | null;
     mascotAvatarSvg?: string | null;
     mascotAvatarImage?: string | null;
+    mascotAvatarSheetRow?: number | null;
   }) => void;
 }) {
   const ready = useDicebearReady();
@@ -446,6 +447,7 @@ function PictureSection({
         mascotAvatar: dicebearUrl(spec.style, spec.seed ?? seed, spec.options),
         mascotAvatarSvg: null,
         mascotAvatarImage: null,
+        mascotAvatarSheetRow: null,
       });
       return;
     }
@@ -468,6 +470,7 @@ function PictureSection({
       mascotAvatar: dicebearUrl(picture.style, next, picture.options),
       mascotAvatarSvg: null,
       mascotAvatarImage: null,
+      mascotAvatarSheetRow: null,
     });
   };
 
@@ -480,7 +483,7 @@ function PictureSection({
         {(picture || fetched || bot.mascotAvatarImage) && (
           <button
             onClick={() =>
-              patch({ mascotAvatar: null, mascotAvatarSvg: null, mascotAvatarImage: null })
+              patch({ mascotAvatar: null, mascotAvatarSvg: null, mascotAvatarImage: null, mascotAvatarSheetRow: null })
             }
             className="rounded-md px-2 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink"
           >
@@ -528,6 +531,50 @@ function PictureSection({
               : "Drop a PNG, JPG, GIF, WebP or SVG here, or click to pick one"}
           </span>
         </label>
+        {bot.mascotAvatarImage && (
+          <div className="mt-3">
+            <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+              Spritesheet row
+            </div>
+            <p className="mt-1 text-[12px] text-ink-secondary">
+              9 rows × 8 frames. Pick one row to loop as this bot's avatar.
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {Array.from({ length: SHEET_ROWS }, (_, row) => {
+                const selected = clampSheetRow(bot.mascotAvatarSheetRow) === row;
+                return (
+                  <button
+                    key={row}
+                    type="button"
+                    onClick={() => patch({ mascotAvatarSheetRow: row })}
+                    className={cn(
+                      "flex flex-col items-center gap-1 rounded-xl bg-inset px-2 py-2 hover:bg-raised",
+                      selected && "ring-2 ring-accent-border",
+                    )}
+                    aria-pressed={selected}
+                    aria-label={`Animate sheet row ${row + 1}`}
+                  >
+                    <SpriteSheetAvatar
+                      src={`/api/attachments/${encodeURIComponent(bot.mascotAvatarImage!)}`}
+                      row={row}
+                      size={44}
+                    />
+                    <span className="text-[11px] text-ink-secondary">{row + 1}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {clampSheetRow(bot.mascotAvatarSheetRow) != null && (
+              <button
+                type="button"
+                onClick={() => patch({ mascotAvatarSheetRow: null })}
+                className="mt-2 text-[12px] text-ink-secondary hover:text-ink"
+              >
+                Use as a still image
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
           Import from dicebear.com
@@ -591,6 +638,7 @@ function PictureSection({
                   mascotAvatar: dicebearUrl(style, seed),
                   mascotAvatarSvg: null,
                   mascotAvatarImage: null,
+                  mascotAvatarSheetRow: null,
                 })
               }
               className={cn(
@@ -640,9 +688,6 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
   const [voices, setVoices] = useState<Array<{ id: string; label: string; description?: string }>>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
   const { capabilities } = useDesktopCapabilities();
-  const providerSupportsLocal = instanceSupportsLocalComputer(state.instances, bot);
-  const localSelectable = capabilities.localComputer.available && providerSupportsLocal;
-  const localDisabledReason = localComputerDisabledReason({ capabilities, providerSupportsLocal });
   const patch = (
     p: Partial<
       Pick<
@@ -659,6 +704,7 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
         | "mascotAvatar"
         | "mascotAvatarSvg"
         | "mascotAvatarImage"
+        | "mascotAvatarSheetRow"
         | "autoApprove"
         | "speakReplies"
         | "voice"
@@ -676,7 +722,6 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
   const engine = state.instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId);
   const canCoordinate = engine?.capabilities?.agentsMcp === true;
   const canUseConnectedApps = engine?.capabilities?.composioMcp === true;
-  const canUseVps = engine?.capabilities?.computerMcp === true && engine.driverKind !== "boxAgent";
   const connectedAppsConfigured = state.config?.composio?.configured === true;
   const connectedAppsEnabled = bot.composio !== false;
   const currentChief = state.bots.find((candidate) => candidate.chiefOfStaff);
@@ -742,6 +787,7 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                     mascotAvatar: null,
                     mascotAvatarSvg: null,
                     mascotAvatarImage: null,
+                    mascotAvatarSheetRow: null,
                   })
                 }
                 className="rounded-md px-2 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink"
@@ -1024,25 +1070,20 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
           <div className="rounded-xl bg-card p-4">
             <div className="text-[15px] font-medium text-ink">Computer</div>
             <div className="mt-0.5 text-[13px] text-ink-secondary">
-              Where this bot's computer runs{bot.computer ? "" : " (currently: auto)"}
+              Local VM or off. Host desktop control is disabled.
             </div>
             <div className="mt-3 flex overflow-hidden rounded-lg border border-hairline/40">
               {([
-                ["cloud", "Cloud"],
                 ["vm", "Local VM"],
-                ["local", "This computer"],
                 ["off", "Off"],
               ] as const).map(([mode, label], i) => (
                 <button
                   key={mode}
-                  disabled={mode === "local" && !localSelectable}
-                  title={mode === "local" && !localSelectable ? localDisabledReason ?? undefined : undefined}
                   onClick={() => patch({ computer: mode })}
                   className={cn(
                     "flex-1 py-1.5 text-[13px] capitalize",
                     i > 0 && "border-l border-hairline/40",
-                    mode === "local" && !localSelectable && "cursor-not-allowed opacity-40",
-                    bot.computer === mode
+                    (bot.computer === mode || (mode === "off" && bot.computer !== "vm"))
                       ? "bg-raised text-ink"
                       : "text-ink-secondary hover:bg-raised/60 hover:text-ink",
                   )}
@@ -1051,13 +1092,6 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                 </button>
               ))}
             </div>
-            {(!bot.computer || bot.computer === "cloud") && (
-              <CloudBackendPicker
-                value={bot.cloudBackend ?? "box"}
-                vpsSupported={canUseVps}
-                onChange={(backend) => patch({ cloudBackend: backend })}
-              />
-            )}
           </div>
 
           <BotUsageCard bot={bot} />

@@ -798,7 +798,17 @@ body {
   43%, 58% { opacity: 1; transform: translate(18px, -15px) scale(0.42); }
 }
 
+@keyframes ogb-sprite-sheet {
+  to {
+    background-position-x: calc(-8 * var(--sheet-size));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ogb-sprite-sheet {
+    animation: none !important;
+  }
+
   .maus-motion *,
   .maus-motion {
     animation: none !important;

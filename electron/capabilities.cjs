@@ -63,6 +63,7 @@ function desktopCapabilities({
   const hostSession = linuxSession(hostPlatform, env);
   const linuxPreview = hostPlatform === "linux" && hostSession !== "headless";
   const localAvailable = localComputerReady(hostPlatform, localConnection);
+  const macIdle = isMac && localConnection?.mode === "idle";
   const screenPreview = {
     available: isMac || linuxPreview,
     interaction:
@@ -87,11 +88,11 @@ function desktopCapabilities({
     support:
       localAvailable && hostPlatform === "linux"
         ? "limited"
-        : localAvailable
+        : localAvailable || macIdle
           ? "supported"
           : "unsupported",
     enabled: connectionEnabled(hostPlatform, localConnection),
-    status: localAvailable ? "ready" : localConnection?.status ?? "unavailable",
+    status: localAvailable ? "ready" : localConnection?.status ?? (macIdle ? "stopped" : "unavailable"),
   };
   if (typeof localConnection?.message === "string") {
     localComputer.message = localConnection.message;
@@ -114,7 +115,11 @@ function desktopCapabilities({
   if (!localAvailable) {
     localComputer.reasonCode =
       localConnection?.reasonCode ??
-      (hostPlatform === "darwin" ? "cua-driver-unavailable" : "unsupported-platform");
+      (macIdle
+        ? "idle"
+        : hostPlatform === "darwin"
+          ? "cua-driver-unavailable"
+          : "unsupported-platform");
   }
 
   return {
@@ -142,7 +147,9 @@ function desktopCapabilities({
 }
 
 function connectionEnabled(platform, connection) {
-  if (platform === "darwin") return localComputerReady(platform, connection);
+  if (platform === "darwin") {
+    return localComputerReady(platform, connection) || connection?.mode === "idle";
+  }
   return platform === "linux" && connection?.enabled === true;
 }
 

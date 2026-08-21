@@ -466,11 +466,17 @@ describe("harness HTTP API", () => {
 
     const raster = await upload("image/png", new Uint8Array(png));
     expect(raster.status).toBe(200);
-    const uploaded = (await raster.json()) as { bot: { mascotAvatarImage: string } };
+    const uploaded = (await raster.json()) as { bot: { mascotAvatarImage: string; mascotAvatarSheetRow?: number } };
     const named = uploaded.bot.mascotAvatarImage;
     // A bare generated filename, which is exactly what the serve route takes.
     expect(named).toMatch(/^[A-Za-z0-9-]+\.png$/);
+    expect(uploaded.bot.mascotAvatarSheetRow).toBe(0);
     expect((await fetch(`${BASE}/api/attachments/${named}`)).status).toBe(200);
+
+    const row = await api("PATCH", `/api/bots/${bot.id}`, { mascotAvatarSheetRow: 3 });
+    expect(row.status).toBe(200);
+    expect(row.body.bot.mascotAvatarSheetRow).toBe(3);
+    expect((await api("PATCH", `/api/bots/${bot.id}`, { mascotAvatarSheetRow: 9 })).status).toBe(400);
 
     // An SVG is markup, not a file, and goes through the avatar allowlist.
     const svg = await upload(
@@ -773,7 +779,7 @@ describe("harness HTTP API", () => {
     expect(impostor.chiefOfStaff).toBeUndefined();
     expect(impostor.approvePeerComms).toBeUndefined();
     expect(impostor.composio).toBe(false);
-    expect(impostor.computer).toBeUndefined();
+    expect(impostor.computer).toBe("off");
     expect(impostor.cloudBackend).toBeUndefined();
     expect(impostor.cwd).toBeUndefined();
 
@@ -912,17 +918,18 @@ describe("harness HTTP API", () => {
     expect(after.modelSelection.effort).toBeUndefined();
   });
 
-  it("keeps Auto mode when local computer is selected", async () => {
+  it("keeps Auto mode when Local VM is selected", async () => {
     const created = await api("POST", "/api/bots");
     const bot = created.body.bot;
     expect((await api("PATCH", `/api/bots/${bot.id}`, { autoApprove: true })).body.bot.autoApprove).toBe(
       true,
     );
-    const local = await api("PATCH", `/api/bots/${bot.id}`, { computer: "local" });
-    expect(local.body.bot).toMatchObject({ computer: "local", autoApprove: true });
-    const stillOn = await api("PATCH", `/api/bots/${bot.id}`, { autoApprove: true, computer: "local" });
-    expect(stillOn.status).toBe(200);
-    expect(stillOn.body.bot).toMatchObject({ computer: "local", autoApprove: true });
+    const vm = await api("PATCH", `/api/bots/${bot.id}`, { computer: "vm" });
+    expect(vm.body.bot).toMatchObject({ computer: "vm", autoApprove: true });
+    const rejectedLocal = await api("PATCH", `/api/bots/${bot.id}`, { computer: "local" });
+    expect(rejectedLocal.status).toBe(400);
+    const rejectedCloud = await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" });
+    expect(rejectedCloud.status).toBe(400);
     await api("DELETE", `/api/bots/${bot.id}`);
   });
 

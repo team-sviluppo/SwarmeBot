@@ -4,6 +4,7 @@ import {
   autoSelectsLocalComputer,
   instanceSupportsLocalComputer,
   linuxAutoDescription,
+  localComputerAssignable,
 } from "./local-computer";
 
 describe("local computer UI eligibility", () => {
@@ -53,6 +54,29 @@ describe("local computer UI eligibility", () => {
         computer: "cloud",
         capabilitiesReady: true,
         localSelectable: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("lets macOS assign This computer while the driver is parked", () => {
+    const capabilities = {
+      host: { platform: "darwin" as const, label: "macOS", session: "unknown" as const, packaged: true },
+      localComputer: {
+        available: false,
+        support: "supported" as const,
+        enabled: true,
+        status: "stopped" as const,
+        reasonCode: "idle",
+      },
+    } as DesktopCapabilities;
+    expect(localComputerAssignable({ capabilities, providerSupportsLocal: true })).toBe(true);
+    expect(localComputerAssignable({ capabilities, providerSupportsLocal: false })).toBe(false);
+    expect(
+      autoSelectsLocalComputer({
+        platform: "darwin",
+        computer: undefined,
+        capabilitiesReady: true,
+        localSelectable: false,
       }),
     ).toBe(false);
   });

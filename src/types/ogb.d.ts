@@ -48,6 +48,10 @@ declare global {
         enable(): Promise<LinuxLocalControlStatus>;
         disable(): Promise<LinuxLocalControlStatus>;
         retry(): Promise<LinuxLocalControlStatus>;
+        /** Start the host CUA daemon when a bot is assigned This computer. */
+        ensure?(): Promise<unknown>;
+        /** Stop the host CUA daemon when no bot uses This computer. */
+        park?(): Promise<unknown>;
       };
       /** Arms one user-initiated display capture request from this frame. */
       beginScreenPreviewIntent(): boolean;

@@ -23,6 +23,8 @@ import {
 } from "@/lib/mascot";
 import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
 import { DicebearAvatar } from "./DicebearAvatar";
+import { SpriteSheetAvatar } from "./SpriteSheetAvatar";
+import { clampSheetRow } from "@/lib/sprite-sheet";
 
 /**
  * Everything about how one bot looks. Call sites pass the bot itself, so a
@@ -47,6 +49,8 @@ export type MausLook = {
   mascotAvatarSvg?: string | null;
   /** A picture of your own, as an attachment filename on this machine. */
   mascotAvatarImage?: string | null;
+  /** Row of a 9×8 sheet to animate. */
+  mascotAvatarSheetRow?: number | null;
   /** Seeds a picture whose stored URL carries no seed of its own. */
   name?: string;
 };
@@ -225,11 +229,24 @@ function MausAvatarComponent(
   // gaze have nothing to drive. The hooks above still run, so switching
   // between a picture and the mascot does not change the hook order.
   if (picture && look?.mascotAvatarImage) {
+    const src = `/api/attachments/${encodeURIComponent(look.mascotAvatarImage)}`;
+    const sheetRow = clampSheetRow(look.mascotAvatarSheetRow);
+    if (sheetRow != null) {
+      return (
+        <SpriteSheetAvatar
+          src={src}
+          row={sheetRow}
+          size={size}
+          label={label}
+          animated={animated}
+        />
+      );
+    }
     return (
       <img
         className="inline-flex shrink-0 rounded-full object-cover"
         style={{ width: size, height: size }}
-        src={`/api/attachments/${encodeURIComponent(look.mascotAvatarImage)}`}
+        src={src}
         alt={label ?? ""}
         aria-hidden={label ? undefined : true}
         draggable={false}

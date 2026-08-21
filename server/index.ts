@@ -88,7 +88,6 @@ import {
   writeMemoryFile,
   MEMORY_FILE_MAX_BYTES,
 } from "./workspace.ts";
-import { readCuaConnection } from "./local-computer.ts";
 import { LocalVmIdleTimer } from "./local-vm-idle.ts";
 import { LocalVmLease } from "./local-vm-lease.ts";
 import { RepeatDetector, callKey } from "./repeat-detector.ts";
@@ -102,7 +101,6 @@ import { memberTurnSelection } from "./member-turn.ts";
 import { WebhookManager } from "./webhooks.ts";
 import { SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { loadBundledSkills, renderSkillInstructions, selectBundledSkills } from "./skill-library.ts";
-import { shouldMountLocalComputer } from "./local-routing.ts";
 
 const PORT = Number(process.env.OMB_PORT || process.env.OGB_PORT || 8799);
 const WEBHOOK_PORT = Number(process.env.OMB_WEBHOOK_PORT || PORT + 1);
@@ -1426,13 +1424,12 @@ async function startTurn(
       // tools that would fail on every call or spawn an unnecessary proxy.
       const dwebUrl = process.env.DWEB_URL?.trim();
       if (dwebUrl) integrations.dweb = { url: dwebUrl };
-      const wants = opts?.runOn === "cloud" ? "cloud" : bot.computer; // cloud routine overrides the MAUS default
+      const wants = opts?.runOn === "cloud" ? "cloud" : bot.computer === "vm" ? "vm" : "off";
       // Cloud routines always use Box/BoxAgent. The per-bot backend applies
       // only to ordinary turns that mount a computer into the local agent.
       const cloudBackend = opts?.runOn === "cloud" || bot.cloudBackend !== "vps" ? "box" : "vps";
       const mountsComputerMcp = instance.adapter.capabilities.computerMcp === true;
       const mountsCloudComputer = mountsComputerMcp || instance.driverKind === "boxAgent";
-      const mountsLocalComputer = instance.adapter.capabilities.localComputerMcp === true;
       let previewCapture: (() => Promise<{ png: string; format: string }>) | null = null;
       let computerKind: "box" | "vps" | "vm" | "local" | null = null;
 
@@ -1459,18 +1456,6 @@ async function startTurn(
         }
         integrations.localComputer = containerComputerMcp(localVm.runtime, controlIntegration(bot.id));
         computerKind = "vm";
-      } else if (wants === "local") {
-        if (!shouldMountLocalComputer({
-          requested: "local",
-          hostPlatform: process.platform,
-          providerSupportsLocal: mountsLocalComputer,
-        })) {
-          throw new Error("this model engine cannot control this computer — choose Claude or an ACP engine, or select another destination");
-        }
-        const cua = readCuaConnection();
-        if (!cua) throw new Error("CUA Driver is not ready for this computer — check permissions and restart SwarmeBot");
-        integrations.localComputer = cua;
-        computerKind = "local";
       }
 
       // A VPS is a local-agent computer mount, never a remote agent runner.
@@ -1545,24 +1530,7 @@ async function startTurn(
         throw new Error("the cloud computer could not be created or reached");
       }
 
-      // Auto-only host fallback. Electron owns cua-driver/TCC attribution;
-      // the harness only reads its already-running connection descriptor.
-      if (
-        !integrations.computer &&
-        !integrations.localComputer &&
-        wants === undefined &&
-        shouldMountLocalComputer({
-          requested: undefined,
-          hostPlatform: process.platform,
-          providerSupportsLocal: mountsLocalComputer,
-        })
-      ) {
-        const cua = readCuaConnection();
-        if (cua) {
-          integrations.localComputer = cua;
-          computerKind = "local";
-        }
-      }
+      // Host CUA is disabled. Never fall back to the user's desktop.
       // peer-agent comms: give a user-initiated turn the list_bots/ask_bot
       // tools. A comms-invoked turn (depth ≥ cap) gets none — hard recursion
       // stop, so the user's tokens can't be burned by a bot-to-bot loop.
@@ -3169,6 +3137,7 @@ const server = createServer(async (req, res) => {
           mascotAvatarSvg: verdict.svg,
           mascotAvatar: null,
           mascotAvatarImage: null,
+          mascotAvatarSheetRow: null,
         });
         return json(res, 200, { bot: wireBot(patched!) });
       }
@@ -3183,6 +3152,7 @@ const server = createServer(async (req, res) => {
         mascotAvatarImage: basename(saved.path),
         mascotAvatar: null,
         mascotAvatarSvg: null,
+        mascotAvatarSheetRow: 0,
       });
       return json(res, 200, { bot: wireBot(patched!) });
     }
@@ -3295,7 +3265,19 @@ const server = createServer(async (req, res) => {
       if (body.mascotAvatarImage !== undefined) {
         if (body.mascotAvatarImage === null || body.mascotAvatarImage === "") {
           patch.mascotAvatarImage = null;
+          patch.mascotAvatarSheetRow = null;
         } else return json(res, 400, { error: "mascotAvatarImage can only be cleared" });
+      }
+      if (body.mascotAvatarSheetRow !== undefined) {
+        if (body.mascotAvatarSheetRow === null) {
+          patch.mascotAvatarSheetRow = null;
+        } else if (
+          !Number.isInteger(body.mascotAvatarSheetRow) ||
+          body.mascotAvatarSheetRow < 0 ||
+          body.mascotAvatarSheetRow > 8
+        ) {
+          return json(res, 400, { error: "mascotAvatarSheetRow must be an integer 0–8" });
+        } else patch.mascotAvatarSheetRow = body.mascotAvatarSheetRow;
       }
       // one pinned message per thread; null/"" clears. The id is not
       // validated against the transcript here — a pin whose message was
@@ -3314,9 +3296,9 @@ const server = createServer(async (req, res) => {
       }
       if (
         body.computer !== undefined &&
-        !["cloud", "vm", "local", "off"].includes(String(body.computer))
+        !["vm", "off"].includes(String(body.computer))
       ) {
-        return json(res, 400, { error: "computer must be cloud, vm, local, or off" });
+        return json(res, 400, { error: "computer must be vm or off" });
       }
       if (body.cloudBackend !== undefined && !["box", "vps"].includes(String(body.cloudBackend))) {
         return json(res, 400, { error: "cloudBackend must be box or vps" });
