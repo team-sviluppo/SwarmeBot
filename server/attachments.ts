@@ -159,12 +159,19 @@ const SHEET_COLS = 8;
 
 /**
  * Whether an uploaded picture is a sprite sheet rather than a still photo:
- * its pixels must divide into the 9x8 grid exactly, with square frames. A
- * photo — square, 3:2, anything else — fails one of those and stays still.
+ * its pixels divide into the 9x8 grid exactly, and the frames that fall out
+ * are roughly as tall as they are wide. Frames are not required to be exactly
+ * square — real sheets are exported at sizes like 1536x1872 (192x208 frames),
+ * which the avatar draws into a circle anyway. The aspect check is what keeps
+ * an ordinary photo out: 1440x1080 divides the grid too, but its cells would
+ * be 180x120, nothing like a portrait frame.
  */
+const FRAME_ASPECT_RANGE = [0.7, 1.4];
+
 export function looksLikeSpriteSheet(bytes: Buffer): boolean {
   const size = imageDimensions(bytes);
   if (!size || size.width <= 0 || size.height <= 0) return false;
   if (size.width % SHEET_COLS !== 0 || size.height % SHEET_ROWS !== 0) return false;
-  return size.width / SHEET_COLS === size.height / SHEET_ROWS;
+  const aspect = size.width / SHEET_COLS / (size.height / SHEET_ROWS);
+  return aspect >= FRAME_ASPECT_RANGE[0]! && aspect <= FRAME_ASPECT_RANGE[1]!;
 }

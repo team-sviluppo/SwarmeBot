@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { clampSheetRow, sheetFrameCounts, SHEET_COLS, SHEET_ROWS } from "./sprite-sheet";
+import {
+  clampSheetRow,
+  sheetDownscale,
+  sheetFrameCounts,
+  sheetFrameSize,
+  SHEET_COLS,
+  SHEET_MAX_FRAME,
+  SHEET_ROWS,
+} from "./sprite-sheet";
 
 describe("sprite sheet contract", () => {
   it("is a fixed 9×8 grid", () => {
@@ -63,5 +71,34 @@ describe("sheetFrameCounts", () => {
     expect(sheetFrameCounts(new Uint8ClampedArray(4), 1, 1)).toEqual(
       Array(SHEET_ROWS).fill(SHEET_COLS),
     );
+  });
+});
+
+describe("sheetFrameSize", () => {
+  it("reads the frame out of a real sheet's pixels", () => {
+    expect(sheetFrameSize(1536, 1872)).toEqual({ width: 192, height: 208 });
+  });
+
+  it("is not a sheet when the grid does not divide, or the cells are photo-shaped", () => {
+    expect(sheetFrameSize(1200, 800)).toBeNull();
+    expect(sheetFrameSize(1440, 1080)).toBeNull(); // divides, but 180x120 cells
+    expect(sheetFrameSize(0, 0)).toBeNull();
+  });
+});
+
+describe("sheetDownscale", () => {
+  it("shrinks an oversized sheet to the frame cap, staying on the grid", () => {
+    const target = sheetDownscale(1536, 1872)!;
+    expect(target.width % SHEET_COLS).toBe(0);
+    expect(target.height % SHEET_ROWS).toBe(0);
+    expect(Math.max(target.width / SHEET_COLS, target.height / SHEET_ROWS)).toBe(SHEET_MAX_FRAME);
+    // Still a sheet to whoever reads the stored pixels next.
+    expect(sheetFrameSize(target.width, target.height)).not.toBeNull();
+  });
+
+  it("leaves a sheet that already fits, and anything that is not one", () => {
+    expect(sheetDownscale(8 * 64, 9 * 64)).toBeNull();
+    expect(sheetDownscale(8 * SHEET_MAX_FRAME, 9 * SHEET_MAX_FRAME)).toBeNull();
+    expect(sheetDownscale(1200, 800)).toBeNull();
   });
 });

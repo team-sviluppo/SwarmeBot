@@ -3,7 +3,9 @@
 // payloads stay in the top group. VibeCoder would join Local later.
 import type { InstanceInfo } from "@/state/store";
 
-/** Harnesses kept off the desktop model-picker rail. Existing bots still run. */
+/** Harnesses kept off the per-bot model picker BY DEFAULT. Existing bots
+ * still run, and Settings -> Engines overrides this per instance: an
+ * explicit choice there wins over this list. */
 const HIDDEN_PICKER_DRIVER_KINDS = new Set([
   "grok",
   "grokAgent",
@@ -16,7 +18,19 @@ const HIDDEN_PICKER_DRIVER_KINDS = new Set([
   "piAgent",
 ]);
 
-export function isPickerHarness(instance: { driverKind?: string } | undefined): boolean {
+export function isPickerHarness(
+  instance: { driverKind?: string; pickerVisible?: boolean } | undefined,
+): boolean {
+  const kind = instance?.driverKind;
+  if (!kind) return false;
+  // the user's per-engine choice beats the shipped default
+  if (typeof instance?.pickerVisible === "boolean") return instance.pickerVisible;
+  return !HIDDEN_PICKER_DRIVER_KINDS.has(kind);
+}
+
+/** The shipped default for this harness, ignoring any override — the settings
+ * row uses it to label a toggle as "default" or "changed". */
+export function isPickerDefault(instance: { driverKind?: string } | undefined): boolean {
   const kind = instance?.driverKind;
   if (!kind) return false;
   return !HIDDEN_PICKER_DRIVER_KINDS.has(kind);

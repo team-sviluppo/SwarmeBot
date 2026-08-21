@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isPickerHarness, splitEngineRail } from "./engine-rail";
+import { isPickerDefault, isPickerHarness, splitEngineRail } from "./engine-rail";
 
 describe("splitEngineRail", () => {
   it("keeps Cloud engines above Local engines", () => {
@@ -41,5 +41,17 @@ describe("splitEngineRail", () => {
     ]) {
       expect(isPickerHarness({ driverKind })).toBe(false);
     }
+  });
+
+  it("lets a per-engine choice override the default in both directions", () => {
+    expect(isPickerHarness({ driverKind: "hermesAgent", pickerVisible: true })).toBe(true);
+    expect(isPickerHarness({ driverKind: "claude", pickerVisible: false })).toBe(false);
+    // an absent flag is not an override
+    expect(isPickerHarness({ driverKind: "hermesAgent", pickerVisible: undefined })).toBe(false);
+  });
+
+  it("reports the shipped default separately from the effective value", () => {
+    expect(isPickerDefault({ driverKind: "hermesAgent" })).toBe(false);
+    expect(isPickerDefault({ driverKind: "claude" })).toBe(true);
   });
 });

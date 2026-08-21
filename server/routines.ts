@@ -10,7 +10,7 @@ export type RoutineSchedule =
   | { type: "daily"; time: string; weekdays: number[] };
 
 /** `cloud` runs the agent itself inside the bot's Box VM. `maus` keeps
- * using the provider selected on the MAUS and only borrows its configured
+ * using the provider selected on the SWARMEand only borrows its configured
  * computer tools, if any. */
 export type RoutineRunOn = "maus" | "cloud";
 
@@ -331,7 +331,7 @@ export class RoutineManager {
     receivedAt: number;
   }): RoutineRun {
     if (this.options.botState(input.botId) === "missing") {
-      throw Object.assign(new Error("The assigned MAUS no longer exists"), { status: 410 });
+      throw Object.assign(new Error("The assigned SWARMEno longer exists"), { status: 410 });
     }
     const run: RoutineRun = {
       id: randomUUID(),

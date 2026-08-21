@@ -798,6 +798,13 @@ body {
   43%, 58% { opacity: 1; transform: translate(18px, -15px) scale(0.42); }
 }
 
+.ogb-sprite-sheet {
+  /* Its own paint scope: a sheet steps its background four times a second,
+     and without this the invalidation is handed to the document, which
+     repaints far more than one 56-pixel circle. */
+  contain: paint;
+}
+
 @keyframes ogb-sprite-sheet {
   to {
     /* Only as far as the row actually draws: short rows stop before the

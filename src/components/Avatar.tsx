@@ -196,6 +196,7 @@ function MausAvatarComponent(
     blink: () => inner.current?.blink(),
     spin: (durationMs?: number) => inner.current?.spin(durationMs),
     setExpression: (index: number) => inner.current?.setExpression(index),
+    setPointerGaze: (x: number, y: number) => inner.current?.setPointerGaze(x, y),
   }));
 
   // A one-shot motion borrows the state for a moment, then hands it back.
@@ -212,18 +213,28 @@ function MausAvatarComponent(
     return () => clearTimeout(timer);
   }, [motion, motionKey, animated]);
 
-  // Pointer-follow gaze, composed with any gaze the caller pins.
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  // Pointer-follow gaze. Both halves of the obvious implementation are
+  // traps at mouse-move rates: a getBoundingClientRect per move forces the
+  // whole document through layout, and a state update per move re-renders
+  // the avatar. So the box is measured once when the pointer arrives, and
+  // the offset goes straight into the engine, which is redrawing anyway.
+  const box = useRef<DOMRect | null>(null);
   const range = forward ? POINTER_GAZE.forward : POINTER_GAZE.authored;
-  const onPointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    if (!trackPointer || !animated) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    setPointer({
-      x: Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1)) * range,
-      y: Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1)) * range,
-    });
+  const onPointerEnter = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    box.current = event.currentTarget.getBoundingClientRect();
   };
-  const onPointerLeave = () => setPointer({ x: 0, y: 0 });
+  const onPointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    const rect = box.current;
+    if (!rect || !rect.width || !rect.height) return;
+    inner.current?.setPointerGaze(
+      Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1)) * range,
+      Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1)) * range,
+    );
+  };
+  const onPointerLeave = () => {
+    box.current = null;
+    inner.current?.setPointerGaze(0, 0);
+  };
 
   // A picture is a still image: the face engine, its states and the pointer
   // gaze have nothing to drive. The hooks above still run, so switching
@@ -269,6 +280,7 @@ function MausAvatarComponent(
   return (
     <span
       className="inline-flex shrink-0"
+      onPointerEnter={trackPointer && animated ? onPointerEnter : undefined}
       onPointerMove={trackPointer && animated ? onPointerMove : undefined}
       onPointerLeave={trackPointer && animated ? onPointerLeave : undefined}
     >
@@ -281,7 +293,7 @@ function MausAvatarComponent(
         gradient={gradientFor(color)}
         title={label ?? null}
         lookAround={forward ? 0 : 1}
-        gaze={{ x: (gaze?.x ?? 0) + pointer.x, y: (gaze?.y ?? 0) + pointer.y }}
+        gaze={gaze}
         turn={turn}
         spring={spring}
         eyeScale={eyeScale}

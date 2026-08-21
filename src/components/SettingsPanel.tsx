@@ -26,7 +26,7 @@ import { cn } from "@/lib/cn";
 import { requestNotificationPermission } from "@/lib/notify";
 import { botUsage, costCaption, formatTokens, formatUsd } from "@/lib/usage";
 import { shortPath } from "@/lib/short-path";
-import { SHEET_ROWS, clampSheetRow } from "@/lib/sprite-sheet";
+import { SHEET_ROWS, clampSheetRow, downscaleSheetFile } from "@/lib/sprite-sheet";
 import { SpriteSheetAvatar } from "./SpriteSheetAvatar";
 
 function Field({
@@ -419,9 +419,13 @@ function PictureSection({
   };
 
   /** Your own file. The bot frame comes back with whichever field it landed in. */
-  const uploadPicture = async (file: File) => {
+  const uploadPicture = async (rawFile: File) => {
     setImporting(true);
     try {
+      // An oversized sheet is resampled here, before it is stored: sheets are
+      // authored at sizes the browser then rescales on every single paint.
+      // Anything that is not one is uploaded exactly as it was picked.
+      const file = await downscaleSheetFile(rawFile);
       const response = await fetch(`/api/bots/${bot.id}/avatar/upload`, {
         method: "POST",
         headers: { "content-type": file.type || "application/octet-stream" },

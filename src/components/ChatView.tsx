@@ -54,6 +54,7 @@ import { webhookMessageView } from "@/lib/webhook-message";
 import { attachmentBasename, splitAttachedImages } from "@/lib/composer-attachments";
 import { BOTTOM_FOLLOW_THRESHOLD, shouldResumeBottomFollow } from "@/lib/bottom-follow";
 import {
+  TRANSCRIPT_FIRST_PAINT_SIZE,
   TRANSCRIPT_WINDOW_SIZE,
   expandWindowStart,
   focusWindowRange,
@@ -746,11 +747,20 @@ export function ChatView({ bot }: { bot: Bot }) {
     end: number | null;
   }>(() => ({
     key: transcriptKey,
-    start: tailWindowStart(messages.length),
+    start: tailWindowStart(messages.length, TRANSCRIPT_FIRST_PAINT_SIZE),
     end: null,
   }));
+  // Whether this thread has grown from its first-paint tail to the full
+  // window yet. Reset with the thread, so every switch pays for a screenful
+  // of bubbles rather than for a hundred and twenty markdown trees.
+  const [widened, setWidened] = useState(false);
   if (transcriptWindow.key !== transcriptKey) {
-    setTranscriptWindow({ key: transcriptKey, start: tailWindowStart(messages.length), end: null });
+    setTranscriptWindow({
+      key: transcriptKey,
+      start: tailWindowStart(messages.length, TRANSCRIPT_FIRST_PAINT_SIZE),
+      end: null,
+    });
+    setWidened(false);
   }
   const {
     visible: windowedMessages,
@@ -856,6 +866,23 @@ export function ChatView({ bot }: { bot: Bot }) {
     // downward user scroll
     previousScrollTop.current = el.scrollTop;
   }, [transcriptWindow.start]);
+
+  // The rest of the window, one frame after the thread appears. It goes
+  // through the same scroll compensation "Show earlier" uses, so the rows
+  // already on screen stay exactly where the reader found them.
+  useEffect(() => {
+    if (widened) return;
+    const frame = requestAnimationFrame(() => {
+      setWidened(true);
+      const start = tailWindowStart(messages.length);
+      // Nothing to widen on a short thread — and claiming a scroll
+      // compensation nobody consumes would misapply it to the next expand.
+      if (transcriptWindow.end !== null || start >= transcriptWindow.start) return;
+      preExpandHeight.current = scrollRef.current?.scrollHeight ?? null;
+      setTranscriptWindow((w) => (w.key === transcriptKey ? { ...w, start } : w));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [widened, transcriptKey, messages.length, transcriptWindow.start, transcriptWindow.end]);
 
   const showLater = () => {
     setBottomFollow(false);

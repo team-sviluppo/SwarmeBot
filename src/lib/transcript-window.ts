@@ -4,6 +4,13 @@
  * messages mount by default; a pill expands by the same step. */
 export const TRANSCRIPT_WINDOW_SIZE = 120;
 
+/** How much of that window mounts in the first commit. Every bubble parses
+ * its own markdown, so a full window is 120 markdown trees built in one
+ * blocking commit — which is what a bot switch used to pay for before the
+ * new thread appeared. A screenful lands first and the rest follows on the
+ * next frame. */
+export const TRANSCRIPT_FIRST_PAINT_SIZE = 20;
+
 export interface TranscriptWindow<T> {
   visible: T[];
   /** Messages hidden before the window — the pill's "(X more)" count. */

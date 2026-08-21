@@ -61,6 +61,10 @@ const instanceConfigSchema = z.object({
   config: z.json().optional(),
 });
 const instanceConfigMapSchema = z.record(z.string(), instanceConfigSchema);
+/** Per-engine model-picker overrides, keyed by instanceId. Only explicit
+ * user choices live here — a missing id means "use the shipped default for
+ * that harness", which the picker itself decides. */
+const pickerVisibilitySchema = z.record(z.string(), z.boolean());
 const appConfigSchema = z.object({
   xai: z.object({ key: optionalText, url: optionalText }).optional(),
   /** Project key used for Sessions, catalog and agent tools. userId/sessionId
@@ -87,8 +91,9 @@ const appConfigSchema = z.object({
   profile: z.object({ name: optionalText, email: optionalText }).optional(),
   rooms: roomConfigSchema.optional(),
   instances: instanceConfigMapSchema.optional(),
+  pickerVisibility: pickerVisibilitySchema.optional(),
 });
-const appConfigPatchSchema = appConfigSchema.omit({ instances: true });
+const appConfigPatchSchema = appConfigSchema.omit({ instances: true, pickerVisibility: true });
 const jsonObjectSchema = z.record(z.string(), z.json());
 
 export interface AppConfig {
@@ -103,6 +108,9 @@ export interface AppConfig {
   profile?: { name?: string; email?: string };
   rooms?: { turnTimeoutMinutes: number };
   instances?: InstanceConfigMap;
+  /** instanceId → show this engine in the per-bot model picker. Explicit
+   * overrides only; absent ids fall back to the picker's own default. */
+  pickerVisibility?: Record<string, boolean>;
 }
 export type ConfigPatch = z.output<typeof appConfigPatchSchema>;
 
@@ -312,6 +320,11 @@ export function saveConfig(
     }
     disk.instances = diskInstances;
   }
+  // Whole-map replace, not a merge: withInstancePickerVisibility() hands back
+  // the resolved map, so a merge could not express "clear this override".
+  if (checkedPatch.pickerVisibility !== undefined) {
+    disk.pickerVisibility = { ...checkedPatch.pickerVisibility };
+  }
   for (const [section, field] of remove) {
     const current = jsonObjectSchema.safeParse(disk[section]);
     if (!current.success || !Object.hasOwn(current.data, field)) continue;
@@ -371,6 +384,33 @@ export function withInstanceCli(
 interface InstanceCliUpdate {
   ok: boolean;
   config: AppConfig;
+}
+
+/** The user's explicit model-picker choices, one per instanceId. Values that
+ * are not booleans are dropped rather than trusted. */
+export function pickerVisibility(cfg: AppConfig): Record<string, boolean> {
+  const out: Record<string, boolean> = Object.create(null);
+  for (const [instanceId, visible] of Object.entries(cfg.pickerVisibility ?? {})) {
+    if (typeof visible === "boolean") out[instanceId] = visible;
+  }
+  return out;
+}
+
+/** Show or hide one engine in the per-bot model picker; `null` drops the
+ * override so the shipped default applies again. Unknown instances are
+ * rejected the same way withInstanceCli() rejects them — and the hasOwn
+ * check is also what keeps an instanceId of `__proto__` (the route regex
+ * accepts it) from reaching the assignment below. */
+export function withInstancePickerVisibility(
+  cfg: AppConfig,
+  instanceId: string,
+  visible: boolean | null,
+): InstanceCliUpdate {
+  if (!Object.hasOwn(instanceConfigs(cfg), instanceId)) return { ok: false, config: cfg };
+  const map = pickerVisibility(cfg);
+  if (visible === null) delete map[instanceId];
+  else map[instanceId] = visible;
+  return { ok: true, config: { ...cfg, pickerVisibility: { ...map } } };
 }
 
 /** The credential env instanceConfigs() injects for one driver — shared with

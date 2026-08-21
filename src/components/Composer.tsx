@@ -122,13 +122,23 @@ export function Composer({
 
   useEffect(() => setHighlight(0), [mention?.start, mention?.query]);
 
-  // grow the textarea with its content (capped by max-h in the className)
+  // Grow the textarea with its content (capped by max-h in the className).
+  // Where the browser can size a field to its own content, let it: the
+  // measure-and-set dance below writes a style and then reads scrollHeight,
+  // which forces the whole document through style and layout synchronously
+  // — in a profile of this app that one line was the single most expensive
+  // piece of JavaScript, and it ran on every keystroke and every mount.
+  const selfSizing = useMemo(
+    () => typeof CSS !== "undefined" && CSS.supports?.("field-sizing", "content"),
+    [],
+  );
   useEffect(() => {
+    if (selfSizing) return;
     const el = inputRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [text]);
+  }, [text, selfSizing]);
 
   const pickMention = (peer: MentionChoice) => {
     if (!mention) return;
@@ -315,6 +325,7 @@ export function Composer({
         <textarea
           ref={inputRef}
           rows={1}
+          style={selfSizing ? { fieldSizing: "content" } as React.CSSProperties : undefined}
           value={text}
           onChange={(e) => {
             setText(e.target.value);

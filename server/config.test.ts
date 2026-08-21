@@ -18,6 +18,8 @@ import {
   syncEndpointEnv,
   vpsSshAlias,
   withInstanceCli,
+  pickerVisibility,
+  withInstancePickerVisibility,
   WORKSPACE_CREDENTIAL_ENV,
   type AppConfig,
 } from "./config.ts";
@@ -97,6 +99,42 @@ describe("default fleet", () => {
   it("does not expand a one-off shadow fleet", () => {
     const map = instanceConfigs({ instances: { ghost: { driver: "not-a-real-driver" } } });
     expect(Object.keys(map)).toEqual(["ghost"]);
+  });
+});
+
+describe("Model-picker visibility per engine", () => {
+  it("stores, flips, and clears one engine's override", () => {
+    const shown = withInstancePickerVisibility({}, "hermes", true);
+    expect(shown.ok).toBe(true);
+    expect(shown.config.pickerVisibility).toEqual({ hermes: true });
+
+    const hidden = withInstancePickerVisibility(shown.config, "claude", false);
+    expect(hidden.config.pickerVisibility).toEqual({ hermes: true, claude: false });
+
+    // null drops the override so the shipped default applies again
+    const reset = withInstancePickerVisibility(hidden.config, "hermes", null);
+    expect(reset.config.pickerVisibility).toEqual({ claude: false });
+  });
+
+  it("leaves the original config untouched and rejects unknown instances", () => {
+    const cfg: AppConfig = { instances: { codex: { driver: "codex" } } };
+    expect(withInstancePickerVisibility(cfg, "codex", false).config.pickerVisibility).toEqual({ codex: false });
+    expect(cfg.pickerVisibility).toBeUndefined();
+    expect(withInstancePickerVisibility(cfg, "nope", false).ok).toBe(false);
+    // the route regex accepts __proto__; the fleet lookup must reject it
+    expect(withInstancePickerVisibility(cfg, "__proto__", false).ok).toBe(false);
+    expect(({} as Record<string, unknown>).pickerVisible).toBeUndefined();
+  });
+
+  it("drops non-boolean values from a hand-edited config", () => {
+    expect(pickerVisibility({ pickerVisibility: { a: true, b: "yes" } as never })).toEqual({ a: true });
+  });
+
+  it("round-trips through disk, replacing the map rather than merging it", () => {
+    saveConfig({ pickerVisibility: { hermes: true, claude: false } });
+    expect(loadConfig().pickerVisibility).toEqual({ hermes: true, claude: false });
+    saveConfig({ pickerVisibility: { hermes: true } });
+    expect(loadConfig().pickerVisibility).toEqual({ hermes: true });
   });
 });
 

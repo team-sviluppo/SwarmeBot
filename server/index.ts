@@ -51,6 +51,8 @@ import {
   litellmBaseUrl,
   EXTERNAL_SECRET_FIELDS,
   withInstanceCli,
+  pickerVisibility,
+  withInstancePickerVisibility,
   vpsSshAlias,
   DATA_DIR,
   EVENTS_DIR,
@@ -237,6 +239,18 @@ function askBotAndWait(targetBotId: string, message: string, depth: number, from
       finish(`(couldn't start that bot: ${err instanceof Error ? err.message : String(err)})`),
     );
   });
+}
+
+/** describe() plus each engine's model-picker override. The DEFAULT for a
+ * harness lives in the client's engine rail, so only explicit user choices
+ * ride along here — an absent flag means "no override". */
+async function describeInstances() {
+  const overrides = pickerVisibility(cfg);
+  return (await registry.describe()).map((instance) =>
+    Object.hasOwn(overrides, instance.instanceId)
+      ? { ...instance, pickerVisible: overrides[instance.instanceId] }
+      : instance,
+  );
 }
 
 // default selection for new bots: first available instance, claude preferred
@@ -1372,13 +1386,10 @@ async function startTurn(
     replaysNatively: instance.driverKind === "grok",
   });
 
-  const persona = [
-    `You are ${bot.name}, a personal bot in SwarmeBot.`,
-    bot.title && `Role: ${bot.title}.`,
-    bot.description && `About: ${bot.description}`,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  // The description IS the persona — a free-text system prompt the user writes,
+  // passed through with no framing. title stays out of it: it only labels the
+  // bot in the Chief of Staff roster and the room member list.
+  const persona = bot.description?.trim() ? `Sei ${bot.name}, ${bot.description.trim()}` : "";
 
   // busy flips immediately so the composer locks; the dispatch itself runs
   // in the background — box provisioning can take ~90s and must never
@@ -1581,7 +1592,7 @@ async function startTurn(
         // resume the wrong conversation and defeat the context bubble
         resumeCursor: resume ? task.resumeCursors[instanceId] : undefined,
         transcript,
-        system:
+        system: (
           persona +
           (computerKind === "vm"
             ? " You have a shared, isolated Cua sandbox: a Linux desktop in a container on this machine. Only /home/cua/workspace is durable; save downloads, repositories, working files, and browser profiles there because everything else inside the VM is disposable. No other host folder is mounted. Use the computer tools for desktop, accessibility, window, and shell work. Inspect the desktop state before acting, prefer accessibility targets over raw coordinates, and work carefully."
@@ -1608,7 +1619,8 @@ async function startTurn(
             ? ` The user tagged ${tagged
                 .map((t) => `@${t.name} (ask_bot bot_id ${t.id})`)
                 .join(" and ")} in their message — bring them in with ask_bot and fold their reply into your answer.`
-            : ""),
+            : "")
+        ).trim(),
         integrations,
         cwd,
       });
@@ -1675,7 +1687,7 @@ routines.start();
 
 // Webhook definitions are independent from calendar schedules, but every
 // delivery joins the same RoutineManager queue. That keeps unattended work
-// ordered behind a busy MAUS and gives webhook runs the same durable receipts.
+// ordered behind a busy SWARMEand gives webhook runs the same durable receipts.
 const webhooks = new WebhookManager({
   emit: broadcast,
   botState: (botId) => {
@@ -1825,8 +1837,7 @@ async function runGroupMemberTurn(
     .join(", ");
   const system = [
     `You are ${bot.name}, a bot in the room "${group.name}" in SwarmeBot.`,
-    bot.title && `Role: ${bot.title}.`,
-    bot.description && `About: ${bot.description}`,
+    bot.description?.trim() && `About: ${bot.description.trim()}`,
     `Room members: ${roster}, and ${userName} (the human).`,
     group.bulletin.trim() && `Room bulletin (shared instructions for everyone):\n${group.bulletin.trim()}`,
     `Reply as yourself, briefly and conversationally. To bring a teammate in, mention them like @Name — they'll see the conversation and respond.`,
@@ -3741,7 +3752,7 @@ const server = createServer(async (req, res) => {
       // Windows never pushes PATH changes into a live process, so without
       // this the answer is frozen at boot and "check again" is a no-op.
       resetPathCache();
-      return json(res, 200, { instances: await registry.describe() });
+      return json(res, 200, { instances: await describeInstances() });
     }
 
     // ── CLI binary discovery for the Engines "detected" dropdown ──
@@ -3777,34 +3788,64 @@ const server = createServer(async (req, res) => {
       return json(res, 200, probe);
     }
 
-    // ── per-instance CLI path override (custom builds / versioned bins) ──
-    // PATCH /api/instances/:id {cli: "/path/to/cli" | ""} — "" reverts to the
-    // driver default. Kills in-flight turns like any provider reload.
+    // ── per-instance settings ──
+    // PATCH /api/instances/:id
+    //   {cli: "/path/to/cli" | ""}      — "" reverts to the driver default;
+    //                                     kills in-flight turns like any reload
+    //   {pickerVisible: bool | null}    — show/hide in the per-bot model
+    //                                     picker; null restores the default.
+    //                                     Config-only, so it reloads nothing
+    //                                     and interrupts no running turn.
     const instancePatch = /^\/api\/instances\/([\w.-]+)$/.exec(path);
     if (method === "PATCH" && instancePatch) {
       // same non-simple-request gate as the local-VM lifecycle routes
       if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
         return json(res, 415, { error: "content-type must be application/json" });
       }
+      const instanceId = instancePatch[1];
       const body = await readBody(req);
-      if (typeof body?.cli !== "string") return json(res, 400, { error: "cli must be a string" });
-      if (/[\n\r]/.test(body.cli)) return json(res, 400, { error: "cli must not contain newlines" });
+      const wantsCli = body?.cli !== undefined;
+      const wantsPicker = body?.pickerVisible !== undefined;
+      if (!wantsCli && !wantsPicker) {
+        return json(res, 400, { error: "cli or pickerVisible is required" });
+      }
+      if (wantsCli) {
+        if (typeof body.cli !== "string") return json(res, 400, { error: "cli must be a string" });
+        if (/[\n\r]/.test(body.cli)) return json(res, 400, { error: "cli must not contain newlines" });
+      }
+      if (wantsPicker && body.pickerVisible !== null && typeof body.pickerVisible !== "boolean") {
+        return json(res, 400, { error: "pickerVisible must be a boolean or null" });
+      }
       if (providerConfigBusy) return json(res, 409, { error: "provider settings are already being updated" });
       providerConfigBusy = true;
       try {
-        const result = withInstanceCli(cfg, instancePatch[1], body.cli);
-        if (!result.ok) return json(res, 404, { error: `unknown instance "${instancePatch[1]}"` });
-        // persist the whole instances map this rebuild produced — a fresh
-        // saveConfig({instances}) merge would re-derive defaults identically,
-        // but writing the resolved map keeps disk and runtime in lockstep
-        saveConfig({ instances: result.config.instances });
-        Object.assign(cfg, loadConfig());
-        await reloadProviders();
+        if (wantsPicker) {
+          const visibility = withInstancePickerVisibility(
+            cfg,
+            instanceId,
+            body.pickerVisible as boolean | null,
+          );
+          if (!visibility.ok) return json(res, 404, { error: `unknown instance "${instanceId}"` });
+          saveConfig({ pickerVisibility: visibility.config.pickerVisibility });
+          Object.assign(cfg, loadConfig());
+        }
+        if (wantsCli) {
+          const result = withInstanceCli(cfg, instanceId, body.cli as string);
+          if (!result.ok) return json(res, 404, { error: `unknown instance "${instanceId}"` });
+          // persist the whole instances map this rebuild produced — a fresh
+          // saveConfig({instances}) merge would re-derive defaults identically,
+          // but writing the resolved map keeps disk and runtime in lockstep
+          saveConfig({ instances: result.config.instances });
+          Object.assign(cfg, loadConfig());
+          // only the CLI path changes what a turn spawns — a visibility flip
+          // must not tear down providers mid-turn
+          await reloadProviders();
+        }
         // rescan BEFORE describe(): the response's cliCandidates are computed
         // from the memoized PATH, so resetting after would answer this request
         // with the pre-reset cache
         resetPathCache();
-        return json(res, 200, { instances: await registry.describe() });
+        return json(res, 200, { instances: await describeInstances() });
       } finally {
         providerConfigBusy = false;
       }

@@ -64,12 +64,18 @@ describe("looksLikeSpriteSheet", () => {
     expect(looksLikeSpriteSheet(png(8, 9))).toBe(true);
   });
 
+  it("accepts the not-quite-square frames real sheets ship with", () => {
+    // 192x208 frames — the shape an exported 9x8 sheet actually has.
+    expect(looksLikeSpriteSheet(png(1536, 1872))).toBe(true);
+  });
+
   it("refuses a still photo — square, 3:2, or off-grid", () => {
     expect(looksLikeSpriteSheet(png(512, 512))).toBe(false);
     expect(looksLikeSpriteSheet(png(1200, 800))).toBe(false);
     expect(looksLikeSpriteSheet(png(320, 359))).toBe(false);
-    // Divides the grid, but the frames would not be square.
-    expect(looksLikeSpriteSheet(png(8 * 40, 9 * 41))).toBe(false);
+    // Divides the grid, but 180x120 cells are a photo's proportions, not a
+    // frame's.
+    expect(looksLikeSpriteSheet(png(1440, 1080))).toBe(false);
   });
 
   it("refuses bytes whose size it cannot read", () => {

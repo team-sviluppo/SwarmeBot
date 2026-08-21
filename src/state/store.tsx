@@ -321,6 +321,9 @@ export interface InstanceInfo {
   cliDefault?: string;
   /** Absolute paths of every default binary found on PATH, PATH order. */
   cliCandidates?: string[];
+  /** Settings -> Engines override for the per-bot model picker. Set ONLY when
+   * the user chose; absent means the shipped default for this harness. */
+  pickerVisible?: boolean;
 }
 
 export type AppSettingsSection =

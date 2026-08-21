@@ -1270,6 +1270,13 @@ export interface CursorAvatarHandle {
   blink: () => void
   spin: (durationMs?: number) => void
   setExpression: (index: number) => void
+  /**
+   * Nudge the eyes without a render. Pointer tracking fires as fast as the
+   * mouse moves, and routing that through React state re-rendered the avatar
+   * — props, inline styles and all — dozens of times a second. The engine
+   * already redraws every frame; it only needs the number.
+   */
+  setPointerGaze: (x: number, y: number) => void
 }
 
 export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarProps>(
@@ -1338,6 +1345,8 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       stateStart: 0,
       lastState,
       lastBodyTransform: '',
+      /** Pointer-follow offset, written straight in by setPointerGaze. */
+      pointerGaze: [0, 0] as [number, number],
       props: {
         state,
         expression,
@@ -1392,6 +1401,9 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
           engine.current.spinStart = performance.now()
         },
         setExpression: selectExpression,
+        setPointerGaze: (x: number, y: number) => {
+          engine.current.pointerGaze = [clamp(x, -1, 1), clamp(y, -1, 1)]
+        },
       }),
       []
     )
@@ -1447,8 +1459,8 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
         const rings = displayed(e).map(ring =>
           ring.map((pt): [number, number] => [pt[0] + ox, pt[1] + oy])
         )
-        const gx = clamp(p.gaze?.x ?? 0, -1, 1) * GAZE_X
-        const gy = clamp(p.gaze?.y ?? 0, -1, 1) * GAZE_Y
+        const gx = clamp((p.gaze?.x ?? 0) + e.pointerGaze[0], -1, 1) * GAZE_X
+        const gy = clamp((p.gaze?.y ?? 0) + e.pointerGaze[1], -1, 1) * GAZE_Y
         const radians = (((p.turn ?? 0) + spinTurn) * Math.PI) / 180
         const base = p.eyeScale ?? 1
         const blink = blinkScale(e, now)

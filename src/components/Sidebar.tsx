@@ -15,6 +15,7 @@ import {
   FolderPlus,
   Library,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Pin,
   PinOff,
@@ -353,14 +354,143 @@ function NewRoomPanel({ onClose }: { onClose: () => void }) {
 }
 
 /** Labeled divider between sidebar sections. Same typographic register as
- * EngineGroupLabel so the sidebar reads as one system. */
-function SectionDivider({ name }: { name: string }) {
+ * EngineGroupLabel so the sidebar reads as one system. Right-click or the
+ * hover affordance opens the rename/delete menu. */
+function SectionDivider({
+  name,
+  onMenu,
+}: {
+  name: string;
+  onMenu: (name: string, x: number, y: number) => void;
+}) {
   return (
-    <div className="flex items-center gap-2 px-3 pb-1 pt-3 first:pt-0" data-section={name}>
+    <div
+      className="group/section flex items-center gap-2 px-3 pb-1 pt-3 first:pt-0"
+      data-section={name}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu(name, e.clientX, e.clientY);
+      }}
+    >
       <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
         {name}
       </span>
       <span className="h-px flex-1 bg-hairline/40" />
+      <button
+        aria-label={`Section options for ${name}`}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          onMenu(name, r.right, r.bottom);
+        }}
+        className="shrink-0 rounded-md p-0.5 text-ink-secondary opacity-0 hover:text-ink focus-visible:opacity-100 group-hover/section:opacity-100"
+      >
+        <MoreHorizontal size={13} />
+      </button>
+    </div>
+  );
+}
+
+/** Section header menu. A section is only a per-bot label, so renaming and
+ * deleting are batch patches over the bots that carry it — hidden ones
+ * included, or an archived bot would keep resurrecting the old name. */
+function SectionMenu({
+  section,
+  anchor,
+  onClose,
+}: {
+  section: string;
+  anchor: { x: number; y: number };
+  onClose: () => void;
+}) {
+  const { state, dispatch } = useStore();
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(section);
+  const trimmed = name.trim();
+  const members = state.bots.filter((b) => b.section === section);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest("[data-section-menu]")) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", onClose);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", onClose);
+    };
+  }, [onClose]);
+
+  // "" clears the label server-side (the section stops existing once its
+  // last bot leaves); a new name renames it for the whole group at once
+  const applyToAll = (value: string) => {
+    for (const bot of members) dispatch({ type: "updateBot", botId: bot.id, patch: { section: value } });
+    onClose();
+  };
+
+  const top = Math.max(8, Math.min(anchor.y, window.innerHeight - 200));
+  const left = Math.min(anchor.x, window.innerWidth - 260);
+
+  return (
+    <div
+      data-section-menu
+      style={{ top, left }}
+      className="fixed z-40 w-[236px] overflow-hidden rounded-xl border border-hairline/50 bg-card py-2 shadow-2xl shadow-black/60"
+    >
+      <div className="px-3.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+        {section}
+      </div>
+      {renaming ? (
+        <form
+          className="flex items-center gap-1.5 px-2.5 py-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!trimmed || trimmed.length > 60) return;
+            if (trimmed === section) return onClose();
+            applyToAll(trimmed);
+          }}
+        >
+          <input
+            autoFocus
+            maxLength={60}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Section name"
+            className="w-full rounded-lg bg-raised/70 px-2.5 py-1.5 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!trimmed || trimmed.length > 60}
+            className={cn(
+              "shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-medium",
+              trimmed ? "bg-accent text-panel" : "bg-raised/70 text-ink-secondary",
+            )}
+          >
+            Save
+          </button>
+        </form>
+      ) : (
+        <button
+          onClick={() => setRenaming(true)}
+          className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[13px] text-ink hover:bg-raised/70"
+        >
+          <Pencil size={15} className="text-ink-secondary" />
+          Rename section
+        </button>
+      )}
+      <div className="mx-2 my-1 border-t border-hairline/40" />
+      <button
+        onClick={() => applyToAll("")}
+        className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[13px] text-danger hover:bg-raised/70"
+      >
+        <FolderMinus size={15} />
+        Delete section
+      </button>
+      <div className="px-3.5 pt-1 text-[11px] text-ink-secondary">
+        {members.length === 1 ? "1 bot stays" : `${members.length} bots stay`}, ungrouped.
+      </div>
     </div>
   );
 }
@@ -879,6 +1009,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const importReturnRef = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [sectionPicker, setSectionPicker] = useState<MenuState | null>(null);
+  const [sectionMenu, setSectionMenu] = useState<{ section: string; x: number; y: number } | null>(null);
   const [roomMenu, setRoomMenu] = useState<{ groupId: string; x: number; y: number } | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [newRoom, setNewRoom] = useState(false);
@@ -1197,7 +1328,10 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           ))}
           {sectionNames.map((name) => (
             <Fragment key={name}>
-              <SectionDivider name={name} />
+              <SectionDivider
+                name={name}
+                onMenu={(section, x, y) => setSectionMenu({ section, x, y })}
+              />
               {sectionedBots
                 .filter((b) => b.section === name)
                 .map((b) => (
@@ -1268,6 +1402,13 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       )}
       {sectionPicker && (
         <SectionPicker botId={sectionPicker.botId} anchor={sectionPicker} onClose={() => setSectionPicker(null)} />
+      )}
+      {sectionMenu && (
+        <SectionMenu
+          section={sectionMenu.section}
+          anchor={sectionMenu}
+          onClose={() => setSectionMenu(null)}
+        />
       )}
       {roomMenu && (
         <RoomContextMenu
