@@ -1,9 +1,8 @@
 // Provider brand marks, keyed by driver kind. Official logos only.
-import { Monitor } from "lucide-react";
+import { Monitor, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { HermesMark } from "./HermesMark";
 import { CursorMark } from "./CursorMark";
-import litellmMark from "@/assets/litellm-mark.png";
 
 export { HermesMark, CursorMark };
 
@@ -125,18 +124,10 @@ export function PiMark({ size = 16, className }: IconProps) {
   );
 }
 
-/** Official LiteLLM mark — bullet-train wordmark provided by the project. */
-export function LiteLLMMark({ size = 16, className }: IconProps) {
-  return (
-    <img
-      src={litellmMark}
-      width={size}
-      height={size}
-      alt=""
-      className={cn("shrink-0 object-contain", className)}
-      aria-hidden
-    />
-  );
+/** Generic, on purpose: the harness talks to whatever OpenAI-compatible
+ * endpoint the user runs, so no vendor logo would describe it honestly. */
+export function LocalEndpointMark({ size = 16, className }: IconProps) {
+  return <Server size={size} className={cn("text-ink-secondary", className)} />;
 }
 
 export function ProviderMark({ driverKind, size, className }: IconProps & { driverKind: string }) {
@@ -166,8 +157,8 @@ export function ProviderMark({ driverKind, size, className }: IconProps & { driv
       return <ComputerMark size={size} className={className} />;
     case "piAgent":
       return <PiMark size={size} className={className} />;
-    case "litellm":
-      return <LiteLLMMark size={size} className={className} />;
+    case "localEndpoint":
+      return <LocalEndpointMark size={size} className={className} />;
     default:
       return (
         <span className="flex size-full items-center justify-center text-[10px] font-semibold tracking-tight text-ink-secondary">

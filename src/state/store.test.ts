@@ -12,7 +12,7 @@ describe("config status frames", () => {
         vps: { configured: true, sshAlias: "homelab" },
         rooms: { turnTimeoutMinutes: 20 },
         opencodeGo: { configured: true },
-        litellmHextra: { configured: true },
+        localEndpoint: { configured: true },
         tts: { configured: true, ready: true, voice: "Ada" },
         profile: { name: "Ian", email: "ian@example.test" },
       }),
@@ -23,7 +23,7 @@ describe("config status frames", () => {
       vps: { configured: true, sshAlias: "homelab" },
       rooms: { turnTimeoutMinutes: 20 },
       opencodeGo: { configured: true },
-      litellmHextra: { configured: true },
+      localEndpoint: { configured: true },
       tts: { configured: true, ready: true, voice: "Ada" },
       profile: { name: "Ian", email: "ian@example.test" },
     });

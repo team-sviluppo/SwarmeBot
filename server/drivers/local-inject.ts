@@ -20,11 +20,13 @@ export interface LocalHost {
   baseUrlEnv?: string;
 }
 
-/** Shipped default for the LiteLLM gateway, and the env var a user's own
- * endpoint arrives in. Both are exported so config validation and the driver
- * agree on one source of truth. */
-export const LITELLM_DEFAULT_BASE_URL = "https://litellm.hextra.it/v1";
-export const LITELLM_BASE_URL_ENV = "LITELLMHEXTRA_BASE_URL";
+/** Env vars the user's own Local Endpoint arrives in. There is deliberately no
+ * shipped default URL: an OpenAI-compatible endpoint is whatever the user runs,
+ * so until they configure one the host does not resolve at all and every
+ * injector skips it (see resolveHost). Exported so config validation and the
+ * driver agree on one source of truth. */
+export const LOCAL_ENDPOINT_BASE_URL_ENV = "LOCAL_ENDPOINT_BASE_URL";
+export const LOCAL_ENDPOINT_API_KEY_ENV = "LOCAL_ENDPOINT_AUTH_KEY";
 
 export const LOCAL_HOSTS: LocalHost[] = [
   { id: "omlx", label: "oMLX", baseUrl: "http://127.0.0.1:8080/v1", apiKey: "omlx" },
@@ -34,12 +36,15 @@ export const LOCAL_HOSTS: LocalHost[] = [
   { id: "lmstudio", label: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", apiKey: "lm-studio" },
   { id: "unsloth", label: "Unsloth", baseUrl: "http://127.0.0.1:8888/v1", apiKeyEnv: "UNSLOTH_STUDIO_AUTH_TOKEN" },
   { id: "unsloth_api", label: "Unsloth", baseUrl: "http://127.0.0.1:8888/v1", apiKeyEnv: "UNSLOTH_STUDIO_AUTH_TOKEN" },
+  // Any OpenAI-compatible endpoint the user runs or pays for — LiteLLM, vLLM,
+  // llama.cpp, a hosted proxy. Empty baseUrl means "not configured yet": it
+  // only resolves once the user saves a URL in Settings -> Connections.
   {
-    id: "litellm_hextra",
-    label: "Litellm Hextra",
-    baseUrl: LITELLM_DEFAULT_BASE_URL,
-    apiKeyEnv: "LITELLMHEXTRA_AUTH_KEY",
-    baseUrlEnv: LITELLM_BASE_URL_ENV,
+    id: "local_endpoint",
+    label: "Local Endpoint",
+    baseUrl: "",
+    apiKeyEnv: LOCAL_ENDPOINT_API_KEY_ENV,
+    baseUrlEnv: LOCAL_ENDPOINT_BASE_URL_ENV,
   },
 ];
 
@@ -94,16 +99,22 @@ export function normalizeGatewayBaseUrl(raw: string | null | undefined): string 
   return url.toString().replace(/\/+$/, "");
 }
 
-/** A host's endpoint for this environment: the user's configured override
- * when it parses, the shipped default otherwise (a broken setting must not
- * silently point the fleet at nothing). */
+/** A host's endpoint for this environment: the user's configured override when
+ * it parses, the built-in address otherwise. Empty means the host has no
+ * built-in address and no usable override — a junk setting must not silently
+ * point the fleet at nothing, so it reads as unconfigured rather than as a URL. */
 export function hostBaseUrl(host: LocalHost, env: Record<string, string | undefined> = process.env): string {
   if (!host.baseUrlEnv) return host.baseUrl;
   return normalizeGatewayBaseUrl(env[host.baseUrlEnv]) ?? host.baseUrl;
 }
 
-function resolveHost(host: LocalHost, env: Record<string, string | undefined>): LocalHost {
+/** undefined for a host that needs a user-supplied endpoint and has not got
+ * one. Every caller already treats a missing host as "leave the model alone",
+ * so this is what keeps an unconfigured Local Endpoint out of the pickers and
+ * out of every CLI's config file. */
+function resolveHost(host: LocalHost, env: Record<string, string | undefined>): LocalHost | undefined {
   const baseUrl = hostBaseUrl(host, env);
+  if (!baseUrl) return undefined;
   return baseUrl === host.baseUrl ? host : { ...host, baseUrl };
 }
 
@@ -298,7 +309,7 @@ export async function probeLocalInjects(
 ): Promise<InjectedModel[]> {
   const allowed = hostIds ? new Set(hostIds) : null;
   const seenHosts = new Set<string>();
-  const hosts = LOCAL_HOSTS.map((host) => resolveHost(host, env)).filter((host) => {
+  const hosts = LOCAL_HOSTS.flatMap((host) => resolveHost(host, env) ?? []).filter((host) => {
     if (allowed && !allowed.has(host.id)) return false;
     const key = host.baseUrl.replace(/\/$/, "");
     if (seenHosts.has(key)) return false;

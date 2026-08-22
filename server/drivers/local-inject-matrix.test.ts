@@ -42,7 +42,12 @@ function scratchHome(prefix: string): string {
   return home;
 }
 
-const UNIQUE_HOSTS = LOCAL_HOSTS.filter((host, index, all) => all.findIndex((row) => row.baseUrl === host.baseUrl) === index);
+// Hosts with a built-in address. The Local Endpoint host ships without one on
+// purpose, so it cannot be part of a matrix that asserts a resolvable /v1 base
+// — its unconfigured and configured behaviour is covered separately below.
+const UNIQUE_HOSTS = LOCAL_HOSTS.filter(
+  (host, index, all) => host.baseUrl !== "" && all.findIndex((row) => row.baseUrl === host.baseUrl) === index,
+);
 
 /** Model ids we have actually seen on oMLX / Unsloth / Ollama / LM Studio. */
 const LIVE_MODEL_IDS = [
@@ -119,12 +124,38 @@ describe("host credentials", () => {
     expect(hostApiKey(host, {})).not.toBe("unsloth-secret");
   });
 
-  it("uses LITELLMHEXTRA_AUTH_KEY for Litellm Hextra", () => {
-    const host = localHost("litellm_hextra")!;
-    expect(host.label).toBe("Litellm Hextra");
-    expect(host.baseUrl).toBe("https://litellm.hextra.it/v1");
-    expect(host.apiKeyEnv).toBe("LITELLMHEXTRA_AUTH_KEY");
-    expect(hostApiKey(host, { LITELLMHEXTRA_AUTH_KEY: "hextra-secret" })).toBe("hextra-secret");
+  it("does not resolve the Local Endpoint host until the user sets a URL", () => {
+    // no shipped address: without a setting there is nothing to point at, so
+    // the host is absent and every injector below leaves the model alone
+    expect(localHost("local_endpoint", {})).toBeUndefined();
+    expect(localHost("local_endpoint", { LOCAL_ENDPOINT_BASE_URL: "junk" })).toBeUndefined();
+
+    const host = localHost("local_endpoint", { LOCAL_ENDPOINT_BASE_URL: "https://llm.example.com" })!;
+    expect(host.label).toBe("Local Endpoint");
+    expect(host.baseUrl).toBe("https://llm.example.com/v1");
+    expect(host.apiKeyEnv).toBe("LOCAL_ENDPOINT_AUTH_KEY");
+    expect(hostApiKey(host, { LOCAL_ENDPOINT_AUTH_KEY: "hextra-secret" })).toBe("hextra-secret");
+  });
+
+  it("leaves every writer alone while the Local Endpoint is unconfigured", () => {
+    const id = encodeInjectId("local_endpoint", "gemma-4-31b-it-bf16");
+    const env: Record<string, string | undefined> = {};
+    expect(applyOpenAIInject(env, id)).toEqual({ model: id, injected: false });
+    expect(env.OPENAI_BASE_URL).toBeUndefined();
+    expect(applyClaudeInject(env, id)).toEqual({ model: id, injected: false });
+    expect(env.ANTHROPIC_BASE_URL).toBeUndefined();
+    expect(codexLocalProviderArgs(env, id)).toEqual([]);
+  });
+
+  it("routes the Local Endpoint through the OpenAI dialect once a URL is set", () => {
+    const env: Record<string, string | undefined> = {
+      LOCAL_ENDPOINT_BASE_URL: "https://llm.example.com",
+      LOCAL_ENDPOINT_AUTH_KEY: "hextra-secret",
+    };
+    const applied = applyOpenAIInject(env, encodeInjectId("local_endpoint", "gemma-4-31b-it-bf16"));
+    expect(applied).toEqual({ model: "gemma-4-31b-it-bf16", injected: true });
+    expect(env.OPENAI_BASE_URL).toBe("https://llm.example.com/v1");
+    expect(env.OPENAI_API_KEY).toBe("hextra-secret");
   });
 
   it("reads the Unsloth studio key file from HOME", () => {

@@ -14,7 +14,7 @@ import { CursorAgentDriver } from "./acp/cursor.ts";
 import { OpenCodeGoDriver } from "./acp/opencode-go.ts";
 import { QwenAgentDriver } from "./acp/qwen.ts";
 import { HermesAgentDriver } from "./acp/hermes.ts";
-import { LitellmDriver } from "./litellm.ts";
+import { LocalEndpointDriver } from "./local-endpoint.ts";
 import { PiDriver } from "./pi.ts";
 
 export const BUILT_IN_DRIVERS: readonly AnyProviderDriver[] = [
@@ -28,7 +28,7 @@ export const BUILT_IN_DRIVERS: readonly AnyProviderDriver[] = [
   QwenAgentDriver,
   HermesAgentDriver,
   PiDriver,
-  LitellmDriver,
+  LocalEndpointDriver,
   ClaudeDriver,
   CodexDriver,
   AntigravityDriver,

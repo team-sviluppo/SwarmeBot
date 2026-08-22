@@ -48,7 +48,7 @@ import {
   saveConfig,
   syncCredentialEnv,
   syncEndpointEnv,
-  litellmBaseUrl,
+  localEndpointBaseUrl,
   EXTERNAL_SECRET_FIELDS,
   withInstanceCli,
   pickerVisibility,
@@ -1389,7 +1389,7 @@ async function startTurn(
   // The description IS the persona — a free-text system prompt the user writes,
   // passed through with no framing. title stays out of it: it only labels the
   // bot in the Chief of Staff roster and the room member list.
-  const persona = bot.description?.trim() ? `Sei ${bot.name}, ${bot.description.trim()}` : "";
+  const persona = bot.description?.trim() ? `You are ${bot.name}, ${bot.description.trim()}` : "";
 
   // busy flips immediately so the composer locks; the dispatch itself runs
   // in the background — box provisioning can take ~90s and must never
@@ -2135,7 +2135,7 @@ function cliProbeEnvironment(): NodeJS.ProcessEnv {
     "XAI_API_KEY",
     "BOX_TOKEN",
     "OPENCODE_API_KEY",
-    "LITELLMHEXTRA_AUTH_KEY",
+    "LOCAL_ENDPOINT_AUTH_KEY",
     "COMPOSIO_API_KEY",
     "OMB_COMPOSIO_BROKER_TOKEN",
     "OMB_TTS_KEY",
@@ -2163,9 +2163,9 @@ function configStatus() {
     box: { configured: Boolean(cfg.box?.token) },
     vps: { configured: Boolean(vpsSshAlias(cfg)), sshAlias: vpsSshAlias(cfg) ?? "" },
     opencodeGo: { configured: Boolean(cfg.opencodeGo?.apiKey) },
-    // the gateway URL is a setting, not a secret — echoed so Settings can
-    // show what this workspace is actually pointed at
-    litellmHextra: { configured: Boolean(cfg.litellmHextra?.apiKey), baseUrl: litellmBaseUrl(cfg) },
+    // the endpoint URL is a setting, not a secret — echoed so Settings can
+    // show what this workspace is actually pointed at ("" = not configured)
+    localEndpoint: { configured: Boolean(cfg.localEndpoint?.apiKey), baseUrl: localEndpointBaseUrl(cfg) ?? "" },
     // the chosen voice is a setting, not a secret; the key is reported the
     // same configured-or-not way as every other credential
     tts: tts.describeVoice(cfg),

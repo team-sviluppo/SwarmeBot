@@ -1,6 +1,7 @@
-// Litellm harness — OpenAI-compatible chat completions against the
-// litellm_hextra local host. Catalog is that host's /v1/models list, same
-// inject ids Hermes uses; the API key lives in settings, not a CLI login.
+// Local Endpoint harness — OpenAI-compatible chat completions against
+// whatever endpoint the user configured (LiteLLM, vLLM, llama.cpp, a hosted
+// proxy). Catalog is that endpoint's /v1/models list, same inject ids Hermes
+// uses; the URL and API key live in settings, not in a CLI login or the build.
 import type {
   DriverCreateInput,
   ModelCatalog,
@@ -16,17 +17,20 @@ import { appendNative } from "./native.ts";
 import {
   decodeInjectId,
   hostApiKey,
+  LOCAL_ENDPOINT_API_KEY_ENV,
   localHost,
   mergeLocalInject,
 } from "./local-inject.ts";
 
-const DRIVER_KIND = "litellm";
-const HOST_ID = "litellm_hextra";
+const DRIVER_KIND = "localEndpoint";
+const HOST_ID = "local_endpoint";
 const EMPTY: ModelCatalog = { default: "", options: [] };
+const NO_ENDPOINT = "Set the Local Endpoint URL in Settings → Connections";
+const NO_KEY = "Add a Local Endpoint API key in Settings → Connections";
 
-export const LitellmDriver: ProviderDriver<Record<string, never>> = {
+export const LocalEndpointDriver: ProviderDriver<Record<string, never>> = {
   driverKind: DRIVER_KIND,
-  metadata: { displayName: "Litellm", supportsMultipleInstances: true, access: "custom" },
+  metadata: { displayName: "Local Endpoint", supportsMultipleInstances: true, access: "custom" },
   models: EMPTY,
   decodeConfig: () => ({}),
   defaultConfig: () => ({}),
@@ -34,14 +38,17 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
   async create(input: DriverCreateInput<Record<string, never>>): Promise<ProviderInstance> {
     const { instanceId } = input;
     const env: Record<string, string | undefined> = { ...process.env, ...input.environment };
-    // env first: the gateway endpoint is a user setting the fleet injects
-    // here, so the host must be resolved against THIS instance's env.
+    // env first: the endpoint is a user setting the fleet injects here, so the
+    // host must be resolved against THIS instance's env. It is undefined until
+    // a URL is saved — create() must still succeed, or an unconfigured harness
+    // would take the whole fleet down at startup instead of reporting itself
+    // unavailable.
     const host = localHost(HOST_ID, env);
-    if (!host) throw new Error("litellm_hextra host is not registered");
-    const apiKey = hostApiKey(host, env);
-    const hasKey = Boolean(host.apiKeyEnv && env[host.apiKeyEnv]);
+    const apiKey = host ? hostApiKey(host, env) : "";
+    const hasKey = Boolean(env[LOCAL_ENDPOINT_API_KEY_ENV]);
     let models = EMPTY;
     const refreshModels = async () => {
+      if (!host) return;
       const resolved = await mergeLocalInject(EMPTY, env, fetch, [HOST_ID]);
       if (resolved.options.length) models = resolved;
     };
@@ -69,6 +76,7 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
       model: string,
       opts: { stream: boolean; signal?: AbortSignal; onDelta?: (d: string) => void },
     ): Promise<{ text: string; usage: { input: number; output: number } | null }> => {
+      if (!host) throw new Error(NO_ENDPOINT);
       const res = await fetch(`${host.baseUrl}/chat/completions`, {
         method: "POST",
         headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
@@ -77,7 +85,7 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
       });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        throw new Error(`LiteLLM HTTP ${res.status}${body ? `: ${body.slice(0, 200)}` : ""}`);
+        throw new Error(`Local Endpoint HTTP ${res.status}${body ? `: ${body.slice(0, 200)}` : ""}`);
       }
       if (!opts.stream) {
         const json: any = await res.json();
@@ -125,7 +133,8 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
 
     const sendTurn = async (turn: SendTurnInput) => {
       const { threadId } = turn;
-      if (!hasKey) throw new Error("no LiteLLM key — add it in Settings → Connections");
+      if (!host) throw new Error(NO_ENDPOINT);
+      if (!hasKey) throw new Error(NO_KEY);
       if (active.has(threadId)) throw new Error("a turn is already running on this thread");
       const turnId = newId();
       const abort = new AbortController();
@@ -140,7 +149,7 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
         })),
         { role: "user", content: turn.text },
       ];
-      appendNative(threadId, { dir: "out", source: "litellm.chat.completions", msg: { model, messages } });
+      appendNative(threadId, { dir: "out", source: "localEndpoint.chat.completions", msg: { model, messages } });
 
       emit({ ...base(threadId, turnId), type: "turn.started" });
       emit({ ...base(threadId, turnId), type: "session.started", sessionId: null, model: turn.model ?? models.default });
@@ -153,7 +162,7 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
             onDelta: (delta) =>
               emit({ ...base(threadId, turnId), type: "content.delta", streamKind: "assistant_text", delta }),
           });
-          appendNative(threadId, { dir: "in", source: "litellm.chat.completions", msg: { text, usage } });
+          appendNative(threadId, { dir: "in", source: "localEndpoint.chat.completions", msg: { text, usage } });
           if (text.trim()) {
             emit({ ...base(threadId, turnId), type: "item.completed", itemType: "assistant_text", text });
           }
@@ -182,12 +191,8 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
     };
 
     const snapshot = async (): Promise<ProviderSnapshot> => {
-      if (!hasKey) {
-        return {
-          state: "unavailable",
-          reason: "Add a LiteLLM API key in Settings → Connections",
-        };
-      }
+      if (!host) return { state: "unavailable", reason: NO_ENDPOINT };
+      if (!hasKey) return { state: "unavailable", reason: NO_KEY };
       return { state: "available", authenticated: true, version: null };
     };
 

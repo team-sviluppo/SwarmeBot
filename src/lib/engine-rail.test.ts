@@ -24,7 +24,7 @@ describe("splitEngineRail", () => {
     expect(isPickerHarness({ driverKind: "codex" })).toBe(true);
     expect(isPickerHarness({ driverKind: "geminiAgent" })).toBe(true);
     expect(isPickerHarness({ driverKind: "cursorAgent" })).toBe(true);
-    expect(isPickerHarness({ driverKind: "litellm" })).toBe(true);
+    expect(isPickerHarness({ driverKind: "localEndpoint" })).toBe(true);
   });
 
   it("hides Grok, Kimi, Droid, Antigravity, OpenCode Go, Qwen, Hermes, and Pi from the picker rail", () => {

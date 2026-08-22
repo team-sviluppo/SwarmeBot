@@ -9,8 +9,8 @@ import { z } from "zod";
 import { writeFileAtomic } from "./atomic.ts";
 import type { InstanceConfigMap } from "./contracts.ts";
 import {
-  LITELLM_BASE_URL_ENV,
-  LITELLM_DEFAULT_BASE_URL,
+  LOCAL_ENDPOINT_API_KEY_ENV,
+  LOCAL_ENDPOINT_BASE_URL_ENV,
   normalizeGatewayBaseUrl,
 } from "./drivers/local-inject.ts";
 import { parseJson, schemaIssue, type JsonObject, type JsonValue } from "./schema.ts";
@@ -74,10 +74,10 @@ const appConfigSchema = z.object({
   vps: vpsConfigSchema.optional(),
   /** OpenCode Go key; persisted write-only and passed only to its child. */
   opencodeGo: z.object({ apiKey: optionalText }).optional(),
-  /** LiteLLM gateway: the key, plus the endpoint it authenticates against —
-   * every user runs their own proxy, so the URL is a setting, not a build
-   * constant. Empty means "use the shipped default". */
-  litellmHextra: z
+  /** Local Endpoint: any OpenAI-compatible URL the user runs or pays for, plus
+   * the key it authenticates against. Both are settings, not build constants —
+   * empty means the harness is simply not configured. */
+  localEndpoint: z
     .object({
       apiKey: optionalText,
       baseUrl: z.string().refine((value) => value === "" || normalizeGatewayBaseUrl(value) !== null, {
@@ -103,7 +103,7 @@ export interface AppConfig {
   /** A named host from the user's SSH config. Authentication stays with SSH. */
   vps?: { sshAlias?: string };
   opencodeGo?: { apiKey?: string };
-  litellmHextra?: { apiKey?: string; baseUrl?: string };
+  localEndpoint?: { apiKey?: string; baseUrl?: string };
   tts?: { key?: string; voice?: string };
   profile?: { name?: string; email?: string };
   rooms?: { turnTimeoutMinutes: number };
@@ -132,20 +132,20 @@ export function vpsSshAlias(cfg: AppConfig): string | null {
   return isValidSshAlias(cfg.vps?.sshAlias) ? cfg.vps.sshAlias : null;
 }
 
-/** The LiteLLM endpoint this workspace talks to: the user's setting when it
- * parses, the shipped gateway otherwise. */
-export function litellmBaseUrl(cfg: AppConfig): string {
-  return normalizeGatewayBaseUrl(cfg.litellmHextra?.baseUrl) ?? LITELLM_DEFAULT_BASE_URL;
+/** The Local Endpoint this workspace talks to, or null when the user has not
+ * set one — there is no address to fall back to. */
+export function localEndpointBaseUrl(cfg: AppConfig): string | null {
+  return normalizeGatewayBaseUrl(cfg.localEndpoint?.baseUrl);
 }
 
 /** Non-secret endpoints the config owns but code outside the fleet reads off
- * the environment: every driver's Custom list probes the LiteLLM gateway
+ * the environment: every driver's Custom list probes the Local Endpoint
  * through process.env, not through its own instance env, so a saved URL has
  * to reach process.env as well — the mirror image of syncCredentialEnv. */
 export function syncEndpointEnv(cfg: AppConfig): void {
-  const baseUrl = normalizeGatewayBaseUrl(cfg.litellmHextra?.baseUrl);
-  if (baseUrl) process.env[LITELLM_BASE_URL_ENV] = baseUrl;
-  else delete process.env[LITELLM_BASE_URL_ENV];
+  const baseUrl = localEndpointBaseUrl(cfg);
+  if (baseUrl) process.env[LOCAL_ENDPOINT_BASE_URL_ENV] = baseUrl;
+  else delete process.env[LOCAL_ENDPOINT_BASE_URL_ENV];
 }
 
 export function roomTurnTimeoutMinutes(cfg: AppConfig): number {
@@ -197,8 +197,8 @@ export function loadConfig(): AppConfig {
   if (process.env.BOX_TOKEN !== undefined) cfg.box.token = process.env.BOX_TOKEN;
   cfg.opencodeGo = { ...cfg.opencodeGo };
   if (process.env.OPENCODE_API_KEY !== undefined) cfg.opencodeGo.apiKey = process.env.OPENCODE_API_KEY;
-  cfg.litellmHextra = { ...cfg.litellmHextra };
-  if (process.env.LITELLMHEXTRA_AUTH_KEY !== undefined) cfg.litellmHextra.apiKey = process.env.LITELLMHEXTRA_AUTH_KEY;
+  cfg.localEndpoint = { ...cfg.localEndpoint };
+  if (process.env.LOCAL_ENDPOINT_AUTH_KEY !== undefined) cfg.localEndpoint.apiKey = process.env.LOCAL_ENDPOINT_AUTH_KEY;
   cfg.tts = { ...cfg.tts };
   if (process.env.OMB_TTS_KEY !== undefined) cfg.tts.key = process.env.OMB_TTS_KEY;
   return cfg;
@@ -217,7 +217,7 @@ export function syncCredentialEnv(patch: Partial<AppConfig>): void {
     [patch.composio?.apiKey, "COMPOSIO_API_KEY"],
     [patch.box?.token, "BOX_TOKEN"],
     [patch.opencodeGo?.apiKey, "OPENCODE_API_KEY"],
-    [patch.litellmHextra?.apiKey, "LITELLMHEXTRA_AUTH_KEY"],
+    [patch.localEndpoint?.apiKey, LOCAL_ENDPOINT_API_KEY_ENV],
     [patch.tts?.key, "OMB_TTS_KEY"],
   ];
   for (const [value, name] of secrets) {
@@ -236,7 +236,7 @@ export const WORKSPACE_CREDENTIAL_ENV = [
   "XAI_API_KEY",
   "BOX_TOKEN",
   "OPENCODE_API_KEY",
-  "LITELLMHEXTRA_AUTH_KEY",
+  LOCAL_ENDPOINT_API_KEY_ENV,
   "OMB_TTS_KEY",
   "COMPOSIO_API_KEY",
   "OMB_COMPOSIO_BROKER_TOKEN",
@@ -277,7 +277,7 @@ export const EXTERNAL_SECRET_FIELDS = [
   ["composio", "apiKey"],
   ["box", "token"],
   ["opencodeGo", "apiKey"],
-  ["litellmHextra", "apiKey"],
+  ["localEndpoint", "apiKey"],
   ["tts", "key"],
 ] as const;
 
@@ -300,7 +300,7 @@ export function saveConfig(
     /* first write */
   }
   const checkedPatch = appConfigSchema.partial().parse(patch);
-  for (const key of ["xai", "composio", "box", "opencodeGo", "litellmHextra", "tts", "profile", "rooms"] as const) {
+  for (const key of ["xai", "composio", "box", "opencodeGo", "localEndpoint", "tts", "profile", "rooms"] as const) {
     const section = checkedPatch[key];
     if (!section) continue;
     const current = jsonObjectSchema.safeParse(disk[key]);
@@ -425,12 +425,12 @@ function injectedEnvironment(cfg: AppConfig, driver: string): Map<string, string
   if (driver === "grok" && cfg.xai?.key) environment.set("XAI_API_KEY", cfg.xai.key);
   if (driver === "boxAgent" && cfg.box?.token) environment.set("BOX_TOKEN", cfg.box.token);
   if (driver === "opencodeGo" && cfg.opencodeGo?.apiKey) environment.set("OPENCODE_API_KEY", cfg.opencodeGo.apiKey);
-  if (driver === "litellm" && cfg.litellmHextra?.apiKey) {
-    environment.set("LITELLMHEXTRA_AUTH_KEY", cfg.litellmHextra.apiKey);
+  if (driver === "localEndpoint" && cfg.localEndpoint?.apiKey) {
+    environment.set(LOCAL_ENDPOINT_API_KEY_ENV, cfg.localEndpoint.apiKey);
   }
-  if (driver === "litellm") {
-    const baseUrl = litellmBaseUrl(cfg);
-    if (baseUrl !== LITELLM_DEFAULT_BASE_URL) environment.set(LITELLM_BASE_URL_ENV, baseUrl);
+  if (driver === "localEndpoint") {
+    const baseUrl = localEndpointBaseUrl(cfg);
+    if (baseUrl) environment.set(LOCAL_ENDPOINT_BASE_URL_ENV, baseUrl);
   }
   return environment;
 }
@@ -467,13 +467,13 @@ export function instanceConfigs(cfg: AppConfig): InstanceConfigMap {
     qwen: { driver: "qwenAgent" },
     hermes: { driver: "hermesAgent" },
     pi: { driver: "piAgent" },
-    litellm: { driver: "litellm" },
+    localEndpoint: { driver: "localEndpoint" },
   };
   const CUSTOM_ONLY = {
     qwen: { driver: "qwenAgent" },
     hermes: { driver: "hermesAgent" },
     pi: { driver: "piAgent" },
-    litellm: { driver: "litellm" },
+    localEndpoint: { driver: "localEndpoint" },
   } as const;
   // New default-fleet engines that existing product configs would otherwise
   // never see. Custom-only engines stay in CUSTOM_ONLY so a one-off test map

@@ -12,7 +12,7 @@ export const WORKSPACE_CREDENTIALS = [
   { section: "box", field: "token", name: "boxToken", env: "BOX_TOKEN" },
   { section: "tts", field: "key", name: "ttsKey", env: "OMB_TTS_KEY" },
   { section: "opencodeGo", field: "apiKey", name: "opencodeGoApiKey", env: "OPENCODE_API_KEY" },
-  { section: "litellmHextra", field: "apiKey", name: "litellmHextraApiKey", env: "LITELLMHEXTRA_AUTH_KEY" },
+  { section: "localEndpoint", field: "apiKey", name: "localEndpointApiKey", env: "LOCAL_ENDPOINT_AUTH_KEY" },
 ];
 
 /** One boot-time sweep of config.json: move every plaintext workspace secret

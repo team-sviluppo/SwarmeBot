@@ -1206,13 +1206,13 @@ describe("harness HTTP API", () => {
     const saved = await api("PUT", "/api/config?secretStorage=external", {
       composio: { apiKey: "ak_good" },
       opencodeGo: { apiKey: "opencode-external" },
-      litellmHextra: { apiKey: "hextra-external" },
+      localEndpoint: { apiKey: "hextra-external" },
       profile: { name: "External Store" },
     });
     expect(saved.status).toBe(200);
     expect(saved.body.composio).toEqual({ configured: true, mode: "self-hosted" });
     expect(saved.body.opencodeGo).toEqual({ configured: true });
-    expect(saved.body.litellmHextra).toMatchObject({ configured: true });
+    expect(saved.body.localEndpoint).toMatchObject({ configured: true });
     expect(saved.body.profile).toEqual({ name: "External Store", email: "" });
     expect(JSON.stringify(saved.body)).not.toContain("ak_good");
 
@@ -1223,7 +1223,7 @@ describe("harness HTTP API", () => {
     expect(disk.composio).toMatchObject({ sessionId: "trs_config_test" });
     expect(disk.composio).not.toHaveProperty("apiKey");
     expect(disk.opencodeGo).toEqual({});
-    expect(disk.litellmHextra).toEqual({});
+    expect(disk.localEndpoint).toEqual({});
     expect(disk.profile).toEqual({ name: "External Store" });
     expect(JSON.stringify(disk)).not.toContain("ak_good");
     expect(JSON.stringify(disk)).not.toContain("opencode-external");
@@ -1311,30 +1311,31 @@ describe("harness HTTP API", () => {
     expect(JSON.stringify(after.body)).not.toContain("opencode-secret");
   });
 
-  it("stores LiteLLM credentials as a configured-only status", async () => {
-    const put = await api("PUT", "/api/config", { litellmHextra: { apiKey: "hextra-secret" } });
+  it("stores Local Endpoint credentials as a configured-only status", async () => {
+    const put = await api("PUT", "/api/config", { localEndpoint: { apiKey: "hextra-secret" } });
     expect(put.status).toBe(200);
-    expect(put.body.litellmHextra).toEqual({ configured: true, baseUrl: "https://litellm.hextra.it/v1" });
+    // a key without a URL is still not a usable endpoint — nothing is invented
+    expect(put.body.localEndpoint).toEqual({ configured: true, baseUrl: "" });
     expect(JSON.stringify(put.body)).not.toContain("hextra-secret");
 
     const after = await api("GET", "/api/config");
-    expect(after.body.litellmHextra).toEqual({ configured: true, baseUrl: "https://litellm.hextra.it/v1" });
+    expect(after.body.localEndpoint).toEqual({ configured: true, baseUrl: "" });
     expect(JSON.stringify(after.body)).not.toContain("hextra-secret");
   });
 
-  it("takes a per-user LiteLLM gateway URL and echoes it back normalized", async () => {
-    const bad = await api("PUT", "/api/config", { litellmHextra: { baseUrl: "not a url" } });
+  it("takes a per-user Local Endpoint URL and echoes it back normalized", async () => {
+    const bad = await api("PUT", "/api/config", { localEndpoint: { baseUrl: "not a url" } });
     expect(bad.status).toBe(400);
 
     // a bare origin is what users paste — /v1 is added for them
-    const saved = await api("PUT", "/api/config", { litellmHextra: { baseUrl: "https://llm.example.com" } });
+    const saved = await api("PUT", "/api/config", { localEndpoint: { baseUrl: "https://llm.example.com" } });
     expect(saved.status).toBe(200);
-    expect(saved.body.litellmHextra.baseUrl).toBe("https://llm.example.com/v1");
-    expect((await api("GET", "/api/config")).body.litellmHextra.baseUrl).toBe("https://llm.example.com/v1");
+    expect(saved.body.localEndpoint.baseUrl).toBe("https://llm.example.com/v1");
+    expect((await api("GET", "/api/config")).body.localEndpoint.baseUrl).toBe("https://llm.example.com/v1");
 
-    const cleared = await api("PUT", "/api/config", { litellmHextra: { baseUrl: "" } });
+    const cleared = await api("PUT", "/api/config", { localEndpoint: { baseUrl: "" } });
     expect(cleared.status).toBe(200);
-    expect(cleared.body.litellmHextra.baseUrl).toBe("https://litellm.hextra.it/v1");
+    expect(cleared.body.localEndpoint.baseUrl).toBe("");
   });
 
   it("rejects a non-string OpenCode Go API key", async () => {

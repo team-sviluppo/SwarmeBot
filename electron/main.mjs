@@ -732,7 +732,7 @@ const CREDENTIAL_PATCH = {
   xaiApiKey: (value) => ({ xai: { key: value } }),
   boxToken: (value) => ({ box: { token: value } }),
   opencodeGoApiKey: (value) => ({ opencodeGo: { apiKey: value } }),
-  litellmHextraApiKey: (value) => ({ litellmHextra: { apiKey: value } }),
+  localEndpointApiKey: (value) => ({ localEndpoint: { apiKey: value } }),
   ttsKey: (value) => ({ tts: { key: value } }),
 };
 

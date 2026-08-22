@@ -251,7 +251,7 @@ export interface ConfigStatus {
   opencodeGo?: { configured: boolean };
   /** `baseUrl` is the gateway this workspace talks to — a setting, not a
    * secret, so it comes back echoed (the shipped default when unset). */
-  litellmHextra?: { configured: boolean; baseUrl?: string };
+  localEndpoint?: { configured: boolean; baseUrl?: string };
   /** Voice (ElevenLabs). `configured` = a key is saved; `ready` = a key AND
    * a voice, which is what it takes to actually speak. The key itself is
    * never echoed back. */
@@ -262,7 +262,7 @@ export interface ConfigStatus {
 
 export type ConfigStatusFrame = Pick<
   ConfigStatus,
-  "xai" | "composio" | "box" | "vps" | "rooms" | "opencodeGo" | "litellmHextra" | "tts" | "profile"
+  "xai" | "composio" | "box" | "vps" | "rooms" | "opencodeGo" | "localEndpoint" | "tts" | "profile"
 >;
 
 export function configStatusFromFrame(frame: ConfigStatusFrame): ConfigStatus {
@@ -273,7 +273,7 @@ export function configStatusFromFrame(frame: ConfigStatusFrame): ConfigStatus {
     vps: frame.vps,
     rooms: frame.rooms,
     opencodeGo: frame.opencodeGo,
-    litellmHextra: frame.litellmHextra,
+    localEndpoint: frame.localEndpoint,
     tts: frame.tts,
     profile: frame.profile,
   };

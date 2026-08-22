@@ -6,7 +6,7 @@ import { Check, CircleHelp, ExternalLink, Loader2, TriangleAlert } from "lucide-
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { cn } from "@/lib/cn";
 
-export type ConfigSection = "composio" | "box" | "opencodeGo" | "litellmHextra";
+export type ConfigSection = "composio" | "box" | "opencodeGo" | "localEndpoint";
 
 const SECTIONS: Record<
   ConfigSection,
@@ -18,14 +18,14 @@ const SECTIONS: Record<
   },
   box: { body: (v) => ({ box: { token: v } }), flag: (c) => c.box.configured },
   opencodeGo: { body: (v) => ({ opencodeGo: { apiKey: v } }), flag: (c) => c.opencodeGo?.configured ?? false },
-  litellmHextra: { body: (v) => ({ litellmHextra: { apiKey: v } }), flag: (c) => c.litellmHextra?.configured ?? false },
+  localEndpoint: { body: (v) => ({ localEndpoint: { apiKey: v } }), flag: (c) => c.localEndpoint?.configured ?? false },
 };
 
-const ELECTRON_CREDENTIAL: Record<ConfigSection, "composioApiKey" | "boxToken" | "opencodeGoApiKey" | "litellmHextraApiKey"> = {
+const ELECTRON_CREDENTIAL: Record<ConfigSection, "composioApiKey" | "boxToken" | "opencodeGoApiKey" | "localEndpointApiKey"> = {
   composio: "composioApiKey",
   box: "boxToken",
   opencodeGo: "opencodeGoApiKey",
-  litellmHextra: "litellmHextraApiKey",
+  localEndpoint: "localEndpointApiKey",
 };
 
 const CREDENTIALS: Record<
@@ -34,8 +34,10 @@ const CREDENTIALS: Record<
     label: string;
     placeholder: string;
     description: string;
-    href: string;
-    linkLabel: string;
+    /** Omitted when the field is vendor-neutral — linking one vendor's docs
+     * would misdescribe what the field accepts. */
+    href?: string;
+    linkLabel?: string;
     optional: boolean;
     warning?: string;
   }
@@ -65,12 +67,11 @@ const CREDENTIALS: Record<
     linkLabel: "Open OpenCode Go setup guide",
     optional: true,
   },
-  litellmHextra: {
-    label: "LiteLLM API key",
-    placeholder: "Paste your LiteLLM API key",
-    description: "List and run models from your LiteLLM gateway in the Litellm harness. Set the gateway URL below.",
-    href: "https://docs.litellm.ai/docs/proxy/virtual_keys",
-    linkLabel: "Open LiteLLM virtual key docs",
+  localEndpoint: {
+    label: "Local Endpoint API key",
+    placeholder: "Paste your endpoint API key",
+    description:
+      "List and run models from any OpenAI-compatible endpoint you host or pay for — LiteLLM, vLLM, llama.cpp, a hosted proxy. Set the endpoint URL below.",
     optional: true,
   },
 };
@@ -129,16 +130,18 @@ function CredentialHelp({ section }: { section: ConfigSection }) {
               <span>{credential.warning}</span>
             </div>
           )}
-          <a
-            href={credential.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setOpen(false)}
-            className="mt-2.5 flex items-center gap-1.5 text-[12px] font-medium text-accent hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-          >
-            {credential.linkLabel}
-            <ExternalLink size={12} aria-hidden="true" />
-          </a>
+          {credential.href && (
+            <a
+              href={credential.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setOpen(false)}
+              className="mt-2.5 flex items-center gap-1.5 text-[12px] font-medium text-accent hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+            >
+              {credential.linkLabel}
+              <ExternalLink size={12} aria-hidden="true" />
+            </a>
+          )}
         </div>
       )}
     </div>
@@ -306,12 +309,13 @@ export function VpsConnection() {
   );
 }
 
-/** The LiteLLM gateway endpoint. Not a secret and not per-install: every
- * user points the harness at their own proxy, so it lives beside the key
- * instead of being baked into the build. Empty = the shipped default. */
-export function LitellmEndpoint() {
+/** The Local Endpoint URL. Not a secret and not per-install: every user points
+ * the harness at their own endpoint, so it lives beside the key instead of
+ * being baked into the build. Empty = the harness is unconfigured, and stays
+ * unavailable — there is no address to guess. */
+export function LocalEndpointUrl() {
   const { state, dispatch } = useStore();
-  const saved = state.config?.litellmHextra?.baseUrl ?? "";
+  const saved = state.config?.localEndpoint?.baseUrl ?? "";
   const [url, setUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -328,11 +332,11 @@ export function LitellmEndpoint() {
     setError(null);
     api("/api/config", {
       method: "PUT",
-      body: JSON.stringify({ litellmHextra: { baseUrl: url.trim() } }),
+      body: JSON.stringify({ localEndpoint: { baseUrl: url.trim() } }),
     })
       .then((status: ConfigStatus) => {
         dispatch({ type: "configStatus", config: status });
-        setUrl(status.litellmHextra?.baseUrl ?? "");
+        setUrl(status.localEndpoint?.baseUrl ?? "");
       })
       .catch((e) => setError(e.message))
       .finally(() => setSaving(false));
@@ -341,11 +345,11 @@ export function LitellmEndpoint() {
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-2 text-[13px] text-ink-secondary">
-        <span>LiteLLM gateway URL</span>
+        <span>Local Endpoint URL</span>
       </div>
       <div className="mb-1.5 text-[12px] leading-relaxed text-ink-secondary">
         The OpenAI-compatible endpoint the key above authenticates against. A bare
-        origin gets <code>/v1</code> appended. Clear it to go back to the default.
+        origin gets <code>/v1</code> appended. Clear it to turn the harness off.
       </div>
       <div className="flex gap-2">
         <input
@@ -354,8 +358,8 @@ export function LitellmEndpoint() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && save()}
-          placeholder="https://litellm.example.com/v1"
-          aria-label="LiteLLM gateway URL"
+          placeholder="http://127.0.0.1:4000/v1"
+          aria-label="Local Endpoint URL"
           autoComplete="off"
           spellCheck={false}
           className="w-full rounded-lg border border-hairline/40 bg-inset px-3 py-2 text-[13px] text-ink placeholder:text-ink-secondary focus:border-hairline focus:outline-none"
@@ -368,9 +372,9 @@ export function LitellmEndpoint() {
             !url.trim() ? "bg-raised text-danger hover:bg-raised-hover" : "bg-raised text-ink hover:bg-raised-hover",
             "disabled:cursor-not-allowed disabled:opacity-50",
           )}
-          title={!url.trim() ? "Go back to the default gateway" : "Save"}
+          title={!url.trim() ? "Clear the endpoint" : "Save"}
         >
-          {saving ? <Loader2 size={13} className="animate-spin" /> : !url.trim() ? "Reset" : <><Check size={13} />Save</>}
+          {saving ? <Loader2 size={13} className="animate-spin" /> : !url.trim() ? "Clear" : <><Check size={13} />Save</>}
         </button>
       </div>
       {error && <div className="mt-1 text-[12px] text-danger">{error}</div>}

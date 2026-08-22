@@ -11,7 +11,7 @@ import {
   parseConfigPatch,
   parseStoredConfig,
   roomTurnTimeoutMinutes,
-  litellmBaseUrl,
+  localEndpointBaseUrl,
   saveConfig,
   stripWorkspaceCredentialEnv,
   syncCredentialEnv,
@@ -41,7 +41,7 @@ describe("configuration boundaries", () => {
   it("rejects malformed stored instances and API patches", () => {
     expect(() => parseStoredConfig({ instances: { claude: { driver: 42 } } })).toThrow("instances.claude.driver");
     expect(() => parseConfigPatch({ opencodeGo: { apiKey: 42 } })).toThrow("opencodeGo.apiKey");
-    expect(() => parseConfigPatch({ litellmHextra: { apiKey: 42 } })).toThrow("litellmHextra.apiKey");
+    expect(() => parseConfigPatch({ localEndpoint: { apiKey: 42 } })).toThrow("localEndpoint.apiKey");
     expect(() => parseConfigPatch({ profile: [] })).toThrow("profile");
   });
 
@@ -79,7 +79,7 @@ describe("default fleet", () => {
     const map = instanceConfigs({});
     expect(map.qwen).toEqual({ driver: "qwenAgent", environment: {} });
     expect(map.hermes).toEqual({ driver: "hermesAgent", environment: {} });
-    expect(map.litellm).toEqual({ driver: "litellm", environment: {} });
+    expect(map.localEndpoint).toEqual({ driver: "localEndpoint", environment: {} });
   });
 
   it("ships Cursor as a default-fleet subscription engine", () => {
@@ -92,7 +92,7 @@ describe("default fleet", () => {
     expect(map.claude.driver).toBe("claudeAgent");
     expect(map.qwen?.driver).toBe("qwenAgent");
     expect(map.hermes?.driver).toBe("hermesAgent");
-    expect(map.litellm?.driver).toBe("litellm");
+    expect(map.localEndpoint?.driver).toBe("localEndpoint");
     expect(map.cursor?.driver).toBe("cursorAgent");
   });
 
@@ -178,13 +178,13 @@ describe("Instance CLI override", () => {
       xai: { key: "SECRET-XAI" },
       box: { token: "SECRET-BOX" },
       opencodeGo: { apiKey: "SECRET-OCG" },
-      litellmHextra: { apiKey: "SECRET-HEXTRA" },
+      localEndpoint: { apiKey: "SECRET-HEXTRA" },
       instances: {
         claude: { driver: "claudeAgent" },
         grokApi: { driver: "grok" },
         computer: { driver: "boxAgent" },
         opencode: { driver: "opencodeGo" },
-        litellm: { driver: "litellm" },
+        localEndpoint: { driver: "localEndpoint" },
       },
     };
     const set = withInstanceCli(cfg, "claude", "/opt/claude");
@@ -199,47 +199,47 @@ describe("Instance CLI override", () => {
   });
 });
 
-describe("LiteLLM configuration", () => {
-  it("injects the key only into Litellm instances", () => {
+describe("Local Endpoint configuration", () => {
+  it("injects the key only into Local Endpoint instances", () => {
     const cfg: AppConfig = {
-      litellmHextra: { apiKey: "hextra-secret" },
+      localEndpoint: { apiKey: "hextra-secret" },
       instances: {
-        litellm: { driver: "litellm" },
+        localEndpoint: { driver: "localEndpoint" },
         grok: { driver: "grokAgent" },
       },
     };
     const instances = instanceConfigs(cfg);
-    expect(instances.litellm.environment).toEqual({ LITELLMHEXTRA_AUTH_KEY: "hextra-secret" });
+    expect(instances.localEndpoint.environment).toEqual({ LOCAL_ENDPOINT_AUTH_KEY: "hextra-secret" });
     expect(instances.grok.environment).toEqual({});
   });
 
-  it("falls back to the shipped gateway and normalizes a user endpoint", () => {
-    expect(litellmBaseUrl({})).toBe("https://litellm.hextra.it/v1");
-    expect(litellmBaseUrl({ litellmHextra: { baseUrl: "" } })).toBe("https://litellm.hextra.it/v1");
-    expect(litellmBaseUrl({ litellmHextra: { baseUrl: "https://llm.example.com" } })).toBe(
+  it("normalizes a user endpoint and reports no endpoint when there is none", () => {
+    // no shipped address to fall back to — an unset endpoint is unset
+    expect(localEndpointBaseUrl({})).toBeNull();
+    expect(localEndpointBaseUrl({ localEndpoint: { baseUrl: "" } })).toBeNull();
+    expect(localEndpointBaseUrl({ localEndpoint: { baseUrl: "nonsense" } })).toBeNull();
+    expect(localEndpointBaseUrl({ localEndpoint: { baseUrl: "https://llm.example.com" } })).toBe(
       "https://llm.example.com/v1",
     );
-    // a broken setting must not point the fleet at nothing
-    expect(litellmBaseUrl({ litellmHextra: { baseUrl: "nonsense" } })).toBe("https://litellm.hextra.it/v1");
   });
 
-  it("injects a custom endpoint into Litellm instances, and nothing when it is the default", () => {
+  it("injects the configured endpoint into Local Endpoint instances, and nothing when unset", () => {
     const custom = instanceConfigs({
-      litellmHextra: { baseUrl: "https://llm.example.com/v1" },
-      instances: { litellm: { driver: "litellm" }, grok: { driver: "grokAgent" } },
+      localEndpoint: { baseUrl: "https://llm.example.com/v1" },
+      instances: { localEndpoint: { driver: "localEndpoint" }, grok: { driver: "grokAgent" } },
     });
-    expect(custom.litellm.environment).toEqual({ LITELLMHEXTRA_BASE_URL: "https://llm.example.com/v1" });
+    expect(custom.localEndpoint.environment).toEqual({ LOCAL_ENDPOINT_BASE_URL: "https://llm.example.com/v1" });
     expect(custom.grok.environment).toEqual({});
 
-    const shipped = instanceConfigs({ instances: { litellm: { driver: "litellm" } } });
-    expect(shipped.litellm.environment).toEqual({});
+    const unset = instanceConfigs({ instances: { localEndpoint: { driver: "localEndpoint" } } });
+    expect(unset.localEndpoint.environment).toEqual({});
   });
 
   it("mirrors the endpoint into process.env for the fleet-wide Custom probes", () => {
-    syncEndpointEnv({ litellmHextra: { baseUrl: "https://llm.example.com" } });
-    expect(process.env.LITELLMHEXTRA_BASE_URL).toBe("https://llm.example.com/v1");
+    syncEndpointEnv({ localEndpoint: { baseUrl: "https://llm.example.com" } });
+    expect(process.env.LOCAL_ENDPOINT_BASE_URL).toBe("https://llm.example.com/v1");
     syncEndpointEnv({});
-    expect(process.env.LITELLMHEXTRA_BASE_URL).toBeUndefined();
+    expect(process.env.LOCAL_ENDPOINT_BASE_URL).toBeUndefined();
   });
 });
 
@@ -250,11 +250,11 @@ describe("externally stored secrets", () => {
     mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(
       join(DATA_DIR, "config.json"),
-      JSON.stringify({ litellmHextra: { apiKey: "old-plaintext" }, profile: { name: "Ada" } }),
+      JSON.stringify({ localEndpoint: { apiKey: "old-plaintext" }, profile: { name: "Ada" } }),
     );
-    saveConfig({ litellmHextra: {}, profile: { name: "Grace" } }, [["litellmHextra", "apiKey"]]);
+    saveConfig({ localEndpoint: {}, profile: { name: "Grace" } }, [["localEndpoint", "apiKey"]]);
     const disk = JSON.parse(readFileSync(join(DATA_DIR, "config.json"), "utf8"));
-    expect(disk.litellmHextra).toEqual({});
+    expect(disk.localEndpoint).toEqual({});
     expect(disk.profile).toEqual({ name: "Grace" });
   });
 });
@@ -265,12 +265,12 @@ describe("credential env narrowing", () => {
       xai: { key: "SECRET-XAI" },
       box: { token: "SECRET-BOX" },
       opencodeGo: { apiKey: "SECRET-OCG" },
-      litellmHextra: { apiKey: "SECRET-HEXTRA" },
+      localEndpoint: { apiKey: "SECRET-HEXTRA" },
       instances: {
         grokApi: { driver: "grok" },
         computer: { driver: "boxAgent" },
         opencode: { driver: "opencodeGo" },
-        litellm: { driver: "litellm" },
+        localEndpoint: { driver: "localEndpoint" },
         claude: { driver: "claudeAgent" },
         codex: { driver: "codex" },
       },
@@ -279,7 +279,7 @@ describe("credential env narrowing", () => {
     expect(instances.grokApi.environment).toEqual({ XAI_API_KEY: "SECRET-XAI" });
     expect(instances.computer.environment).toEqual({ BOX_TOKEN: "SECRET-BOX" });
     expect(instances.opencode.environment).toEqual({ OPENCODE_API_KEY: "SECRET-OCG" });
-    expect(instances.litellm.environment).toEqual({ LITELLMHEXTRA_AUTH_KEY: "SECRET-HEXTRA" });
+    expect(instances.localEndpoint.environment).toEqual({ LOCAL_ENDPOINT_AUTH_KEY: "SECRET-HEXTRA" });
     // engines that bring their own login receive NO workspace credential
     expect(instances.claude.environment).toEqual({});
     expect(instances.codex.environment).toEqual({});
@@ -306,7 +306,7 @@ describe("credential env narrowing", () => {
 });
 
 describe("credential env preference", () => {
-  const VARS = ["XAI_API_KEY", "BOX_TOKEN", "OPENCODE_API_KEY", "LITELLMHEXTRA_AUTH_KEY", "OMB_TTS_KEY", "COMPOSIO_API_KEY"] as const;
+  const VARS = ["XAI_API_KEY", "BOX_TOKEN", "OPENCODE_API_KEY", "LOCAL_ENDPOINT_AUTH_KEY", "OMB_TTS_KEY", "COMPOSIO_API_KEY"] as const;
   let saved: Record<string, string | undefined>;
 
   beforeEach(() => {
@@ -334,20 +334,20 @@ describe("credential env preference", () => {
         xai: { key: "file-xai", url: "https://api.example.test/v1" },
         box: { token: "file-box" },
         opencodeGo: { apiKey: "file-ocg" },
-        litellmHextra: { apiKey: "file-hextra" },
+        localEndpoint: { apiKey: "file-hextra" },
         tts: { key: "file-tts", voice: "narrator" },
       }),
     );
     process.env.XAI_API_KEY = "env-xai";
     process.env.BOX_TOKEN = "env-box";
     process.env.OPENCODE_API_KEY = "env-ocg";
-    process.env.LITELLMHEXTRA_AUTH_KEY = "env-hextra";
+    process.env.LOCAL_ENDPOINT_AUTH_KEY = "env-hextra";
     process.env.OMB_TTS_KEY = "env-tts";
     const cfg = loadConfig();
     expect(cfg.xai).toEqual({ key: "env-xai", url: "https://api.example.test/v1" });
     expect(cfg.box).toEqual({ token: "env-box" });
     expect(cfg.opencodeGo).toEqual({ apiKey: "env-ocg" });
-    expect(cfg.litellmHextra).toEqual({ apiKey: "env-hextra" });
+    expect(cfg.localEndpoint).toEqual({ apiKey: "env-hextra" });
     expect(cfg.tts).toEqual({ key: "env-tts", voice: "narrator" });
   });
 
@@ -405,6 +405,6 @@ describe("workspace credential env strip", () => {
     // consumed in-process (Computer driver / voice module), never by a CLI
     expect(WORKSPACE_CREDENTIAL_ENV).toContain("BOX_TOKEN");
     expect(WORKSPACE_CREDENTIAL_ENV).toContain("OMB_TTS_KEY");
-    expect(WORKSPACE_CREDENTIAL_ENV).toContain("LITELLMHEXTRA_AUTH_KEY");
+    expect(WORKSPACE_CREDENTIAL_ENV).toContain("LOCAL_ENDPOINT_AUTH_KEY");
   });
 });

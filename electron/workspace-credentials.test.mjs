@@ -13,7 +13,7 @@ describe("workspace credential migration", () => {
       box: { token: "box-secret" },
       tts: { key: "tts-secret", voice: "narrator" },
       opencodeGo: { apiKey: "ocg-secret" },
-      litellmHextra: { apiKey: "hextra-secret" },
+      localEndpoint: { apiKey: "hextra-secret" },
       profile: { name: "Ada" },
     };
     const result = migrateWorkspaceCredentials(config, {});
@@ -24,7 +24,7 @@ describe("workspace credential migration", () => {
       boxToken: "box-secret",
       ttsKey: "tts-secret",
       opencodeGoApiKey: "ocg-secret",
-      litellmHextraApiKey: "hextra-secret",
+      localEndpointApiKey: "hextra-secret",
     });
     // secrets are DELETED (not blanked) so "" stays meaningful as "cleared";
     // non-secret siblings (endpoint url, chosen voice) stay in the file
@@ -33,7 +33,7 @@ describe("workspace credential migration", () => {
       box: {},
       tts: { voice: "narrator" },
       opencodeGo: {},
-      litellmHextra: {},
+      localEndpoint: {},
       profile: { name: "Ada" },
     });
     // inputs are never mutated — main.mjs decides which files to rewrite
@@ -98,7 +98,7 @@ describe("workspace credential env", () => {
         boxToken: "box-secret",
         ttsKey: "tts-secret",
         opencodeGoApiKey: "ocg-secret",
-        litellmHextraApiKey: "hextra-secret",
+        localEndpointApiKey: "hextra-secret",
         composioApiKey: "ak_handled-separately",
       }),
     ).toEqual({
@@ -106,7 +106,7 @@ describe("workspace credential env", () => {
       BOX_TOKEN: "box-secret",
       OMB_TTS_KEY: "tts-secret",
       OPENCODE_API_KEY: "ocg-secret",
-      LITELLMHEXTRA_AUTH_KEY: "hextra-secret",
+      LOCAL_ENDPOINT_AUTH_KEY: "hextra-secret",
     });
   });
 
