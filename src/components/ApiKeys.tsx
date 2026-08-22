@@ -66,8 +66,8 @@ const CREDENTIALS: Record<
     optional: true,
   },
   litellmHextra: {
-    label: "LiteLLM Hextra API key",
-    placeholder: "Paste your LiteLLM Hextra API key",
+    label: "LiteLLM API key",
+    placeholder: "Paste your LiteLLM API key",
     description: "List and run models from your LiteLLM gateway in the Litellm harness. Set the gateway URL below.",
     href: "https://docs.litellm.ai/docs/proxy/virtual_keys",
     linkLabel: "Open LiteLLM virtual key docs",

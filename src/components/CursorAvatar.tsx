@@ -1347,6 +1347,14 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       lastBodyTransform: '',
       /** Pointer-follow offset, written straight in by setPointerGaze. */
       pointerGaze: [0, 0] as [number, number],
+      /**
+       * The last value written to each SVG attribute we drive. Most frames
+       * of a resting mascot recompute the same eye path and the same mouth,
+       * and writing an identical attribute still dirties layout and paint
+       * for that subtree — with a mascot per bot on screen that is the app's
+       * steadiest background cost. Comparing first is far cheaper.
+       */
+      written: new Map<string, string>(),
       props: {
         state,
         expression,
@@ -1451,6 +1459,11 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
 
       const draw = (e: typeof engine.current, now: number, spinTurn: number) => {
         const p = e.props
+        const write = (el: Element, name: string, key: string, value: string) => {
+          if (e.written.get(key) === value) return
+          e.written.set(key, value)
+          el.setAttribute(name, value)
+        }
         // Re-apply a fraction of this expression's own look-direction.
         const g = displayedGaze(e)
         const look = p.lookAround ?? 0.35
@@ -1473,9 +1486,11 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
           const longitude = baseLongitude + radians
           const depth = Math.cos(longitude)
           const perspective = Math.max(depth, 0.02) / Math.max(Math.cos(baseLongitude), 0.02)
-          el.setAttribute('d', toPath(ring))
-          el.setAttribute(
+          write(el, 'd', `eye${index}-d`, toPath(ring))
+          write(
+            el,
             'transform',
+            `eye${index}-transform`,
             `translate(${(SPHERE_C + SPHERE_R * Math.sin(longitude) + gx).toFixed(2)} ${(
               c[1] + gy
             ).toFixed(2)}) scale(${clamp(perspective * base, 0.02, 2.4).toFixed(4)} ${clamp(
@@ -1484,7 +1499,11 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
               2.4
             ).toFixed(4)}) translate(${(-c[0]).toFixed(2)} ${(-c[1]).toFixed(2)})`
           )
-          el.style.opacity = depth > 0.02 ? '1' : '0'
+          const eyeOpacity = depth > 0.02 ? '1' : '0'
+          if (e.written.get(`eye${index}-opacity`) !== eyeOpacity) {
+            e.written.set(`eye${index}-opacity`, eyeOpacity)
+            el.style.opacity = eyeOpacity
+          }
         })
 
         // Mouth: same sphere projection as the eyes, but blinking never touches it.
@@ -1496,16 +1515,22 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
           const longitude = baseLongitude + radians
           const depth = Math.cos(longitude)
           const perspective = Math.max(depth, 0.02) / Math.max(Math.cos(baseLongitude), 0.02)
-          mouthEl.setAttribute('d', mouthPath(frameGeom, spec))
-          mouthEl.setAttribute(
+          write(mouthEl, 'd', 'mouth-d', mouthPath(frameGeom, spec))
+          write(
+            mouthEl,
             'transform',
+            'mouth-transform',
             `translate(${(SPHERE_C + SPHERE_R * Math.sin(longitude) + gx).toFixed(2)} ${(
               frameGeom.y + gy
             ).toFixed(2)}) scale(${clamp(perspective, 0.02, 2.4).toFixed(4)} 1) translate(${(
               -frameGeom.x
             ).toFixed(2)} ${(-frameGeom.y).toFixed(2)})`
           )
-          mouthEl.style.opacity = depth > 0.02 ? '1' : '0'
+          const mouthOpacity = depth > 0.02 ? '1' : '0'
+          if (e.written.get('mouth-opacity') !== mouthOpacity) {
+            e.written.set('mouth-opacity', mouthOpacity)
+            mouthEl.style.opacity = mouthOpacity
+          }
         }
 
         // The body. One-shot entrances need time since the state began, so track that here
@@ -1653,9 +1678,23 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
  */
 const animating = new Set<(now: number) => void>()
 let pumpFrame = 0
+let pumpedAt = 0
+
+/**
+ * The mascots' frame rate. Their motion is slow by design — a 3.6-second
+ * breathing pulse, a sway, a blink — and none of it reads as smoother at 60
+ * than at 30. Every frame that does run costs SVG writes, compositing and a
+ * commit for each mascot on screen, so halving the rate halves the app's
+ * steadiest background cost for no visible difference.
+ */
+const FRAME_MS = 1000 / 30
 
 function pump(now: number) {
   pumpFrame = requestAnimationFrame(pump)
+  // A millisecond of slack: display frames land at 16.67ms boundaries, and
+  // demanding a full 33.3 would skip every other pair and land at 20fps.
+  if (now - pumpedAt < FRAME_MS - 1) return
+  pumpedAt = now
   // A copy: an avatar may unsubscribe (unmount) from inside its own frame.
   for (const tick of [...animating]) tick(now)
 }

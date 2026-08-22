@@ -199,7 +199,7 @@ describe("Instance CLI override", () => {
   });
 });
 
-describe("LiteLLM Hextra configuration", () => {
+describe("LiteLLM configuration", () => {
   it("injects the key only into Litellm instances", () => {
     const cfg: AppConfig = {
       litellmHextra: { apiKey: "hextra-secret" },

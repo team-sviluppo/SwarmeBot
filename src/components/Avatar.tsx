@@ -25,6 +25,7 @@ import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
 import { DicebearAvatar } from "./DicebearAvatar";
 import { SpriteSheetAvatar } from "./SpriteSheetAvatar";
 import { clampSheetRow } from "@/lib/sprite-sheet";
+import { useStillAvatars } from "@/lib/still-avatars";
 
 /**
  * Everything about how one bot looks. Call sites pass the bot itself, so a
@@ -186,10 +187,14 @@ function MausAvatarComponent(
     mouthStroke,
     forward = true,
     trackPointer = true,
-    animated = true,
+    animated: animatedProp = true,
   }: MausAvatarProps,
   ref: React.Ref<MausAvatarHandle>,
 ) {
+  // Reduce-motion — the system setting or the stored override — reaches the
+  // mascot engine here, so one check covers every avatar in the app.
+  const still = useStillAvatars();
+  const animated = animatedProp && !still;
   const picture = silhouette === undefined && look != null && wearsPicture(look);
   const inner = useRef<CursorAvatarHandle>(null);
   useImperativeHandle(ref, () => ({

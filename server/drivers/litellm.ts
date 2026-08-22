@@ -185,7 +185,7 @@ export const LitellmDriver: ProviderDriver<Record<string, never>> = {
       if (!hasKey) {
         return {
           state: "unavailable",
-          reason: "Add a LiteLLM Hextra API key in Settings → Connections",
+          reason: "Add a LiteLLM API key in Settings → Connections",
         };
       }
       return { state: "available", authenticated: true, version: null };

@@ -1311,7 +1311,7 @@ describe("harness HTTP API", () => {
     expect(JSON.stringify(after.body)).not.toContain("opencode-secret");
   });
 
-  it("stores LiteLLM Hextra credentials as a configured-only status", async () => {
+  it("stores LiteLLM credentials as a configured-only status", async () => {
     const put = await api("PUT", "/api/config", { litellmHextra: { apiKey: "hextra-secret" } });
     expect(put.status).toBe(200);
     expect(put.body.litellmHextra).toEqual({ configured: true, baseUrl: "https://litellm.hextra.it/v1" });
