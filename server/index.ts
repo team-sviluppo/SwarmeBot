@@ -3238,8 +3238,13 @@ const server = createServer(async (req, res) => {
       // Persona fields reach system prompts (this bot's own, the Chief of
       // Staff roster, room rosters) — bound them at the only write boundary
       // rather than trusting every prompt-assembly site to defend itself.
-      // Caps match the team-manifest import limits.
-      for (const [field, max] of [["name", 100], ["title", 200], ["description", 4000]] as const) {
+      // Caps match the team-manifest import limits: raise them together or a
+      // team export stops being re-importable.
+      // The description cap is only ever paid once per turn, by the bot whose
+      // persona it is; the sites that fan out over N bots clip it themselves
+      // (chief-of-staff ROSTER_ABOUT_MAX, agents-proxy list_bots), so this
+      // number does not multiply.
+      for (const [field, max] of [["name", 100], ["title", 200], ["description", 8000]] as const) {
         const value = body[field];
         if (value === undefined) continue;
         if (typeof value !== "string") return json(res, 400, { error: `${field} must be a string` });

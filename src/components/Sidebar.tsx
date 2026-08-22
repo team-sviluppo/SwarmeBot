@@ -8,6 +8,7 @@ import {
   Bot as BotIcon,
   CalendarDays,
   Check,
+  ChevronRight,
   ClipboardCopy,
   Copy,
   Crown,
@@ -353,14 +354,44 @@ function NewRoomPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+// Collapsed sections survive a reload: the sidebar is furniture, and a
+// section the user folded away should stay folded. Reaching for localStorage
+// is itself a failure point (blocked storage throws on access), so every
+// touch is guarded and a failure just means the section starts expanded.
+const COLLAPSED_KEY = "swarmebot.collapsedSections";
+
+function readCollapsedSections(): string[] {
+  try {
+    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(COLLAPSED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed.filter((name): name is string => typeof name === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCollapsedSections(names: string[]) {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(COLLAPSED_KEY, JSON.stringify(names));
+  } catch {
+    // storage unavailable — collapse still works for this session
+  }
+}
+
 /** Labeled divider between sidebar sections. Same typographic register as
  * EngineGroupLabel so the sidebar reads as one system. Right-click or the
  * hover affordance opens the rename/delete menu. */
 function SectionDivider({
   name,
+  count,
+  collapsed,
+  onToggle,
   onMenu,
 }: {
   name: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
   onMenu: (name: string, x: number, y: number) => void;
 }) {
   return (
@@ -372,9 +403,19 @@ function SectionDivider({
         onMenu(name, e.clientX, e.clientY);
       }}
     >
-      <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-        {name}
-      </span>
+      <button
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        aria-label={`${collapsed ? "Expand" : "Collapse"} section ${name}`}
+        className="flex min-w-0 items-center gap-1 rounded-md text-ink-secondary hover:text-ink"
+      >
+        <ChevronRight
+          size={11}
+          className={cn("shrink-0 transition-transform", !collapsed && "rotate-90")}
+        />
+        <span className="truncate text-[10px] font-medium uppercase tracking-[0.08em]">{name}</span>
+        {collapsed && <span className="shrink-0 text-[10px] tabular-nums">{count}</span>}
+      </button>
       <span className="h-px flex-1 bg-hairline/40" />
       <button
         aria-label={`Section options for ${name}`}
@@ -1023,6 +1064,16 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
     restoreBot?: { id: string; name: string };
   } | null>(null);
   const [query, setQuery] = useState("");
+  const [collapsedSections, setCollapsedSections] = useState<string[]>(readCollapsedSections);
+
+  const toggleSection = (name: string) => {
+    setCollapsedSections((current) => {
+      const next = current.includes(name) ? current.filter((s) => s !== name) : [...current, name];
+      writeCollapsedSections(next);
+      return next;
+    });
+  };
+
 
   // Esc closes the drawer, mirroring ApiKeys.tsx:75-85. Bound only while the
   // drawer is open — on mobile, exactly when a bot/room context menu or the
@@ -1326,25 +1377,33 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
               archiveDisabled={activeBotCount <= 1}
             />
           ))}
-          {sectionNames.map((name) => (
-            <Fragment key={name}>
-              <SectionDivider
-                name={name}
-                onMenu={(section, x, y) => setSectionMenu({ section, x, y })}
-              />
-              {sectionedBots
-                .filter((b) => b.section === name)
-                .map((b) => (
-                  <BotListItem
-                    key={b.id}
-                    bot={b}
-                    onMenu={setMenu}
-                    onArchive={(bot) => void archiveBot(bot)}
-                    archiveDisabled={activeBotCount <= 1}
-                  />
-                ))}
-            </Fragment>
-          ))}
+          {sectionNames.map((name) => {
+            const members = sectionedBots.filter((b) => b.section === name);
+            // a filter is a search: hiding matches behind a folded section
+            // would read as "no results", so collapse only applies at rest
+            const collapsed = !q && collapsedSections.includes(name);
+            return (
+              <Fragment key={name}>
+                <SectionDivider
+                  name={name}
+                  count={members.length}
+                  collapsed={collapsed}
+                  onToggle={() => toggleSection(name)}
+                  onMenu={(section, x, y) => setSectionMenu({ section, x, y })}
+                />
+                {!collapsed &&
+                  members.map((b) => (
+                    <BotListItem
+                      key={b.id}
+                      bot={b}
+                      onMenu={setMenu}
+                      onArchive={(bot) => void archiveBot(bot)}
+                      archiveDisabled={activeBotCount <= 1}
+                    />
+                  ))}
+              </Fragment>
+            );
+          })}
           <SearchResults query={query} onLanded={() => setQuery("")} />
         </div>
       </div>

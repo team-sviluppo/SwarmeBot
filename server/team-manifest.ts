@@ -44,7 +44,7 @@ const memberSchema = z.object({
   }),
   name: requiredText(100),
   title: optionalText(200),
-  description: optionalText(4_000),
+  description: optionalText(8_000),
   appearance: z.object({
     color: z.enum(COLORS, { error: "is not supported" }),
     mascotExpression: optionalText(80),

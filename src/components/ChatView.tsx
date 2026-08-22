@@ -615,8 +615,10 @@ const MessagesList = memo(function MessagesList({
             className="text-[17px] font-semibold text-ink"
             inputClassName="rounded bg-inset px-1.5 py-0.5 text-center text-[17px] font-semibold"
           />
+          {/* the bot's own description can run to paragraphs — it belongs in
+              Settings, not stretching this opening panel */}
           <div className="max-w-[360px] text-[14px] text-ink-secondary">
-            {bot.description || "Send a message to start the conversation."}
+            Send a message to start the conversation.
           </div>
         </div>
       )}
