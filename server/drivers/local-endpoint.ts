@@ -44,11 +44,14 @@ const PROBE_TIMEOUT_MS = 5000;
  * decoration: Hermes uses 403 to refuse a session continuation it cannot
  * honour, and sendTurn recovers from exactly that one. */
 class EndpointError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
+  // Assigned in the body, not declared as a constructor parameter property:
+  // the server runs under `node --experimental-strip-types`, which erases
+  // types but refuses syntax that has to emit code. tsc and vitest both
+  // accept the shorthand, so only the dev server would have caught it.
+  readonly status: number;
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
   }
 }
 

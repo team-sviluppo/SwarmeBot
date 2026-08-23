@@ -16,6 +16,9 @@ import {
   FolderPlus,
   Library,
   Loader2,
+  ArrowDown,
+  ArrowUp,
+  GripVertical,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -35,6 +38,7 @@ import { MausAvatar, InitialsAvatar } from "./Avatar";
 import { stateForBot } from "@/lib/mascot";
 import { useUpdaterState } from "@/lib/updater";
 import { cn } from "@/lib/cn";
+import { moveSection, nudgeSection, orderSections, renameInOrder } from "@/lib/section-order";
 import { downloadAllBots } from "@/lib/team-files";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { MIN_QUERY, SearchResults } from "./SearchResults";
@@ -354,15 +358,22 @@ function NewRoomPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-// Collapsed sections survive a reload: the sidebar is furniture, and a
-// section the user folded away should stay folded. Reaching for localStorage
-// is itself a failure point (blocked storage throws on access), so every
-// touch is guarded and a failure just means the section starts expanded.
+// Two bits of sidebar arrangement outlive a reload: which sections are folded
+// away, and what order they sit in. Both are furniture rather than facts about
+// the bots — a section is only a label each bot carries, so there is no section
+// record on the server to hang either off (see src/lib/section-order.ts).
+// Reaching for localStorage is itself a failure point (blocked storage throws
+// on access), so every touch is guarded and a failure just means the sidebar
+// starts in its default arrangement.
+//
+// The cost of storing the order here is that it is per-machine. If it should
+// follow the account, it wants a real field on the server, not this key.
 const COLLAPSED_KEY = "swarmebot.collapsedSections";
+const ORDER_KEY = "swarmebot.sectionOrder";
 
-function readCollapsedSections(): string[] {
+function readStoredNames(key: string): string[] {
   try {
-    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(COLLAPSED_KEY);
+    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(key);
     const parsed: unknown = raw ? JSON.parse(raw) : null;
     return Array.isArray(parsed) ? parsed.filter((name): name is string => typeof name === "string") : [];
   } catch {
@@ -370,11 +381,11 @@ function readCollapsedSections(): string[] {
   }
 }
 
-function writeCollapsedSections(names: string[]) {
+function writeStoredNames(key: string, names: string[]) {
   try {
-    if (typeof localStorage !== "undefined") localStorage.setItem(COLLAPSED_KEY, JSON.stringify(names));
+    if (typeof localStorage !== "undefined") localStorage.setItem(key, JSON.stringify(names));
   } catch {
-    // storage unavailable — collapse still works for this session
+    // storage unavailable — the arrangement still holds for this session
   }
 }
 
@@ -387,22 +398,70 @@ function SectionDivider({
   collapsed,
   onToggle,
   onMenu,
+  dragging,
+  dropAbove,
+  dropBelow,
+  onDragStart,
+  onDragEnter,
+  onDrop,
+  onDragEnd,
 }: {
   name: string;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
   onMenu: (name: string, x: number, y: number) => void;
+  dragging: boolean;
+  dropAbove: boolean;
+  dropBelow: boolean;
+  onDragStart: () => void;
+  onDragEnter: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }) {
   return (
     <div
-      className="group/section flex items-center gap-2 px-3 pb-1 pt-3 first:pt-0"
+      // The header is the handle for the whole section: its bots follow it,
+      // because the list is rendered straight from the order this reorders.
+      draggable
+      onDragStart={(e) => {
+        // Firefox ignores a drag whose dataTransfer was never written to, and
+        // the payload is the section name so an external drop reads sensibly.
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", name);
+        onDragStart();
+      }}
+      onDragEnter={onDragEnter}
+      onDragOver={(e) => {
+        // the default action is "reject the drop" — without this there is no
+        // drop event at all
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
+      className={cn(
+        "group/section relative flex items-center gap-2 px-3 pb-1 pt-3 first:pt-0",
+        dragging && "opacity-40",
+        // the line sits on the edge the section will land against, so the
+        // preview matches where the release actually puts it
+        dropAbove && "before:absolute before:inset-x-3 before:top-1.5 before:h-0.5 before:rounded-full before:bg-accent",
+        dropBelow && "after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent",
+      )}
       data-section={name}
       onContextMenu={(e) => {
         e.preventDefault();
         onMenu(name, e.clientX, e.clientY);
       }}
     >
+      <GripVertical
+        size={11}
+        aria-hidden
+        className="pointer-events-none shrink-0 text-ink-secondary opacity-0 transition-opacity group-hover/section:opacity-60"
+      />
       <button
         onClick={onToggle}
         aria-expanded={!collapsed}
@@ -438,10 +497,19 @@ function SectionMenu({
   section,
   anchor,
   onClose,
+  onNudge,
+  onRenamed,
+  canMoveUp,
+  canMoveDown,
 }: {
   section: string;
   anchor: { x: number; y: number };
   onClose: () => void;
+  /** Reordering without a mouse. Dragging is the fast path, not the only one. */
+  onNudge: (delta: -1 | 1) => void;
+  onRenamed: (from: string, to: string) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const { state, dispatch } = useStore();
   const [renaming, setRenaming] = useState(false);
@@ -468,6 +536,9 @@ function SectionMenu({
   // last bot leaves); a new name renames it for the whole group at once
   const applyToAll = (value: string) => {
     for (const bot of members) dispatch({ type: "updateBot", botId: bot.id, patch: { section: value } });
+    // a rename is the same section under a new label, so it keeps its slot
+    // instead of surfacing at the bottom as if it had just been created
+    if (value) onRenamed(section, value);
     onClose();
   };
 
@@ -521,6 +592,29 @@ function SectionMenu({
           Rename section
         </button>
       )}
+      <div className="mx-2 my-1 border-t border-hairline/40" />
+      <button
+        onClick={() => {
+          onNudge(-1);
+          onClose();
+        }}
+        disabled={!canMoveUp}
+        className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[13px] text-ink hover:bg-raised/70 disabled:opacity-40 disabled:hover:bg-transparent"
+      >
+        <ArrowUp size={15} className="text-ink-secondary" />
+        Move section up
+      </button>
+      <button
+        onClick={() => {
+          onNudge(1);
+          onClose();
+        }}
+        disabled={!canMoveDown}
+        className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[13px] text-ink hover:bg-raised/70 disabled:opacity-40 disabled:hover:bg-transparent"
+      >
+        <ArrowDown size={15} className="text-ink-secondary" />
+        Move section down
+      </button>
       <div className="mx-2 my-1 border-t border-hairline/40" />
       <button
         onClick={() => applyToAll("")}
@@ -1064,14 +1158,35 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
     restoreBot?: { id: string; name: string };
   } | null>(null);
   const [query, setQuery] = useState("");
-  const [collapsedSections, setCollapsedSections] = useState<string[]>(readCollapsedSections);
+  const [collapsedSections, setCollapsedSections] = useState<string[]>(() => readStoredNames(COLLAPSED_KEY));
 
   const toggleSection = (name: string) => {
     setCollapsedSections((current) => {
       const next = current.includes(name) ? current.filter((s) => s !== name) : [...current, name];
-      writeCollapsedSections(next);
+      writeStoredNames(COLLAPSED_KEY, next);
       return next;
     });
+  };
+
+  // The saved preference, not the rendered list — see orderSections. `dragging`
+  // is the section under the pointer's grip; `dropTarget` is the one it is
+  // hovering, and drawing the line on the target is what tells the user where
+  // the release will land.
+  const [sectionOrder, setSectionOrder] = useState<string[]>(() => readStoredNames(ORDER_KEY));
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  // Reordering has to be stated against what is ON SCREEN, then folded back
+  // into the preference: the visible list is the only thing the user can see
+  // to aim at, while the preference may still remember sections a search has
+  // filtered away.
+  const reorderSections = (visible: string[], apply: (order: string[]) => string[]) => {
+    const next = apply(orderSections(visible, sectionOrder));
+    // names outside this render keep their relative place at the back rather
+    // than being dropped, so a filtered-out section survives a drag
+    const merged = [...next, ...sectionOrder.filter((name) => !next.includes(name))];
+    setSectionOrder(merged);
+    writeStoredNames(ORDER_KEY, merged);
   };
 
 
@@ -1217,10 +1332,13 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
     .sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false));
   // sections keep first-appearance order within the current list; a section
   // whose bots all moved away (or fell out of the filter) simply vanishes
-  const sectionNames: string[] = [];
+  const discovered: string[] = [];
   for (const bot of sectionedBots) {
-    if (!sectionNames.includes(bot.section!)) sectionNames.push(bot.section!);
+    if (!discovered.includes(bot.section!)) discovered.push(bot.section!);
   }
+  // first appearance is only the fallback now: anything the user has dragged
+  // outranks it
+  const sectionNames = orderSections(discovered, sectionOrder);
   const visibleGroups = state.groups.filter((g) => !q || g.name.toLowerCase().includes(q));
   const activeBotCount = state.bots.filter((bot) => !bot.hidden).length;
   const archivedBots = state.bots.filter((bot) => bot.hidden);
@@ -1377,7 +1495,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
               archiveDisabled={activeBotCount <= 1}
             />
           ))}
-          {sectionNames.map((name) => {
+          {sectionNames.map((name, i) => {
             const members = sectionedBots.filter((b) => b.section === name);
             // a filter is a search: hiding matches behind a folded section
             // would read as "no results", so collapse only applies at rest
@@ -1390,6 +1508,22 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                   collapsed={collapsed}
                   onToggle={() => toggleSection(name)}
                   onMenu={(section, x, y) => setSectionMenu({ section, x, y })}
+                  dragging={dragging === name}
+                  dropBelow={dropTarget === name && dragging !== null && sectionNames.indexOf(dragging) < i}
+                  dropAbove={dropTarget === name && dragging !== null && sectionNames.indexOf(dragging) > i}
+                  onDragStart={() => setDragging(name)}
+                  onDragEnter={() => dragging && dragging !== name && setDropTarget(name)}
+                  onDrop={() => {
+                    if (dragging && dragging !== name) {
+                      reorderSections(sectionNames, (order) => moveSection(order, dragging, name));
+                    }
+                    setDragging(null);
+                    setDropTarget(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null);
+                    setDropTarget(null);
+                  }}
                 />
                 {!collapsed &&
                   members.map((b) => (
@@ -1467,6 +1601,16 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           section={sectionMenu.section}
           anchor={sectionMenu}
           onClose={() => setSectionMenu(null)}
+          canMoveUp={sectionNames.indexOf(sectionMenu.section) > 0}
+          canMoveDown={sectionNames.indexOf(sectionMenu.section) < sectionNames.length - 1}
+          onNudge={(delta) =>
+            reorderSections(sectionNames, (order) => nudgeSection(order, sectionMenu.section, delta))
+          }
+          onRenamed={(from, to) => {
+            const merged = renameInOrder(sectionOrder, from, to);
+            setSectionOrder(merged);
+            writeStoredNames(ORDER_KEY, merged);
+          }}
         />
       )}
       {roomMenu && (
