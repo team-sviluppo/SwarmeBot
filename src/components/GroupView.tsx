@@ -25,6 +25,7 @@ import { ReactionBar, ReactionChips } from "./Reactions";
 import { ApprovalCard } from "./ApprovalCard";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { cn } from "@/lib/cn";
+import { BOT_BUBBLE, USER_BUBBLE } from "@/lib/bubble-width";
 import { useFocusMessage } from "@/lib/focus-message";
 import { shortPath } from "@/lib/short-path";
 import { BOTTOM_FOLLOW_THRESHOLD, shouldResumeBottomFollow } from "@/lib/bottom-follow";
@@ -131,19 +132,28 @@ const Transcript = memo(function Transcript({
             </div>
           ) : m.kind === "text" && m.text ? (
             <div className={cn("group flex w-full flex-col", user ? "items-end" : "items-start")}>
-              <div className={cn("flex w-full items-end gap-1.5", user ? "justify-end" : "justify-start")}>
+              <div className={cn("relative flex w-full items-end gap-1.5", user ? "justify-end" : "justify-start")}>
                 {user && <ReactionBar threadId={group.threadId} message={m} />}
                 <PinToggle group={group} message={m} />
-                <div
-                  className={cn(
-                    "max-w-[70%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed",
-                    user ? "whitespace-pre-wrap bg-bubble-user text-ink" : "bg-card text-ink",
+                {/* wrapper hugs the bubble so the floating bar anchors to it */}
+                <div className={cn("relative flex min-w-0", user ? USER_BUBBLE : BOT_BUBBLE)}>
+                  {!user && (
+                    <ReactionBar
+                      threadId={group.threadId}
+                      message={m}
+                      className="absolute bottom-0 right-3 z-10 translate-y-1/2"
+                    />
                   )}
-                  title={new Date(m.at).toLocaleString()}
-                >
-                  {user ? m.text : <ChatMarkdown text={m.text} />}
+                  <div
+                    className={cn(
+                      "min-w-0 rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed",
+                      user ? "whitespace-pre-wrap bg-bubble-user text-ink" : "bg-card text-ink",
+                    )}
+                    title={new Date(m.at).toLocaleString()}
+                  >
+                    {user ? m.text : <ChatMarkdown text={m.text} />}
+                  </div>
                 </div>
-                {!user && <ReactionBar threadId={group.threadId} message={m} />}
                 <span className="self-end pb-1 text-[11px] tabular-nums text-ink-secondary/70 opacity-0 transition-opacity group-hover:opacity-100">
                   {formatTime(m.at)}
                 </span>
@@ -174,7 +184,7 @@ function StreamingBubble({ text }: { text: string }) {
   const deferred = useDeferredValue(text);
   return (
     <div className="flex w-full justify-start">
-      <div className="max-w-[70%] rounded-2xl bg-card px-4 py-2.5 text-[15px] leading-relaxed text-ink">
+      <div className={cn(BOT_BUBBLE, "rounded-2xl bg-card px-4 py-2.5 text-[15px] leading-relaxed text-ink")}>
         <ChatMarkdown text={deferred} streaming />
         <span className="animate-caret ml-0.5 inline-block h-[14px] w-[2px] bg-ink align-middle" />
       </div>

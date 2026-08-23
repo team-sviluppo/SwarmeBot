@@ -49,6 +49,7 @@ import { ReactionBar, ReactionChips } from "./Reactions";
 import { SpeakButton } from "./SpeakButton";
 import { CallButton, CallOverlay } from "./CallView";
 import { cn } from "@/lib/cn";
+import { BOT_BUBBLE, USER_BUBBLE } from "@/lib/bubble-width";
 import { useFocusMessage } from "@/lib/focus-message";
 import { webhookMessageView } from "@/lib/webhook-message";
 import { attachmentBasename, splitAttachedImages } from "@/lib/composer-attachments";
@@ -118,7 +119,7 @@ function ThinkingStrip({ text, active }: { text: string; active: boolean }) {
   }, [text, open]);
   return (
     <div className="flex w-full justify-start">
-      <div className="max-w-[70%] min-w-[200px]">
+      <div className={cn(BOT_BUBBLE, "min-w-[200px]")}>
         <button
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
@@ -167,7 +168,7 @@ function ErrorRow({
 }) {
   return (
     <div className="flex justify-start">
-      <div className="max-w-[70%] rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13.5px] text-danger">
+      <div className={cn(BOT_BUBBLE, "rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13.5px] text-danger")}>
         <div className="flex items-start gap-2">
           <AlertTriangle size={15} className="mt-0.5 shrink-0" />
           <span className="min-w-0 break-words">{message}</span>
@@ -200,7 +201,7 @@ class MessageBoundary extends Component<{ children: ReactNode; fallbackText: str
   render() {
     if (this.state.failed) {
       return (
-        <div className="max-w-[70%] rounded-2xl bg-card px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap text-ink">
+        <div className={cn(BOT_BUBBLE, "rounded-2xl bg-card px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap text-ink")}>
           {this.props.fallbackText}
         </div>
       );
@@ -232,7 +233,7 @@ function BubbleEditor({
     if (draft.trim()) onSubmit(draft.trim());
   };
   return (
-    <div className="w-full max-w-[70%] rounded-2xl border border-hairline/40 bg-bubble-user px-4 py-3">
+    <div className={cn("w-full", USER_BUBBLE, "rounded-2xl border border-hairline/40 bg-bubble-user px-4 py-3")}>
       <textarea
         ref={ref}
         value={draft}
@@ -313,7 +314,7 @@ function Bubble({
 
   return (
     <div className={cn("group animate-msg-in flex w-full flex-col", user ? "items-end" : "items-start")}>
-      <div className={cn("flex w-full items-center gap-1.5", user ? "justify-end" : "justify-start")}>
+      <div className={cn("relative flex w-full items-center gap-1.5", user ? "justify-end" : "justify-start")}>
         {/* editing rewinds the thread, so it waits for the turn to end —
             same rule as the version switcher below */}
         {user && message.kind === "text" && !webhookView && !bot.busy && (
@@ -346,9 +347,15 @@ function Bubble({
         >
           {bot.pinnedMessageId === message.id ? <PinOff size={14} /> : <Pin size={14} />}
         </button>
+        {/* the wrapper hugs the bubble, so the floating reaction bar anchors to
+            the bubble's own corner however short the reply is */}
+        <div className={cn("relative flex min-w-0", user ? USER_BUBBLE : BOT_BUBBLE)}>
+        {!user && message.kind === "text" && (
+          <ReactionBar threadId={bot.threadId} message={message} className="absolute bottom-0 right-3 z-10 translate-y-1/2" />
+        )}
         <div
           className={cn(
-            "max-w-[70%] rounded-2xl text-[15px] leading-relaxed",
+            "min-w-0 rounded-2xl text-[15px] leading-relaxed",
             user && webhookView
               ? "overflow-hidden border border-accent/25 bg-card text-ink shadow-[0_10px_30px_rgba(0,0,0,0.18)]"
               : user
@@ -416,6 +423,7 @@ function Bubble({
             </MessageBoundary>
           )}
         </div>
+        </div>
         {!user && (
           <div className="flex flex-col gap-0.5 self-end pb-0.5">
             <CopyButton text={text} />
@@ -434,7 +442,6 @@ function Bubble({
             )}
           </div>
         )}
-        {!user && message.kind === "text" && <ReactionBar threadId={bot.threadId} message={message} />}
         <span
           className={cn(
             "self-end pb-1 text-[11px] tabular-nums text-ink-secondary/70 opacity-0 transition-opacity group-hover:opacity-100",
@@ -548,7 +555,7 @@ function StreamingBubble({ text }: { text: string }) {
   const deferred = useDeferredValue(text);
   return (
     <div className="flex w-full justify-start">
-      <div className="max-w-[70%] rounded-2xl bg-card px-4 py-2.5 text-[15px] leading-relaxed text-ink">
+      <div className={cn(BOT_BUBBLE, "rounded-2xl bg-card px-4 py-2.5 text-[15px] leading-relaxed text-ink")}>
         <MessageBoundary fallbackText={deferred}>
           <ChatMarkdown text={deferred} streaming />
         </MessageBoundary>

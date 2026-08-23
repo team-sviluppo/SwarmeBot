@@ -34,7 +34,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 NOTARY_PROFILE="${NOTARY_PROFILE:-AC_PASSWORD}"
-MAC_ARCHES="${MAC_ARCHES:-arm64,x64}"
+MAC_ARCHES="${MAC_ARCHES:-arm64}"
 ENV_FILE="$ROOT/.env.mac-release.local"
 PRODUCT_NAME="SwarmeBot"
 

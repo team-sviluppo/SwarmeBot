@@ -17,7 +17,18 @@ const EXTENDED_SET = [
   "💀", "✨", "🎉", "☕",
 ] as const;
 
-export function ReactionBar({ threadId, message }: { threadId: string; message: Message }) {
+export function ReactionBar({
+  threadId,
+  message,
+  className,
+}: {
+  threadId: string;
+  message: Message;
+  /** Placement for the root. Bot turns pass an absolute position so the bar
+   * stops reserving a column's worth of width next to a bubble it only ever
+   * covers on hover — see BOT_BUBBLE. */
+  className?: string;
+}) {
   const { dispatch } = useStore();
   const [pickerOpen, setPickerOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -45,7 +56,7 @@ export function ReactionBar({ threadId, message }: { threadId: string; message: 
   }, [pickerOpen]);
 
   return (
-    <div className="relative">
+    <div className={cn("relative", className)}>
       <div
         ref={anchorRef}
         className="flex items-center gap-0.5 rounded-full border border-hairline/40 bg-panel px-1 py-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
