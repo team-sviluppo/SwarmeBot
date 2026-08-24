@@ -57,10 +57,16 @@ class EndpointError extends Error {
 
 /** What we know about this endpoint's ability to hold a conversation for us.
  *
- * "unknown" is the state that matters: a LiteLLM (or any other) proxy in front
- * of Hermes serves the OpenAI routes and 404s everything else, so a missing
- * /v1/capabilities is NOT evidence of a plain endpoint. Unknown resolves on the
- * first real turn instead — see sessionEcho. */
+ * "unknown" is the state that matters, and the one most live setups sit in
+ * forever: a LiteLLM (or any other) proxy in front of Hermes serves the OpenAI
+ * routes and 404s everything else, so a missing /v1/capabilities is NOT
+ * evidence of a plain endpoint — and the same proxy swallows the response
+ * headers a streamed turn would have proven itself with. Unknown therefore
+ * hedges rather than decides: the session header goes out AND the body carries
+ * the full branch, which is correct against a Hermes and against a plain
+ * endpoint alike. "session" is the proven case and the only one that trims the
+ * body; "none" is a refusal we were told about (403, or a capabilities route
+ * that named something else). */
 export type Continuity = { kind: "unknown" } | { kind: "session"; header: string } | { kind: "none" };
 
 /** LiteLLM hands the upstream's own response headers back to the client under
@@ -329,19 +335,34 @@ export const LocalEndpointDriver: ProviderDriver<Record<string, never>> = {
           // The proof is not that an id came back — it is that OUR id came
           // back. Hermes stamps a session id on every answer, and when it never
           // received a header it derives one from sha256(system + first user
-          // message): a proxy that drops the header still returns a perfectly
-          // healthy-looking `api-<hash>`. Trusting that echo is ruinous, and
-          // silently so. We would store it, stop sending the transcript, and
-          // hand Hermes a body whose first user message is now a different one
-          // every turn — so it would derive a NEW empty session each time and
-          // the bot would lose its memory completely, with nothing in the logs.
-          // A mismatch therefore means exactly one thing: the header did not
-          // survive the trip, and this thread has to keep replaying itself.
+          // message), so a proxy that drops the header still returns a
+          // perfectly healthy-looking `api-<hash>`. Trusting that echo is
+          // ruinous: we would stop sending the transcript and hand Hermes a
+          // body whose first user message changes every turn, so it would
+          // derive a NEW empty session each time and the bot would lose its
+          // memory completely, with nothing in the logs.
+          //
+          // What a missing or foreign echo does NOT prove is that our header
+          // was dropped. LiteLLM forwards the request header upstream, and it
+          // does hand the upstream's own response headers back — but only on a
+          // non-streamed answer (prefixed, see PROXY_HEADER_PREFIX). On the SSE
+          // path it emits nothing but its own `x-litellm-*` set, and every turn
+          // here streams, so a Hermes that honoured us is indistinguishable
+          // from a plain endpoint from this side. Measured against
+          // litellm.hextra.it (LiteLLM 1.98.0) 2026-08-24, both ways. Reading that silence as "no continuity" and dropping the
+          // header is what put two Hermes sessions behind one chat: turn one
+          // named `swarme-…`, turn two sent nothing and Hermes derived a
+          // session of its own. So an unproven endpoint stays unproven and
+          // keeps BOTH halves — the header still goes out, so an honouring
+          // Hermes keeps one session per task, and the body still carries the
+          // branch, so an endpoint that ignored it loses no history. Only an
+          // explicit 403 refusal, or a capabilities verdict, turns the header
+          // off; the echo can only ever promote.
           const honoured = Boolean(result.sessionId) && result.sessionId === session;
-          if (hermes.kind === "unknown") {
-            hermes = honoured ? { kind: "session", header: HERMES_SESSION_HEADER } : { kind: "none" };
-          } else if (hermes.kind === "session" && !honoured) {
-            hermes = { kind: "none" };
+          if (honoured) {
+            if (hermes.kind !== "session") hermes = { kind: "session", header: HERMES_SESSION_HEADER };
+          } else if (hermes.kind === "session") {
+            hermes = { kind: "unknown" };
           }
           appendNative(threadId, { dir: "in", source: "localEndpoint.chat.completions", msg: { text, usage } });
           if (text.trim()) {

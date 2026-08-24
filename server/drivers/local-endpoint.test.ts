@@ -284,15 +284,19 @@ describe("Hermes Agent session continuity", () => {
     // Believing that echo is ruinous: the driver would stop sending the
     // transcript, and each turn's body would start with a different first
     // user message — a brand-new empty session every time, memory silently
-    // gone. So the mismatch has to settle the question the other way.
+    // gone. So the body keeps carrying the whole branch.
     await runTurn(instance, {
       threadId: "task-1",
       text: "second",
       system: "You are Bot",
+      resumeCursor: calls[0]!.session,
       transcript: [{ role: "user", text: "ciao" }, { role: "assistant", text: "ok" }],
     });
-    expect(calls[1]!.session).toBeNull();
     expect(calls[1]!.messages.map((m) => m.content)).toEqual(["You are Bot", "ciao", "ok", "second"]);
+    // ...while the header still names OUR session, because a foreign echo is
+    // no evidence the request header was dropped. Giving it up here is what
+    // left one chat with two Hermes sessions.
+    expect(calls[1]!.session).toBe(calls[0]!.session);
   });
 
   it("replays the thread instead of failing when continuation is refused", async () => {
@@ -374,21 +378,28 @@ describe("Hermes Agent session continuity", () => {
     expect(next).toEqual([calls[0]!.session]);
   });
 
-  it("gives up on continuity when an unproven endpoint echoes nothing back", async () => {
+  it("hedges for good when an unproven endpoint echoes nothing back", async () => {
+    // LiteLLM in front of Hermes, streaming: it forwards our request header
+    // upstream but returns none of the response's headers, so nothing ever
+    // proves the session either way. Read live 2026-08-24 from a chat that
+    // had opened two Hermes sessions for two messages.
     const { instance, calls } = await hermesInstance(null, "none");
-    // a plain llama.cpp behind a proxy: no capabilities route AND no echo
     const opening = await runTurn(instance, { threadId: "task-1", text: "first" });
     expect(calls[0]!.session).toMatch(/^swarme-/);
     expect(opening).toEqual([calls[0]!.session]);
 
-    await runTurn(instance, {
+    const next = await runTurn(instance, {
       threadId: "task-1",
       text: "second",
+      resumeCursor: calls[0]!.session,
       transcript: [{ role: "user", text: "first" }, { role: "assistant", text: "ok" }],
     });
-    // settled: no header, and the thread is replayed in full as before
-    expect(calls[1]!.session).toBeNull();
+    // both halves stay: the task keeps its one session id (an honouring
+    // Hermes continues it instead of deriving a fresh one per turn) and the
+    // body keeps the branch (a plain endpoint loses no history)
+    expect(calls[1]!.session).toBe(calls[0]!.session);
     expect(calls[1]!.messages.map((m) => m.content)).toEqual(["first", "ok", "second"]);
+    expect(next).toEqual([calls[0]!.session]);
   });
 });
 
