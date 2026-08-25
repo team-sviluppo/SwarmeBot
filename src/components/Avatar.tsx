@@ -248,13 +248,17 @@ function MausAvatarComponent(
     const src = `/api/attachments/${encodeURIComponent(look.mascotAvatarImage)}`;
     const sheetRow = clampSheetRow(look.mascotAvatarSheetRow);
     if (sheetRow != null) {
+      // A sheet is a CSS background step, not the mascot frame loop. Call
+      // sites pause unused mascots (`animated={false}` in the roster, search,
+      // pickers); that must not freeze a sprite. Only reduce-motion / the
+      // still-avatars override holds it on the first frame.
       return (
         <SpriteSheetAvatar
           src={src}
           row={sheetRow}
           size={size}
           label={label}
-          animated={animated}
+          animated={!still}
         />
       );
     }

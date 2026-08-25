@@ -914,6 +914,7 @@ function BotListItem({
         // runs the morph engine on every frame. The ones worth the frames are
         // the row you are in, the ones actually doing something, and whoever
         // has a motion beat playing; the rest hold their resting face.
+        // Sprite-sheet pictures ignore this and keep looping (see Avatar).
         animated={selected || bot.busy === true || mascotMotion != null}
       />
       <div className="min-w-0 flex-1">
