@@ -36,7 +36,7 @@ export const LOCAL_HOSTS: LocalHost[] = [
   { id: "lmstudio", label: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", apiKey: "lm-studio" },
   { id: "unsloth", label: "Unsloth", baseUrl: "http://127.0.0.1:8888/v1", apiKeyEnv: "UNSLOTH_STUDIO_AUTH_TOKEN" },
   { id: "unsloth_api", label: "Unsloth", baseUrl: "http://127.0.0.1:8888/v1", apiKeyEnv: "UNSLOTH_STUDIO_AUTH_TOKEN" },
-  { id: "vllm_api", label: "Local Server", baseUrl: "http://127.0.0.1:8000/v1", apiKeyEnv: "vllm" },
+  { id: "vllm_api", label: "Local Server", baseUrl: "http://127.0.0.1:8000/v1", apiKeyEnv: "local" },
   // Any OpenAI-compatible endpoint the user runs or pays for — LiteLLM, vLLM,
   // llama.cpp, a hosted proxy. Empty baseUrl means "not configured yet": it
   // only resolves once the user saves a URL in Settings -> Connections.
