@@ -6,9 +6,12 @@ import { showWorkingDots } from "./turn-tail";
 const msg = (m: Partial<Message>): Message => ({ id: "m1", role: "bot", kind: "text", at: 1, ...m });
 
 describe("showWorkingDots", () => {
-  it("hides the dots when the bot is idle or a stream is rendering", () => {
+  it("hides the dots when the bot is idle", () => {
     expect(showWorkingDots(false, undefined, msg({ role: "user" }))).toBe(false);
-    expect(showWorkingDots(true, "partial reply…", msg({ role: "user" }))).toBe(false);
+  });
+
+  it("keeps the dots while a partial reply is already on screen", () => {
+    expect(showWorkingDots(true, "partial reply…", msg({ role: "user" }))).toBe(true);
   });
 
   it("shows the dots while a turn runs with nothing settled yet", () => {

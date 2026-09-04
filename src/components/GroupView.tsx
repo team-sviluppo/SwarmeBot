@@ -671,22 +671,19 @@ export function GroupView({ group }: { group: Group }) {
               </button>
             </div>
           )}
-          {speaker && showWorkingDots(true, streaming, group.messages.at(-1), speaker.id) && (
+          {speaker && (streaming || showWorkingDots(true, streaming, group.messages.at(-1), speaker.id)) && (
             <>
               <ClusterLabel bot={speaker} name={speaker.name} color={speaker.color} />
-              <div className="flex justify-start">
-                <div className="flex items-center gap-1.5 rounded-2xl bg-raised px-4 py-3">
-                  <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:0ms]" />
-                  <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:150ms]" />
-                  <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:300ms]" />
+              {streaming && <StreamingBubble text={streaming} />}
+              {showWorkingDots(true, streaming, group.messages.at(-1), speaker.id) && (
+                <div className="flex justify-start">
+                  <div className="flex items-center gap-1.5 rounded-2xl bg-raised px-4 py-3">
+                    <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:0ms]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:150ms]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:300ms]" />
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
-          {speaker && streaming && (
-            <>
-              <ClusterLabel bot={speaker} name={speaker.name} color={speaker.color} />
-              <StreamingBubble text={streaming} />
+              )}
             </>
           )}
         </div>

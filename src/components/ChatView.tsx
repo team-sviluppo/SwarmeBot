@@ -1108,21 +1108,18 @@ export function ChatView({ bot }: { bot: Bot }) {
             </div>
           )}
           {reasoning && bot.busy && <ThinkingStrip text={reasoning} active={!streaming} />}
-          {streaming ? (
-            <StreamingBubble text={streaming} />
-          ) : (
-            showWorkingDots(bot.busy, streaming, messages.at(-1)) && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-2.5 rounded-2xl bg-raised px-4 py-3">
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:0ms]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:150ms]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:300ms]" />
-                  </span>
-                  <WorkingTimer since={lastUserMessage?.at ?? Date.now()} />
-                </div>
+          {streaming && <StreamingBubble text={streaming} />}
+          {showWorkingDots(bot.busy, streaming, messages.at(-1)) && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2.5 rounded-2xl bg-raised px-4 py-3">
+                <span className="flex items-center gap-1.5">
+                  <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:0ms]" />
+                  <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:150ms]" />
+                  <span className="size-1.5 animate-bounce rounded-full bg-ink-secondary [animation-delay:300ms]" />
+                </span>
+                <WorkingTimer since={lastUserMessage?.at ?? Date.now()} />
               </div>
-            )
+            </div>
           )}
         </div>
       </div>
