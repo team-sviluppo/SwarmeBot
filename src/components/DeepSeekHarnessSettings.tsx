@@ -17,6 +17,7 @@ import {
 } from "../../shared/deepseek-harness";
 import { cn } from "@/lib/cn";
 import { effortLevelsForModel } from "@/lib/model-effort";
+import { ModelPickerToggle } from "./ModelPickerToggle";
 import {
   deepSeekHarnessActions,
   DeepSeekHarnessApiError,
@@ -98,6 +99,8 @@ export interface DeepSeekHarnessSettingsViewProps {
   onChooseCandidate: (candidate: DeepSeekHarnessModelProfile) => void;
   onUpsert: () => void;
   onReload: () => void;
+  /** Optional: refresh the instance list after the picker toggle saves. */
+  onPickerVisibilitySaved?: () => void;
 }
 
 const labelForEffort = (level: EffortLevel) => {
@@ -511,6 +514,7 @@ export function DeepSeekHarnessSettingsView({
   onChooseCandidate,
   onUpsert,
   onReload,
+  onPickerVisibilitySaved,
 }: DeepSeekHarnessSettingsViewProps) {
   const busy = pending !== null;
   const filteredCandidates = filterDeepSeekHarnessModels(candidates, search);
@@ -882,6 +886,12 @@ export function DeepSeekHarnessSettingsView({
 
       {notice && <div role="status" className="mt-3 text-[11.5px] text-success">{notice}</div>}
       {error && <div role="alert" className="mt-3 text-[11.5px] leading-relaxed text-danger">{error}</div>}
+
+      {/* This engine has no CLI row, so its picker toggle lives here — the
+          same switch every other engine gets in Settings -> Engines. */}
+      <div className="mt-4 border-t border-hairline/35 pt-3">
+        <ModelPickerToggle instance={instance} onSaved={onPickerVisibilitySaved} />
+      </div>
     </section>
   );
 }
@@ -1132,6 +1142,7 @@ export function DeepSeekHarnessSettings({ instance }: { instance: InstanceInfo }
       onChooseCandidate={chooseCandidate}
       onUpsert={upsert}
       onReload={() => void load()}
+      onPickerVisibilitySaved={refreshInstances}
     />
   );
 }

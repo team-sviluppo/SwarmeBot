@@ -137,6 +137,23 @@ describe("DeepSeek Harness settings", () => {
     ])).toEqual([instance]);
   });
 
+  it("offers the model-picker toggle the CLI engine rows get, on by default", () => {
+    const markup = view();
+
+    expect(markup).toContain("Show in model picker");
+    expect(markup).toContain('aria-label="Show DeepSeek Harness in the model picker"');
+    expect(markup).toMatch(/role="switch"[^>]*aria-checked="true"/);
+    // shipped default, so no override to undo yet
+    expect(markup).not.toContain("reset to default");
+  });
+
+  it("marks the toggle off and offers a reset once the engine is hidden by an override", () => {
+    const markup = view({ instance: { ...instance, pickerVisible: false } });
+
+    expect(markup).toMatch(/role="switch"[^>]*aria-checked="false"/);
+    expect(markup).toContain("reset to default");
+  });
+
   it("renders accessible Direct and Paired controls for an explicit remote origin", () => {
     const markup = view();
 
