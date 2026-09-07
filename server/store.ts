@@ -37,6 +37,7 @@ export interface OptionCardData {
   title: string;
   subtitle: string;
   options: string[];
+  multiSelect?: boolean;
   answered?: string;
   dismissed?: boolean;
   /** Present when this card is a live provider ask (approval/question). */
@@ -118,6 +119,9 @@ export interface GroupRecord {
   bulletin: string;
   unread: boolean;
   createdAt: number;
+  /** Provider-native continuation per room member and instance. Room members
+   * share a transcript but must never share a provider persona/session. */
+  memberResumeCursors?: Record<string, Record<string, string>>;
   /** true for auto-created bot⇄bot channels (ask_bot exchanges live here;
    * the user can open the channel and chip in) */
   dm?: boolean;
@@ -571,6 +575,7 @@ export class Store {
       bulletin: "",
       unread: false,
       createdAt: Date.now(),
+      memberResumeCursors: {},
       dm: dm || undefined,
       busyBotId: null,
     };
@@ -599,6 +604,20 @@ export class Store {
     this.saveGroups();
     this.emit({ type: "group", groupId: group.id });
     return group;
+  }
+
+  groupResumeCursor(groupId: string, botId: string, instanceId: string): string | undefined {
+    return this.group(groupId)?.memberResumeCursors?.[botId]?.[instanceId];
+  }
+
+  setGroupResumeCursor(groupId: string, botId: string, instanceId: string, cursor: string): void {
+    const group = this.group(groupId);
+    if (!group || !group.memberIds.includes(botId)) return;
+    group.memberResumeCursors ??= {};
+    group.memberResumeCursors[botId] ??= {};
+    group.memberResumeCursors[botId]![instanceId] = cursor;
+    this.saveGroups();
+    this.emit({ type: "group", groupId });
   }
 
   /** A thread's durable record: DB rows plus any legacy JSON leftovers. */

@@ -9,9 +9,16 @@ import { Check, ChevronDown, Loader2, TriangleAlert } from "lucide-react";
 
 import { api, useStore, type InstanceInfo } from "@/state/store";
 import { EngineGroupLabel } from "./EngineGroupLabel";
+import { DeepSeekHarnessSettings } from "./DeepSeekHarnessSettings";
 import { ProviderMark } from "./ProviderIcons";
 import { isPickerDefault, isPickerHarness, splitEngineRail } from "@/lib/engine-rail";
 import { cn } from "@/lib/cn";
+
+/** DeepSeek Harness is configured by origin/pairing, not by a CLI path, so
+ * it gets its own settings card instead of an EngineRow. */
+export function deepSeekHarnessSettingsInstances(instances: readonly InstanceInfo[]): InstanceInfo[] {
+  return instances.filter((instance) => instance.driverKind === "deepseekHarness");
+}
 
 interface ProbeResult {
   ok: boolean;
@@ -334,16 +341,23 @@ function EngineRow({ instance }: { instance: InstanceInfo }) {
 
 export function EnginesSettings() {
   const { state } = useStore();
+  const deepSeekHarnessInstances = deepSeekHarnessSettingsInstances(state.instances);
   // Every engine gets a row: the model-picker toggle applies to all of them,
   // including API-key engines with no CLI at all (those simply omit the
   // Set CLI… button) and unknown-driver shadows the running build can't load.
-  const rows = state.instances;
+  // DeepSeek Harness is the exception — a CLI row would offer a knob its
+  // driver cannot turn, so it renders its own connection card above.
+  const rows = state.instances.filter((i) => i.driverKind !== "deepseekHarness");
 
   return (
     <div className="flex flex-col gap-5">
-      {rows.length === 0 && (
+      {rows.length === 0 && deepSeekHarnessInstances.length === 0 && (
         <div className="text-[13px] text-ink-secondary">No engines detected yet.</div>
       )}
+      {deepSeekHarnessInstances.length > 0 && <EngineGroupLabel>Harness</EngineGroupLabel>}
+      {deepSeekHarnessInstances.map((instance) => (
+        <DeepSeekHarnessSettings key={instance.instanceId} instance={instance} />
+      ))}
       {(() => {
         const { subscription, custom } = splitEngineRail(rows);
         return (

@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronLeft, Crown, FolderOpen, ImagePlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, useStore, type Bot } from "@/state/store";
+import { effortLevelsForModel } from "@/lib/model-effort";
 import { MausAvatar, wearsPicture } from "./Avatar";
 import { DicebearAvatar, useDicebearReady } from "./DicebearAvatar";
 import {
@@ -772,6 +773,11 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
   const hasPicture = wearsPicture(bot);
   const mascotMotion = state.mascotMotion?.botId === bot.id ? state.mascotMotion : null;
   const engine = state.instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId);
+  const effortLevels = effortLevelsForModel(
+    engine?.models.options ?? [],
+    bot.modelSelection.model,
+    engine?.capabilities?.effortLevels,
+  );
   const canCoordinate = engine?.capabilities?.agentsMcp === true;
   const canUseConnectedApps = engine?.capabilities?.composioMcp === true;
   const connectedAppsConfigured = state.config?.composio?.configured === true;
@@ -1094,7 +1100,7 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
             <ModelPicker bot={bot} />
           </div>
 
-          {!!engine?.capabilities?.effortLevels?.length && (
+          {!!effortLevels?.length && (
             <div className="rounded-xl bg-card p-4">
               <div className="text-[15px] font-medium text-ink">Effort</div>
               {/* Says what the app does, not what the engine ends up at:
@@ -1106,7 +1112,7 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                 How hard this bot thinks{bot.modelSelection.effort ? "" : " (Default: no level is sent)"}
               </div>
               <div className="mt-3 flex overflow-hidden rounded-lg border border-hairline/40">
-                {([undefined, ...engine.capabilities.effortLevels] as const).map((level, i) => (
+                {([undefined, ...effortLevels] as const).map((level, i) => (
                   <button
                     key={level ?? "default"}
                     aria-pressed={bot.modelSelection.effort === level}
