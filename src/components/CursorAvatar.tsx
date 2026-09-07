@@ -1591,6 +1591,14 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
         draw(e, now, spinTurn)
       }
 
+      // A paused mascot gets this one frame and no loop, so it has to be the
+      // finished face. selectExpression leaves morph at 0 with `current` still
+      // on the OUTGOING expression, and it is the loop that walks morph to 1 —
+      // so without this snap every paused mascot drew expression 0 whatever
+      // its state said, which made a gallery of ten expressions ten copies of
+      // the same picture. Nothing to interpolate towards when no frame will
+      // ever run: land on the target.
+      if (paused) engine.current.morph = 1
       // One frame either way, so a paused mascot shows its face instead of
       // an empty body — the old loop bailed out before ever drawing it.
       draw(engine.current, performance.now(), 0)
@@ -1599,7 +1607,9 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       // exists costs something on every frame the app draws.
       if (paused) return
       return onAvatarFrame(step)
-    }, [paused])
+      // state/expression are deps so a paused mascot redraws when its face
+      // changes: it has no loop to notice on its own.
+    }, [paused, state, expression])
 
     const paint = `url(#${uid}-grad)`
     const paintRef = useRef(paint)

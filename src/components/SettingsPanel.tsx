@@ -18,7 +18,7 @@ import {
   stateForBot,
   MAUS_COLORS,
   MAUS_COLOR_NAMES,
-  MAUS_SILHOUETTE_IDS,
+  PICKABLE_SILHOUETTE_IDS,
   normalizeSilhouette,
 } from "@/lib/mascot";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
@@ -770,6 +770,11 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
   ) => dispatch({ type: "updateBot", botId: bot.id, patch: p });
   const activeState = stateForBot(bot);
   const activeSilhouette = normalizeSilhouette(bot.mascotSilhouette);
+  // A bot that chose one of the retired shapes keeps it, so the gallery has to
+  // show it too — a picker with no visible selection reads as "none of these".
+  const silhouetteChoices = PICKABLE_SILHOUETTE_IDS.includes(activeSilhouette)
+    ? PICKABLE_SILHOUETTE_IDS
+    : [...PICKABLE_SILHOUETTE_IDS, activeSilhouette];
   const hasPicture = wearsPicture(bot);
   const mascotMotion = state.mascotMotion?.botId === bot.id ? state.mascotMotion : null;
   const engine = state.instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId);
@@ -865,10 +870,10 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                 Shape
               </div>
               {!painted ? (
-                <GalleryPlaceholder count={MAUS_SILHOUETTE_IDS.length} />
+                <GalleryPlaceholder count={silhouetteChoices.length} />
               ) : (
-              <div className="grid grid-cols-5 gap-2">
-                {MAUS_SILHOUETTE_IDS.map((silhouette) => (
+              <div className="grid grid-cols-4 gap-2">
+                {silhouetteChoices.map((silhouette) => (
                   <button
                     key={silhouette}
                     onClick={() => patch({ mascotSilhouette: silhouette })}

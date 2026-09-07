@@ -16,6 +16,7 @@ import {
 import { wearsDicebearPicture } from "@/lib/dicebear";
 import {
   MAUS_COLORS,
+  eyeInkFor,
   silhouetteFor,
   type MausColor,
   type MausMotion,
@@ -320,6 +321,7 @@ function MausAvatarComponent(
         size={size}
         silhouette={silhouetteFor(silhouette ?? look?.mascotSilhouette)}
         gradient={gradientFor(color)}
+        eyeColor={eyeInkFor(color)}
         title={label ?? null}
         lookAround={forward ? 0 : 1}
         gaze={gaze}

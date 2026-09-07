@@ -15,6 +15,7 @@ import { pickBotName } from "./names.ts";
 import { redactSecretsInText } from "./redact.ts";
 
 export type MausColor =
+  | "white"
   | "green"
   | "blue"
   | "red"

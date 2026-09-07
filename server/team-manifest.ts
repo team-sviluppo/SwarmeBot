@@ -10,6 +10,7 @@ export const LEGACY_TEAM_MANIFEST_VERSION = 1 as const;
 export const MAX_TEAM_MEMBERS = 200;
 
 const COLORS = [
+  "white",
   "green",
   "blue",
   "red",

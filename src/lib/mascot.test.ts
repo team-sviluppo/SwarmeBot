@@ -4,8 +4,12 @@ import {
   DEFAULT_SILHOUETTE_ID,
   MAUS_SILHOUETTES,
   MAUS_SILHOUETTE_IDS,
+  MAUS_COLOR_NAMES,
+  MAUS_COLORS,
+  PICKABLE_SILHOUETTE_IDS,
   PICKABLE_STATES,
   RESTING_FACES,
+  eyeInkFor,
   normalizeSilhouette,
   restingFaceFor,
   silhouetteFor,
@@ -13,9 +17,23 @@ import {
 } from "./mascot";
 
 describe("silhouettes", () => {
-  it("offers every registered shape, default first", () => {
+  it("knows every registered shape, offered ones first", () => {
     expect(MAUS_SILHOUETTE_IDS[0]).toBe(DEFAULT_SILHOUETTE_ID);
-    expect(MAUS_SILHOUETTE_IDS).toEqual(Object.keys(MAUS_SILHOUETTES));
+    expect([...MAUS_SILHOUETTE_IDS].sort()).toEqual(Object.keys(MAUS_SILHOUETTES).sort());
+  });
+
+  it("offers the product's shapes and can draw every one of them", () => {
+    expect(PICKABLE_SILHOUETTE_IDS).toHaveLength(8);
+    for (const id of PICKABLE_SILHOUETTE_IDS) expect(MAUS_SILHOUETTES[id]).toBeDefined();
+    expect(PICKABLE_SILHOUETTE_IDS).toContain(DEFAULT_SILHOUETTE_ID);
+  });
+
+  it("keeps drawing a retired shape a bot already chose", () => {
+    // Dropping a shape from the picker must not repaint a bot that picked it.
+    for (const retired of ["cursor", "octagon", "shield", "egg", "capsule", "star"]) {
+      expect(PICKABLE_SILHOUETTE_IDS).not.toContain(retired);
+      expect(normalizeSilhouette(retired)).toBe(retired);
+    }
   });
 
   it("falls back to the default for junk, absent and inherited names", () => {
@@ -101,5 +119,19 @@ describe("stateForBot", () => {
     expect(stateForBot({ ...plain, title: "Security Engineer" })).toBe("working");
     expect(stateForBot({ ...plain, title: "Compliance" })).toBe("scared");
     expect(stateForBot({ ...plain, description: "watches uptime and incidents" })).toBe("radar");
+  });
+});
+
+describe("colors", () => {
+  it("gives every offered color a fill", () => {
+    for (const name of MAUS_COLOR_NAMES) expect(MAUS_COLORS[name]).toMatch(/^#[0-9A-Fa-f]{6}$/);
+  });
+
+  it("inks the face dark on a light body and white on the rest", () => {
+    // White eyes on a white body is a blob with no face.
+    expect(eyeInkFor("white")).toBe("#2A2A30");
+    for (const name of MAUS_COLOR_NAMES.filter((c) => c !== "white")) {
+      expect(eyeInkFor(name), name).toBe("#ffffff");
+    }
   });
 });
