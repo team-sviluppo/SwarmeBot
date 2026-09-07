@@ -15,7 +15,7 @@ import {
   type Message,
 } from "@/state/store";
 import { MausAvatar } from "./Avatar";
-import { normalizeState } from "@/lib/mascot";
+import { stateForBot } from "@/lib/mascot";
 import { effectiveDefaultResponder, groupResponseHint } from "@/lib/group-routing";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { Composer } from "./Composer";
@@ -55,7 +55,7 @@ function ClusterLabel({ bot, name, color }: { bot?: Bot; name: string; color: st
       <MausAvatar
         color={(bot?.color ?? color) as Bot["color"]}
         look={bot}
-        state={normalizeState(bot?.mascotExpression) ?? "happy"}
+        state={bot ? stateForBot(bot) : "happy"}
         size={16}
         motion="none"
         motionKey={0}
@@ -506,7 +506,7 @@ export function GroupView({ group }: { group: Group }) {
             >
               <MausAvatar
                 color={b.color} look={b}
-                state={normalizeState(b.mascotExpression) ?? "happy"}
+                state={stateForBot(b)}
                 size={24}
                 animated={false}
               />
@@ -634,7 +634,7 @@ export function GroupView({ group }: { group: Group }) {
                   <MausAvatar
                     key={b.id}
                     color={b.color} look={b}
-                    state="happy"
+                    state={stateForBot(b)}
                     size={44}
                     motion="none"
                     motionKey={0}

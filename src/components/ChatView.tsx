@@ -494,6 +494,9 @@ function ActivityChip({ message }: { message: Message }) {
   // bot⇄bot comm chip: opens the channel where the exchange lives
   const comm = message.comm;
   if (comm) {
+    // The peer's look is read live rather than from the frozen comm payload,
+    // so re-shaping or renaming a bot updates its old chips too.
+    const peer = state.bots.find((b) => b.id === comm.withBotId);
     return (
       <div className="flex justify-start">
         <button
@@ -501,12 +504,10 @@ function ActivityChip({ message }: { message: Message }) {
           title={`Open the conversation with ${comm.withName}`}
           className="flex items-center gap-2 rounded-full border border-hairline/40 bg-panel px-3 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink"
         >
-          {/* The peer's shape is read live rather than from the frozen comm
-              payload, so re-shaping a bot updates its old chips too. */}
           <MausAvatar
             color={comm.withColor}
-            look={state.bots.find((b) => b.id === comm.withBotId)}
-            state="happy"
+            look={peer}
+            state={peer ? stateForBot(peer) : "happy"}
             size={16}
           />
           <span className="max-w-[480px] truncate">{tool.name}</span>
@@ -615,7 +616,7 @@ const MessagesList = memo(function MessagesList({
     <>
       {messages.length === 0 && !bot.busy && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-24 text-center">
-          <MausAvatar color={bot.color} look={bot} state="idle" size={64} motion="none" motionKey={0} />
+          <MausAvatar color={bot.color} look={bot} state={stateForBot(bot)} size={64} motion="none" motionKey={0} />
           <RenameTitle
             value={bot.name}
             onCommit={(name) => dispatch({ type: "updateBot", botId: bot.id, patch: { name } })}

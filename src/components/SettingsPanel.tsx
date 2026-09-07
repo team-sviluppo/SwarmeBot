@@ -524,7 +524,7 @@ function PictureSection({
             }}
           />
           {bot.mascotAvatarImage ? (
-            <MausAvatar color={bot.color} look={bot} size={38} />
+            <MausAvatar color={bot.color} look={bot} state={stateForBot(bot)} size={38} />
           ) : (
             <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-raised">
               <ImagePlus size={17} />

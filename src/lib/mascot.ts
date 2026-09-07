@@ -153,6 +153,52 @@ export const PICKABLE_STATES: MausState[] = [
   "proud", // 15
 ];
 
+/**
+ * The resting faces a bot with nothing to say about itself can wear.
+ *
+ * `stateForBot` used to end in `return "idle"`, so every bot whose name and
+ * title missed the keyword table below wore expression 0 — which is most of a
+ * fresh roster, and is why a sidebar of bots looked like one bot repeated.
+ * Picking from this list by identity gives that roster visible variety while
+ * keeping each bot's face fixed forever: the same bot must not change face
+ * between two launches, or its avatar stops being recognisable.
+ *
+ * A subset of PICKABLE_STATES, not the whole thing: `sleeping` and `drowsy`
+ * read as an engine that failed to start, and `suspicious` reads as a warning.
+ * A bot that has told us nothing has nothing to warn about, so the fallback
+ * stays inside the faces that mean "here, and fine".
+ */
+export const RESTING_FACES: MausState[] = [
+  "idle",
+  "happy",
+  "curious",
+  "working",
+  "thinking",
+  "listening",
+  "proud",
+];
+
+/** FNV-1a. Any stable string hash would do; this one is short and has no
+ * clustering on the short, similar strings bot names actually are. */
+function hash(value: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * The face a bot wears when nothing else has claimed it — derived from its
+ * identity, so it is varied across the roster and stable for each bot.
+ * Prefers the id: a rename should not repaint the face, and two bots that
+ * happen to share a name should still differ.
+ */
+export function restingFaceFor(identity: string): MausState {
+  return RESTING_FACES[hash(identity) % RESTING_FACES.length];
+}
+
 /* ---------------------------------------------------------------- silhouettes */
 
 /**
@@ -272,6 +318,8 @@ type MascotMessage = {
 };
 
 export type MascotBotProfile = {
+  /** Seeds the resting face. Absent falls back to the name. */
+  id?: string;
   name: string;
   title?: string;
   description?: string;
@@ -329,5 +377,5 @@ export function stateForBot(bot: MascotBotProfile): MausState {
     return "happy";
   }
 
-  return "idle";
+  return restingFaceFor(bot.id ?? bot.name);
 }

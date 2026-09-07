@@ -14,7 +14,7 @@ import {
   pasteAttachment,
   type Attachment,
 } from "@/lib/composer-attachments";
-import { normalizeState } from "@/lib/mascot";
+import { stateForBot } from "@/lib/mascot";
 import { groupComposerHint, roomRespondersForComposer } from "@/lib/group-routing";
 import { PendingApprovalActions, PendingApprovalPanel, pendingApprovals } from "./PendingApproval";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
@@ -285,7 +285,7 @@ export function Composer({
                 {peer.bot ? (
                   <MausAvatar
                     color={peer.bot.color} look={peer.bot}
-                    state={normalizeState(peer.bot.mascotExpression) ?? "happy"}
+                    state={stateForBot(peer.bot)}
                     size={24}
                   />
                 ) : (
