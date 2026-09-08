@@ -631,8 +631,8 @@ const MessagesList = memo(function MessagesList({
   return (
     <>
       {messages.length === 0 && !bot.busy && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-24 text-center">
-          <MausAvatar color={bot.color} look={bot} state={stateForBot(bot)} size={64} motion="none" motionKey={0} />
+        <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-center">
+          <MausAvatar color={bot.color} look={bot} state={stateForBot(bot)} size={88} motion="none" motionKey={0} />
           <RenameTitle
             value={bot.name}
             onCommit={(name) => dispatch({ type: "updateBot", botId: bot.id, patch: { name } })}
@@ -955,9 +955,9 @@ export function ChatView({ bot }: { bot: Bot }) {
       {/* Header */}
       <div
         className={cn(
-          "flex items-center justify-between px-5 py-3",
+          "flex items-center justify-between px-4 py-2",
           // Room for the drawer button, which overlays this corner below md.
-          "pl-11 md:pl-5",
+          "pl-11 md:pl-4",
           isWin && "pr-[148px]",
         )}
         style={drag}
@@ -971,7 +971,7 @@ export function ChatView({ bot }: { bot: Bot }) {
             <MausAvatar
               color={bot.color} look={bot}
               state={stateForBot({ ...bot, messages })}
-              size={28}
+              size={22}
               motion={mascotMotion?.kind ?? "none"}
               motionKey={mascotMotion?.nonce ?? 0}
             />
@@ -979,8 +979,8 @@ export function ChatView({ bot }: { bot: Bot }) {
           <RenameTitle
             value={bot.name}
             onCommit={(name) => dispatch({ type: "updateBot", botId: bot.id, patch: { name } })}
-            className="truncate text-[15px] font-semibold text-ink"
-            inputClassName="max-w-[220px] rounded bg-inset px-1.5 py-0.5 text-[15px] font-semibold"
+            className="truncate text-[14px] font-semibold text-ink"
+            inputClassName="max-w-[220px] rounded bg-inset px-1.5 py-0.5 text-[14px] font-semibold"
           />
           {bot.chiefOfStaff && (
             <span className="flex items-center gap-1 rounded-full bg-accent/12 px-2 py-0.5 text-[11px] font-medium text-accent">

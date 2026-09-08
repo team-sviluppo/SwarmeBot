@@ -117,16 +117,16 @@ function UpdateButton() {
       disabled={working}
       title={label}
       aria-label={label}
-      className="relative rounded-md p-2 text-accent hover:bg-raised disabled:opacity-60"
+      className="relative rounded-md p-1.5 text-accent hover:bg-raised disabled:opacity-60"
     >
       {working ? (
-        <Loader2 size={18} className="animate-spin" />
+        <Loader2 size={15} className="animate-spin" />
       ) : upToDate ? (
-        <Check size={18} />
+        <Check size={15} />
       ) : status === "available" ? (
-        <ArrowDownToLine size={18} />
+        <ArrowDownToLine size={15} />
       ) : (
-        <RefreshCw size={18} />
+        <RefreshCw size={15} />
       )}
       {status === "downloaded" && (
         <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-accent" />
@@ -165,26 +165,26 @@ function groupPreview(group: Group, bots: Bot[]): string {
   return last.from ? `${last.from.name}: ${text}` : text;
 }
 
-/** Room avatar: 2–3 overlapping mauses in the same 56px slot a bot gets. */
+/** Room avatar: overlapping mauses in the same compact slot a bot gets. */
 function StackedMauses({ members }: { members: Bot[] }) {
   if (members.length <= 1) {
     const b = members[0];
     return (
-      <div className="flex size-14 shrink-0 items-center justify-center">
-        {b ? <MausAvatar color={b.color} look={b} state={stateForBot(b)} size={56} /> : <Users size={24} className="text-ink-secondary" />}
+      <div className="flex size-8 shrink-0 items-center justify-center">
+        {b ? <MausAvatar color={b.color} look={b} state={stateForBot(b)} size={32} /> : <Users size={16} className="text-ink-secondary" />}
       </div>
     );
   }
   const shown = members.slice(0, 3);
   const extra = members.length - shown.length;
   return (
-    <div className="flex size-14 shrink-0 items-center justify-center">
-      <div className="flex items-center -space-x-3">
+    <div className="flex size-8 shrink-0 items-center justify-center">
+      <div className="flex items-center -space-x-2">
         {shown.map((b) => (
-          <MausAvatar key={b.id} color={b.color} look={b} state={stateForBot(b)} size={30} />
+          <MausAvatar key={b.id} color={b.color} look={b} state={stateForBot(b)} size={18} />
         ))}
         {extra > 0 && (
-          <span className="z-10 flex size-[22px] items-center justify-center rounded-full border border-hairline/40 bg-raised text-[10px] font-medium text-ink-secondary">
+          <span className="z-10 flex size-4 items-center justify-center rounded-full border border-hairline/40 bg-raised text-[8px] font-medium text-ink-secondary">
             +{extra}
           </span>
         )}
@@ -208,18 +208,18 @@ function GroupListItem({ group, onMenu }: { group: Group; onMenu: (menu: { group
         onMenu({ groupId: group.id, x: e.clientX, y: e.clientY });
       }}
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left",
+        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left",
         selected ? "bg-raised" : "hover:bg-raised/50",
       )}
     >
       <StackedMauses members={members} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-[15px] font-semibold text-ink">{group.name}</span>
-          {selected && last && <span className="shrink-0 text-xs text-ink-secondary">{formatTime(last.at)}</span>}
+        <div className="flex items-baseline justify-between gap-1.5">
+          <span className="truncate text-[13px] font-medium text-ink">{group.name}</span>
+          {selected && last && <span className="shrink-0 text-[11px] text-ink-secondary">{formatTime(last.at)}</span>}
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-[13px] text-ink-secondary">{groupPreview(group, state.bots)}</span>
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="truncate text-[11.5px] text-ink-secondary">{groupPreview(group, state.bots)}</span>
           {group.unread && <span className="size-2 shrink-0 rounded-full bg-accent" />}
         </div>
       </div>
@@ -444,7 +444,7 @@ function SectionDivider({
       }}
       onDragEnd={onDragEnd}
       className={cn(
-        "group/section relative flex items-center gap-2 px-3 pb-1 pt-3 first:pt-0",
+        "group/section relative flex items-center gap-1.5 px-2 pb-0.5 pt-2 first:pt-0.5",
         dragging && "opacity-40",
         // the line sits on the edge the section will land against, so the
         // preview matches where the release actually puts it
@@ -893,7 +893,7 @@ function BotListItem({
   const visible = visibleMessages(bot);
   const last = visible.at(-1);
   const rowClass = cn(
-    "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 pr-10 text-left",
+    "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 pr-8 text-left",
     bot.chiefOfStaff
       ? selected
         ? "border-accent/40 bg-accent/15"
@@ -907,7 +907,7 @@ function BotListItem({
       <MausAvatar
         color={bot.color} look={bot}
         state={stateForBot({ ...bot, messages: visible })}
-        size={56}
+        size={32}
         motion={mascotMotion?.kind ?? "none"}
         motionKey={mascotMotion?.nonce ?? 0}
         // Every animated mascot runs the morph engine on every frame, so the
@@ -919,28 +919,28 @@ function BotListItem({
         priority={selected || bot.busy === true || mascotMotion != null}
       />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-1.5 truncate text-[15px] font-semibold text-ink">
-            {bot.pinned && <Pin size={12} className="shrink-0 text-ink-secondary" />}
+        <div className="flex items-baseline justify-between gap-1.5">
+          <span className="flex min-w-0 items-center gap-1 truncate text-[13px] font-medium text-ink">
+            {bot.pinned && <Pin size={10} className="shrink-0 text-ink-secondary" />}
             <RenameTitle
               value={bot.name}
               onCommit={(name) => dispatch({ type: "updateBot", botId: bot.id, patch: { name } })}
               onEditingChange={setRenaming}
               className="truncate"
-              inputClassName="w-full rounded bg-inset px-1 py-0.5 text-[15px] font-semibold"
+              inputClassName="w-full rounded bg-inset px-1 py-0.5 text-[13px] font-medium"
             />
           </span>
           {selected && last && !renaming && (
-            <span className="shrink-0 text-xs text-ink-secondary transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+            <span className="shrink-0 text-[11px] text-ink-secondary transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
               {formatTime(last.at)}
             </span>
           )}
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-1.5 truncate text-[13px] text-ink-secondary">
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="flex min-w-0 items-center gap-1 truncate text-[11.5px] leading-tight text-ink-secondary">
             {bot.chiefOfStaff && (
-              <span className="flex shrink-0 items-center gap-1 text-[11.5px] font-medium text-accent">
-                <Crown size={11} /> Chief of Staff
+              <span className="flex shrink-0 items-center gap-0.5 text-[10.5px] font-medium text-accent">
+                <Crown size={10} /> Chief of Staff
               </span>
             )}
             {bot.chiefOfStaff && preview(bot) && <span className="shrink-0 text-ink-secondary/60">·</span>}
@@ -997,9 +997,9 @@ function BotListItem({
               ? "Keep at least one active bot"
               : `Archive ${bot.name}`
         }
-        className="absolute right-2 top-2.5 flex size-7 items-center justify-center rounded-lg bg-card/90 text-ink-secondary opacity-0 shadow-sm transition hover:bg-raised hover:text-ink focus:opacity-100 disabled:cursor-default disabled:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100"
+        className="absolute right-1 top-1.5 flex size-6 items-center justify-center rounded-md bg-card/90 text-ink-secondary opacity-0 shadow-sm transition hover:bg-raised hover:text-ink focus:opacity-100 disabled:cursor-default disabled:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100"
       >
-        <Archive size={14} />
+        <Archive size={12} />
       </button>
     </div>
   );
@@ -1350,7 +1350,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <aside
       className={cn(
-        "flex h-full w-[320px] shrink-0 flex-col border-r border-hairline/40 bg-panel",
+        "flex h-full w-[272px] shrink-0 flex-col border-r border-hairline/30 bg-panel",
         // Below md only: the sidebar leaves the flow and slides in over the chat.
         // Scoped with max-md: rather than cancelled with md: on purpose — Tailwind
         // v4 emits the native `translate` property, and any value other than
@@ -1363,115 +1363,113 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         open ? "max-md:translate-x-0" : "max-md:-translate-x-full",
       )}
     >
-      {/* macOS owns inset traffic lights; Linux/Windows use native chrome. */}
+      {/* Search + new sit on one row, matching the compact Grok-style rail. */}
       <div
-        className="flex items-center justify-between px-4 pt-3.5 pb-1"
+        className="flex items-center gap-1.5 px-2.5 pt-2.5 pb-2"
         style={macInset ? ({ WebkitAppRegion: "drag" } as React.CSSProperties) : undefined}
       >
         {macInset ? (
-          <div className="w-14" />
+          <div className="w-14 shrink-0" />
         ) : browser ? (
-          <div className="flex items-center gap-2">
-            <span className="size-3 rounded-full bg-[#ff5f57]" />
-            <span className="size-3 rounded-full bg-[#febc2e]" />
-            <span className="size-3 rounded-full bg-[#28c840]" />
+          <div className="flex shrink-0 items-center gap-1.5 pr-1">
+            <span className="size-2.5 rounded-full bg-[#ff5f57]" />
+            <span className="size-2.5 rounded-full bg-[#febc2e]" />
+            <span className="size-2.5 rounded-full bg-[#28c840]" />
           </div>
-        ) : <div />}
+        ) : null}
         <div
-          className="relative"
+          className="flex min-w-0 flex-1 items-center gap-1"
           style={macInset ? ({ WebkitAppRegion: "no-drag" } as React.CSSProperties) : undefined}
         >
-          <button
-            ref={importReturnRef}
-            onClick={() => setPlusOpen((o) => !o)}
-            className="rounded-md p-1 text-ink-secondary hover:bg-raised hover:text-ink"
-            title="New or share"
-          >
-            <Plus size={20} strokeWidth={2} />
-          </button>
-          {plusOpen && (
-            <>
-              <div className="fixed inset-0 z-30" onMouseDown={() => setPlusOpen(false)} />
-              <div className="absolute right-0 top-full z-40 mt-1 w-44 overflow-hidden rounded-xl border border-hairline/50 bg-card py-1.5 shadow-2xl shadow-black/60">
-                <button
-                  onClick={() => {
-                    setPlusOpen(false);
-                    track("bot_created");
-                    dispatch({ type: "newBot" });
-                  }}
-                  className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
-                >
-                  <BotIcon size={16} className="text-ink-secondary" />
-                  New Bot
-                </button>
-                <button
-                  onClick={() => {
-                    setPlusOpen(false);
-                    setNewRoom(true);
-                  }}
-                  className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
-                >
-                  <Users size={16} className="text-ink-secondary" />
-                  New Room
-                </button>
-                <button
-                  onClick={() => {
-                    setPlusOpen(false);
-                    void exportAllBots();
-                  }}
-                  disabled={exportingTeam}
-                  className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
-                >
-                  {exportingTeam ? <Loader2 size={16} className="animate-spin text-ink-secondary" /> : <ArrowDownToLine size={16} className="text-ink-secondary" />}
-                  {exportingTeam ? "Exporting…" : "Export all bots"}
-                </button>
-                <button
-                  onClick={() => {
-                    setPlusOpen(false);
-                    setTeamLibraryOpen(true);
-                  }}
-                  className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
-                >
-                  <Library size={16} className="text-ink-secondary" />
-                  Teams
-                </button>
-                {archivedBots.length > 0 && (
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg bg-raised/70 px-2 py-1.5">
+            <Search size={13} className="shrink-0 text-ink-secondary" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+              placeholder="Search"
+              aria-label="Search bots and messages"
+              className="w-full bg-transparent text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none"
+            />
+          </div>
+          <div className="relative shrink-0">
+            <button
+              ref={importReturnRef}
+              onClick={() => setPlusOpen((o) => !o)}
+              className="rounded-md p-1 text-ink-secondary hover:bg-raised hover:text-ink"
+              title="New or share"
+            >
+              <Plus size={16} strokeWidth={2} />
+            </button>
+            {plusOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onMouseDown={() => setPlusOpen(false)} />
+                <div className="absolute right-0 top-full z-40 mt-1 w-44 overflow-hidden rounded-xl border border-hairline/50 bg-card py-1.5 shadow-2xl shadow-black/60">
                   <button
                     onClick={() => {
                       setPlusOpen(false);
-                      setArchivedBotsOpen(true);
+                      track("bot_created");
+                      dispatch({ type: "newBot" });
                     }}
                     className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
                   >
-                    <Archive size={16} className="text-ink-secondary" />
-                    <span className="flex-1">Archived bots</span>
-                    <span className="text-[11.5px] text-ink-secondary">{archivedBots.length}</span>
+                    <BotIcon size={16} className="text-ink-secondary" />
+                    New Bot
                   </button>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="px-3 pt-2 pb-3">
-        <div className="flex items-center gap-2 rounded-lg bg-raised/70 px-3 py-2">
-          <Search size={16} className="text-ink-secondary" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-            placeholder="Search"
-            aria-label="Search bots and messages"
-            className="w-full bg-transparent text-[14px] text-ink placeholder:text-ink-secondary focus:outline-none"
-          />
+                  <button
+                    onClick={() => {
+                      setPlusOpen(false);
+                      setNewRoom(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
+                  >
+                    <Users size={16} className="text-ink-secondary" />
+                    New Room
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPlusOpen(false);
+                      void exportAllBots();
+                    }}
+                    disabled={exportingTeam}
+                    className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
+                  >
+                    {exportingTeam ? <Loader2 size={16} className="animate-spin text-ink-secondary" /> : <ArrowDownToLine size={16} className="text-ink-secondary" />}
+                    {exportingTeam ? "Exporting…" : "Export all bots"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPlusOpen(false);
+                      setTeamLibraryOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
+                  >
+                    <Library size={16} className="text-ink-secondary" />
+                    Teams
+                  </button>
+                  {archivedBots.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setPlusOpen(false);
+                        setArchivedBotsOpen(true);
+                      }}
+                      className="flex w-full items-center gap-3 px-3.5 py-2 text-left text-[14px] text-ink hover:bg-raised/70"
+                    >
+                      <Archive size={16} className="text-ink-secondary" />
+                      <span className="flex-1">Archived bots</span>
+                      <span className="text-[11.5px] text-ink-secondary">{archivedBots.length}</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Bot list */}
-      <div className="flex-1 overflow-y-auto px-2">
-        <div className="flex flex-col gap-0.5">
+      <div className="flex-1 overflow-y-auto px-1.5">
+        <div className="flex flex-col gap-px">
           {!chiefBot && visibleBots.length === 0 && sectionedBots.length === 0 && visibleGroups.length === 0 && q && q.length < MIN_QUERY && (
             <div className="px-3 py-6 text-center text-[13px] text-ink-secondary">Nothing matches “{query}”</div>
           )}
@@ -1545,44 +1543,44 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       </div>
 
       {/* Footer */}
-      <div className="px-3 pb-3 pt-2">
+      <div className="px-1.5 pb-2 pt-1">
         <button
           onClick={() => dispatch({ type: "showRoutines" })}
           className={cn(
-            "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors",
+            "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors",
             state.activeView === "routines" ? "bg-raised text-ink" : "text-ink hover:bg-raised/50",
           )}
         >
-          <CalendarDays size={20} className={state.activeView === "routines" ? "text-accent" : "text-ink-secondary"} />
-          <span className="flex-1 text-[14px]">Automations</span>
+          <CalendarDays size={15} className={state.activeView === "routines" ? "text-accent" : "text-ink-secondary"} />
+          <span className="flex-1 text-[13px]">Automations</span>
           {state.routineRuns.some((run) => ["failed", "missed"].includes(run.status) && !run.seenAt) && (
-            <span className="size-2 rounded-full bg-danger" />
+            <span className="size-1.5 rounded-full bg-danger" />
           )}
         </button>
         <button
           onClick={() => dispatch({ type: "togglePlugins", open: true })}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-raised/50"
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-raised/50"
         >
-          <Puzzle size={20} className="text-ink-secondary" />
-          <span className="text-[14px] text-ink">Connected apps</span>
+          <Puzzle size={15} className="text-ink-secondary" />
+          <span className="text-[13px] text-ink">Connected apps</span>
         </button>
         <div className="flex items-center">
           <button
             onClick={() => dispatch({ type: "toggleAppSettings" })}
-            className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-raised/50"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-raised/50"
           >
-            <InitialsAvatar initials={profileInitials(state.config?.profile)} size={28} />
-            <span className="truncate text-[14px] text-ink">
+            <InitialsAvatar initials={profileInitials(state.config?.profile)} size={22} />
+            <span className="truncate text-[13px] text-ink">
               {state.config?.profile?.name?.trim() || state.config?.profile?.email?.trim() || "You"}
             </span>
           </button>
           <UpdateButton />
           <button
             onClick={() => dispatch({ type: "toggleAppSettings" })}
-            className="rounded-md p-2 text-ink-secondary hover:bg-raised hover:text-ink"
+            className="rounded-md p-1.5 text-ink-secondary hover:bg-raised hover:text-ink"
             title="App settings"
           >
-            <Settings size={18} />
+            <Settings size={15} />
           </button>
         </div>
       </div>

@@ -483,7 +483,7 @@ export function GroupView({ group }: { group: Group }) {
       {/* Header: static member mauses; a ring + dot marks the working bot. */}
       <div
         className={cn(
-          "flex items-center justify-between px-5 py-3",
+          "flex items-center justify-between px-4 py-2",
           // Room for the drawer button, which overlays this corner below md.
           "pl-11 md:pl-5",
           isWin && "pr-[148px]",

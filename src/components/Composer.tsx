@@ -242,7 +242,7 @@ export function Composer({
   };
 
   return (
-    <div className="px-5 pb-5 pt-2">
+    <div className="px-8 pb-6 pt-2">
       {speechError && (
         <div className="mx-auto mb-2 max-w-[900px] rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
           {speechError}
@@ -321,7 +321,7 @@ export function Composer({
           onRemove={removeAttachment}
           allowImages={engineSupportsImages}
         />
-        <div className="flex items-end gap-2 rounded-3xl border border-hairline/40 bg-raised/60 py-2 pl-3 pr-2">
+        <div className="flex items-end gap-2 rounded-full border border-hairline/30 bg-raised/70 py-1.5 pl-4 pr-2">
         <textarea
           ref={inputRef}
           rows={1}

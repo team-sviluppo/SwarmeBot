@@ -3806,7 +3806,7 @@ const server = createServer(async (req, res) => {
     }
     if (m && method === "PATCH") {
       const body = await readBody(req);
-      let task = store.taskByThread(m[1], m[2]);
+      let task: TaskRecord | null | undefined = store.taskByThread(m[1], m[2]);
       if (!task) return json(res, 404, { error: "no such task" });
       if (typeof body.pinned === "boolean") {
         task = store.setTaskPinned(m[1], m[2], body.pinned);
