@@ -1,7 +1,7 @@
 // Store persistence contract: bots.json + messages-<threadId>.json are
 // the durable record — everything here must survive a process restart
 // except `busy`, which never does (no turn survives one either).
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -212,6 +212,21 @@ describe("Store", () => {
     expect(reloaded.bot(bot.id)?.resumeCursors).toEqual({ claude: "sess-abc", codex: "thread-xyz" });
   });
 
+  it("persists independent provider continuations for every room member", () => {
+    const store = new Store(selection);
+    const first = store.createBot({ name: "First" });
+    const second = store.createBot({ name: "Second" });
+    const group = store.createGroup("Pair", [first.id, second.id]);
+
+    store.setGroupResumeCursor(group.id, first.id, "deepseekHarness", "dsh:first");
+    store.setGroupResumeCursor(group.id, second.id, "deepseekHarness", "dsh:second");
+
+    const reloaded = new Store(selection);
+    expect(reloaded.groupResumeCursor(group.id, first.id, "deepseekHarness")).toBe("dsh:first");
+    expect(reloaded.groupResumeCursor(group.id, second.id, "deepseekHarness")).toBe("dsh:second");
+    expect(reloaded.groupResumeCursor(group.id, first.id, "other")).toBeUndefined();
+  });
+
   it("seedIfEmpty creates exactly one starter bot, once", () => {
     const store = new Store(selection);
     store.seedIfEmpty();
@@ -328,6 +343,18 @@ describe("Store", () => {
     expect(store.bot(bot.id)).toBeNull();
     expect(new Store(selection).messagesFor(bot.threadId)).toHaveLength(0);
     expect(store.deleteBot(bot.id)).toBe(false);
+  });
+
+  it("saves pinned conversations to disk when the bot is deleted", () => {
+    const store = new Store(selection);
+    const bot = store.createBot({ name: "Mira" });
+    const extra = store.createTask(bot.id, "Keep this")!;
+    store.appendMessage(extra.threadId, { role: "user", kind: "text", text: "remember me" });
+    store.setTaskPinned(bot.id, extra.threadId, true);
+    store.deleteBot(bot.id);
+    const file = join(DATA_DIR, "bots", "Mira", "Keep this.md");
+    expect(existsSync(file)).toBe(true);
+    expect(readFileSync(file, "utf8")).toContain("remember me");
   });
   it("migrates a pre-branching flat transcript file", () => {
     const store = new Store(selection);

@@ -31,7 +31,7 @@ export class ProviderError extends Error {
 
 /** Reasoning-effort levels, ascending. A union of everything any engine
  * accepts; each driver declares the subset its CLI will take. */
-export const EFFORT_LEVELS = ["none", "low", "medium", "high", "xhigh", "max"] as const;
+export const EFFORT_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 
 /** Narrow untrusted API/config input before it becomes a model selection. */
@@ -83,7 +83,7 @@ export interface RuntimeEventBase {
 
 export type RuntimeEvent = RuntimeEventBase &
   (
-    | { type: "session.started"; sessionId: string | null; model?: string | null }
+    | { type: "session.started"; sessionId: string | null; model?: string | null; resumeCursor?: string }
     | { type: "session.exited"; reason?: string }
     | { type: "turn.started" }
     | {
@@ -109,6 +109,7 @@ export type RuntimeEvent = RuntimeEventBase &
         tool: string;
         summary: string;
         choices?: string[];
+        multiSelect?: boolean;
         approvalScope?: "local-computer";
       }
     | {
@@ -132,7 +133,10 @@ export type RuntimeEventListener = (event: RuntimeEvent) => void;
  * asked-about action — broadening ("always allow") stays a separate,
  * explicit step. `unavailable` is the fail-closed default: no answerer,
  * no action. */
-export type RequestOutcome = "allowed-once" | "rejected" | "answered" | "unavailable";
+/** `retryable` means the provider did not acknowledge delivery; retain the card and let the person retry.
+ * `already-resolved` means an authoritative provider event settled the ask
+ * before the delivery receipt; callers must not restore or re-audit it. */
+export type RequestOutcome = "allowed-once" | "rejected" | "answered" | "already-resolved" | "retryable" | "unavailable";
 
 // ── adapter contract (upstream ProviderAdapterShape, promise-flavored) ──
 // The conversation runtime every provider is flattened into. streamEvents
@@ -141,6 +145,9 @@ export type RequestOutcome = "allowed-once" | "rejected" | "answered" | "unavail
 // carrying the provider-native continuation (e.g. a claude session id).
 export interface SendTurnInput {
   threadId: ThreadId;
+  /** Optional provider-session identity when several personas share one
+   * public transcript (room members). Runtime events still use threadId. */
+  sessionKey?: string;
   text: string;
   model?: string;
   effort?: EffortLevel;
@@ -222,6 +229,14 @@ export interface ProviderAdapter {
      * the driver cannot set effort, so the app never offers the control —
      * same rule as computerMcp: never show a knob the driver cannot turn. */
     effortLevels?: readonly EffortLevel[];
+    /** True when the driver keeps a live session across turns and can take
+     * a user message MID-TURN (delivered before the model's next call —
+     * "steer"). This build routes steering through steer-queue.ts (queue
+     * now, one follow-up turn on settle) for EVERY engine, so the flag is
+     * declared but not yet honoured: it records what the driver can do,
+     * ready for the composer to keep the queue-one-and-wait behaviour off
+     * once index.ts prefers adapter.steer(). */
+    queueing?: boolean;
     /** True only when local MCP calls can reach the human approval channel.
      * Full-auto/bypass provider instances must leave this false. */
     localComputerMcp?: boolean;
@@ -236,8 +251,12 @@ export interface ProviderAdapter {
   respondToRequest(
     threadId: ThreadId,
     requestId: string,
-    decision: { behavior: "allow" | "deny" | "answer"; message?: string },
+    decision: { behavior: "allow" | "deny" | "answer"; message?: string; selected?: string[]; custom?: string },
   ): Promise<RequestOutcome>;
+  /** Deliver a user message into the RUNNING turn on this thread. Resolves
+   * false when there is no live turn to steer (the caller then sends it as
+   * a normal turn). Only drivers with `capabilities.queueing` implement it. */
+  steer?(threadId: ThreadId, text: string): Promise<boolean>;
   hasSession(threadId: ThreadId): boolean;
   stopAll(): Promise<void>;
   onEvent(listener: RuntimeEventListener): () => void;
@@ -282,7 +301,17 @@ export interface EngineInstall {
 // a rejection to an unavailable shadow snapshot.
 export interface ModelCatalog {
   default: string;
-  options: Array<{ id: string; label: string; custom?: boolean; loaded?: boolean }>;
+  options: Array<{
+    id: string;
+    label: string;
+    custom?: boolean;
+    loaded?: boolean;
+    /** Exact context budget for this model when the provider reports one. */
+    contextWindow?: number;
+    /** Exact reasoning levels accepted by this model. Absent falls back to
+     * the driver's declared levels for legacy catalogs. */
+    effortLevels?: readonly EffortLevel[];
+  }>;
 }
 
 export interface DriverCreateInput<Config> {

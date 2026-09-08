@@ -171,7 +171,7 @@ function StackedMauses({ members }: { members: Bot[] }) {
     const b = members[0];
     return (
       <div className="flex size-14 shrink-0 items-center justify-center">
-        {b ? <MausAvatar color={b.color} look={b} state="happy" size={56} /> : <Users size={24} className="text-ink-secondary" />}
+        {b ? <MausAvatar color={b.color} look={b} state={stateForBot(b)} size={56} /> : <Users size={24} className="text-ink-secondary" />}
       </div>
     );
   }
@@ -181,7 +181,7 @@ function StackedMauses({ members }: { members: Bot[] }) {
     <div className="flex size-14 shrink-0 items-center justify-center">
       <div className="flex items-center -space-x-3">
         {shown.map((b) => (
-          <MausAvatar key={b.id} color={b.color} look={b} state="happy" size={30} />
+          <MausAvatar key={b.id} color={b.color} look={b} state={stateForBot(b)} size={30} />
         ))}
         {extra > 0 && (
           <span className="z-10 flex size-[22px] items-center justify-center rounded-full border border-hairline/40 bg-raised text-[10px] font-medium text-ink-secondary">
@@ -333,7 +333,7 @@ function NewRoomPanel({ onClose }: { onClose: () => void }) {
               onClick={() => toggle(b.id)}
               className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-raised/50"
             >
-              <MausAvatar color={b.color} look={b} state="happy" size={28} />
+              <MausAvatar color={b.color} look={b} state={stateForBot(b)} size={28} />
               <span className="min-w-0 flex-1 truncate text-[14px] text-ink">{b.name}</span>
               <span
                 className={cn(
@@ -910,12 +910,13 @@ function BotListItem({
         size={56}
         motion={mascotMotion?.kind ?? "none"}
         motionKey={mascotMotion?.nonce ?? 0}
-        // The list is as long as the bot roster and every animated mascot
-        // runs the morph engine on every frame. The ones worth the frames are
-        // the row you are in, the ones actually doing something, and whoever
-        // has a motion beat playing; the rest hold their resting face.
-        // Sprite-sheet pictures ignore this and keep looping (see Avatar).
-        animated={selected || bot.busy === true || mascotMotion != null}
+        // Every animated mascot runs the morph engine on every frame, so the
+        // roster is bounded by visibility and the app-wide frame budget rather
+        // than by freezing all but one row (see lib/avatar-frames). The rows
+        // whose frames carry meaning — the one you are in, the ones actually
+        // doing something, whoever has a motion beat playing — claim a slot
+        // ahead of the merely-decorative ones.
+        priority={selected || bot.busy === true || mascotMotion != null}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
@@ -1115,7 +1116,7 @@ function ArchivedBotsPanel({
           <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
             {bots.map((bot) => (
               <div key={bot.id} className="flex min-h-[82px] items-center gap-3 border-b border-hairline/35 px-1 py-3">
-                <MausAvatar color={bot.color} look={bot} state="happy" size={42} />
+                <MausAvatar color={bot.color} look={bot} state={stateForBot(bot)} size={42} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14px] font-medium text-ink">{bot.name}</div>
                   <div className="mt-0.5 truncate text-[12.5px] text-ink-secondary">{bot.title || "Bot"}</div>

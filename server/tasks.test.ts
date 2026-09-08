@@ -115,6 +115,19 @@ describe("tasks", () => {
     expect(store.tasks(bot.id)).toHaveLength(1);
   });
 
+  it("refuses to delete a pinned task until it is unpinned", async () => {
+    const { store } = await freshStore();
+    const bot = store.createBot();
+    const first = bot.threadId;
+    const second = store.createTask(bot.id)!;
+    store.setTaskPinned(bot.id, second.threadId, true);
+    expect(store.deleteTask(bot.id, second.threadId)).toBeNull();
+    expect(store.tasks(bot.id)).toHaveLength(2);
+    store.setTaskPinned(bot.id, second.threadId, false);
+    expect(store.deleteTask(bot.id, second.threadId)).toBeTruthy();
+    expect(store.tasks(bot.id).map((t) => t.threadId)).toEqual([first]);
+  });
+
   it("adopts a pre-tasks bot's endless thread as its first task", async () => {
     const { store, UNTITLED_TASK } = await freshStore();
     const bot = store.createBot();

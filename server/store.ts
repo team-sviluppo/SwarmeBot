@@ -13,8 +13,10 @@ import { workspaceDir } from "./workspace.ts";
 import { newId, type CloudBackend, type ModelSelection, type ThreadId } from "./contracts.ts";
 import { pickBotName } from "./names.ts";
 import { redactSecretsInText } from "./redact.ts";
+import { archivePinnedTasks } from "./transcript-export.ts";
 
 export type MausColor =
+  | "white"
   | "green"
   | "blue"
   | "red"
@@ -37,6 +39,7 @@ export interface OptionCardData {
   title: string;
   subtitle: string;
   options: string[];
+  multiSelect?: boolean;
   answered?: string;
   dismissed?: boolean;
   /** Present when this card is a live provider ask (approval/question). */
@@ -118,6 +121,9 @@ export interface GroupRecord {
   bulletin: string;
   unread: boolean;
   createdAt: number;
+  /** Provider-native continuation per room member and instance. Room members
+   * share a transcript but must never share a provider persona/session. */
+  memberResumeCursors?: Record<string, Record<string, string>>;
   /** true for auto-created bot⇄bot channels (ask_bot exchanges live here;
    * the user can open the channel and chip in) */
   dm?: boolean;
@@ -157,6 +163,8 @@ export interface TaskRecord {
   lastInstanceId?: string;
   /** what this task has spent: banked once per turn from turn.completed */
   usage?: TaskUsage;
+  /** kept in the task list until unpinned; cannot be deleted while set */
+  pinned?: boolean;
   /** the folder this task's turns run in, pinned on its first turn from
    * the bot's `cwd` at that moment. Pinned, not read live: Claude keeps
    * sessions per project directory and Codex threads carry their cwd, so
@@ -571,6 +579,7 @@ export class Store {
       bulletin: "",
       unread: false,
       createdAt: Date.now(),
+      memberResumeCursors: {},
       dm: dm || undefined,
       busyBotId: null,
     };
@@ -599,6 +608,20 @@ export class Store {
     this.saveGroups();
     this.emit({ type: "group", groupId: group.id });
     return group;
+  }
+
+  groupResumeCursor(groupId: string, botId: string, instanceId: string): string | undefined {
+    return this.group(groupId)?.memberResumeCursors?.[botId]?.[instanceId];
+  }
+
+  setGroupResumeCursor(groupId: string, botId: string, instanceId: string, cursor: string): void {
+    const group = this.group(groupId);
+    if (!group || !group.memberIds.includes(botId)) return;
+    group.memberResumeCursors ??= {};
+    group.memberResumeCursors[botId] ??= {};
+    group.memberResumeCursors[botId]![instanceId] = cursor;
+    this.saveGroups();
+    this.emit({ type: "group", groupId });
   }
 
   /** A thread's durable record: DB rows plus any legacy JSON leftovers. */
@@ -825,6 +848,12 @@ export class Store {
   deleteBot(id: string): boolean {
     const bot = this.bot(id);
     if (!bot) return false;
+    archivePinnedTasks({
+      botName: bot.name,
+      userName: "User",
+      tasks: bot.tasks ?? [],
+      messagesFor: (threadId) => this.activePath(threadId),
+    });
     this.bots = this.bots.filter((b) => b.id !== id);
     // every task's transcript goes with the bot, not just the open one
     for (const threadId of new Set([bot.threadId, ...(bot.tasks ?? []).map((t) => t.threadId)])) {
@@ -1040,6 +1069,16 @@ export class Store {
     return task;
   }
 
+  setTaskPinned(botId: string, threadId: string, pinned: boolean): TaskRecord | null {
+    const task = this.bot(botId)?.tasks?.find((t) => t.threadId === threadId);
+    if (!task) return null;
+    if (pinned) task.pinned = true;
+    else delete task.pinned;
+    this.saveBots();
+    this.emit({ type: "bot", botId });
+    return task;
+  }
+
   /** Name a task after its first message, once. */
   titleTaskFromFirstMessage(botId: string, text: string, threadId?: string) {
     const task = threadId ? this.taskByThread(botId, threadId) : this.activeTask(botId);
@@ -1049,11 +1088,13 @@ export class Store {
     this.emit({ type: "bot", botId });
   }
 
-  /** Delete a task and its transcript. A bot always keeps one. */
+  /** Delete a task and its transcript. A bot always keeps one. Pinned
+   * tasks stay until they are unpinned. */
   deleteTask(botId: string, threadId: string): BotRecord | null {
     const bot = this.bot(botId);
     if (!bot || !bot.tasks || bot.tasks.length < 2) return null;
-    if (!bot.tasks.some((t) => t.threadId === threadId)) return null;
+    const task = bot.tasks.find((t) => t.threadId === threadId);
+    if (!task || task.pinned) return null;
     bot.tasks = bot.tasks.filter((t) => t.threadId !== threadId);
     this.deleteThreadRecord(threadId);
     if (bot.threadId === threadId) {

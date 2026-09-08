@@ -15,14 +15,14 @@ import {
   type Message,
 } from "@/state/store";
 import { MausAvatar } from "./Avatar";
-import { normalizeState } from "@/lib/mascot";
+import { stateForBot } from "@/lib/mascot";
 import { effectiveDefaultResponder, groupResponseHint } from "@/lib/group-routing";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { Composer } from "./Composer";
 import { ConnectorCard } from "./ConnectorCard";
 import { GroupCallButton, GroupCallOverlay } from "./GroupCallView";
 import { ReactionBar, ReactionChips } from "./Reactions";
-import { ApprovalCard } from "./ApprovalCard";
+import { GroupRequestCard } from "./GroupRequestCard";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { cn } from "@/lib/cn";
 import { BOT_BUBBLE, USER_BUBBLE } from "@/lib/bubble-width";
@@ -55,7 +55,7 @@ function ClusterLabel({ bot, name, color }: { bot?: Bot; name: string; color: st
       <MausAvatar
         color={(bot?.color ?? color) as Bot["color"]}
         look={bot}
-        state={normalizeState(bot?.mascotExpression) ?? "happy"}
+        state={bot ? stateForBot(bot) : "happy"}
         size={16}
         motion="none"
         motionKey={0}
@@ -115,10 +115,8 @@ const Transcript = memo(function Transcript({
           // Allow the broker rejects
           m.kind === "connector" && m.connector && m.from?.botId ? (
             <ConnectorCard botId={m.from.botId} threadId={group.threadId} message={m} />
-          ) : m.kind === "options" && m.card?.requestId && m.card.tool ? (
-            <div className="flex justify-start">
-              <ApprovalCard bot={memberOf(m.from?.botId)} message={m} />
-            </div>
+          ) : m.kind === "options" && m.card?.requestId ? (
+            <GroupRequestCard groupId={group.id} bot={memberOf(m.from?.botId)} message={m} />
           ) : m.kind === "activity" && m.tool ? (
             <div className="flex justify-start">
               <div
@@ -508,7 +506,7 @@ export function GroupView({ group }: { group: Group }) {
             >
               <MausAvatar
                 color={b.color} look={b}
-                state={normalizeState(b.mascotExpression) ?? "happy"}
+                state={stateForBot(b)}
                 size={24}
                 animated={false}
               />
@@ -636,7 +634,7 @@ export function GroupView({ group }: { group: Group }) {
                   <MausAvatar
                     key={b.id}
                     color={b.color} look={b}
-                    state="happy"
+                    state={stateForBot(b)}
                     size={44}
                     motion="none"
                     motionKey={0}

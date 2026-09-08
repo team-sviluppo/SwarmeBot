@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronLeft, Crown, FolderOpen, ImagePlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, useStore, type Bot } from "@/state/store";
+import { effortLevelsForModel } from "@/lib/model-effort";
 import { MausAvatar, wearsPicture } from "./Avatar";
 import { DicebearAvatar, useDicebearReady } from "./DicebearAvatar";
 import {
@@ -17,7 +18,7 @@ import {
   stateForBot,
   MAUS_COLORS,
   MAUS_COLOR_NAMES,
-  MAUS_SILHOUETTE_IDS,
+  PICKABLE_SILHOUETTE_IDS,
   normalizeSilhouette,
 } from "@/lib/mascot";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
@@ -523,7 +524,7 @@ function PictureSection({
             }}
           />
           {bot.mascotAvatarImage ? (
-            <MausAvatar color={bot.color} look={bot} size={38} />
+            <MausAvatar color={bot.color} look={bot} state={stateForBot(bot)} size={38} />
           ) : (
             <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-raised">
               <ImagePlus size={17} />
@@ -769,9 +770,19 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
   ) => dispatch({ type: "updateBot", botId: bot.id, patch: p });
   const activeState = stateForBot(bot);
   const activeSilhouette = normalizeSilhouette(bot.mascotSilhouette);
+  // A bot that chose one of the retired shapes keeps it, so the gallery has to
+  // show it too — a picker with no visible selection reads as "none of these".
+  const silhouetteChoices = PICKABLE_SILHOUETTE_IDS.includes(activeSilhouette)
+    ? PICKABLE_SILHOUETTE_IDS
+    : [...PICKABLE_SILHOUETTE_IDS, activeSilhouette];
   const hasPicture = wearsPicture(bot);
   const mascotMotion = state.mascotMotion?.botId === bot.id ? state.mascotMotion : null;
   const engine = state.instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId);
+  const effortLevels = effortLevelsForModel(
+    engine?.models.options ?? [],
+    bot.modelSelection.model,
+    engine?.capabilities?.effortLevels,
+  );
   const canCoordinate = engine?.capabilities?.agentsMcp === true;
   const canUseConnectedApps = engine?.capabilities?.composioMcp === true;
   const connectedAppsConfigured = state.config?.composio?.configured === true;
@@ -859,10 +870,10 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                 Shape
               </div>
               {!painted ? (
-                <GalleryPlaceholder count={MAUS_SILHOUETTE_IDS.length} />
+                <GalleryPlaceholder count={silhouetteChoices.length} />
               ) : (
-              <div className="grid grid-cols-5 gap-2">
-                {MAUS_SILHOUETTE_IDS.map((silhouette) => (
+              <div className="grid grid-cols-4 gap-2">
+                {silhouetteChoices.map((silhouette) => (
                   <button
                     key={silhouette}
                     onClick={() => patch({ mascotSilhouette: silhouette })}
@@ -1094,7 +1105,7 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
             <ModelPicker bot={bot} />
           </div>
 
-          {!!engine?.capabilities?.effortLevels?.length && (
+          {!!effortLevels?.length && (
             <div className="rounded-xl bg-card p-4">
               <div className="text-[15px] font-medium text-ink">Effort</div>
               {/* Says what the app does, not what the engine ends up at:
@@ -1106,7 +1117,7 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                 How hard this bot thinks{bot.modelSelection.effort ? "" : " (Default: no level is sent)"}
               </div>
               <div className="mt-3 flex overflow-hidden rounded-lg border border-hairline/40">
-                {([undefined, ...engine.capabilities.effortLevels] as const).map((level, i) => (
+                {([undefined, ...effortLevels] as const).map((level, i) => (
                   <button
                     key={level ?? "default"}
                     aria-pressed={bot.modelSelection.effort === level}

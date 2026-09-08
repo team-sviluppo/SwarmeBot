@@ -16,6 +16,7 @@ import {
 import { wearsDicebearPicture } from "@/lib/dicebear";
 import {
   MAUS_COLORS,
+  eyeInkFor,
   silhouetteFor,
   type MausColor,
   type MausMotion,
@@ -26,6 +27,7 @@ import { DicebearAvatar } from "./DicebearAvatar";
 import { SpriteSheetAvatar } from "./SpriteSheetAvatar";
 import { clampSheetRow } from "@/lib/sprite-sheet";
 import { useStillAvatars } from "@/lib/still-avatars";
+import { useAvatarFrameSlot, useNearViewport } from "@/lib/avatar-frames";
 
 /**
  * Everything about how one bot looks. Call sites pass the bot itself, so a
@@ -159,8 +161,18 @@ export type MausAvatarProps = {
   forward?: boolean;
   /** Let the eyes follow the pointer across this avatar. */
   trackPointer?: boolean;
-  /** Run the animation. Off renders the state's resting face. */
+  /**
+   * Let this mascot animate. Off renders the state's resting face and is
+   * final; on is a request, still subject to being on screen and to the
+   * app-wide frame budget (see lib/avatar-frames).
+   */
   animated?: boolean;
+  /**
+   * Claim a frame slot ahead of the decorative mascots. For the frames that
+   * carry meaning rather than life: the selected row, a bot mid-turn, a
+   * one-shot motion beat playing.
+   */
+  priority?: boolean;
   /** Legacy Maus face-placement knobs — accepted, ignored. */
   eyeSpacing?: number;
   faceX?: number;
@@ -188,14 +200,22 @@ function MausAvatarComponent(
     forward = true,
     trackPointer = true,
     animated: animatedProp = true,
+    priority = false,
   }: MausAvatarProps,
   ref: React.Ref<MausAvatarHandle>,
 ) {
   // Reduce-motion — the system setting or the stored override — reaches the
   // mascot engine here, so one check covers every avatar in the app.
   const still = useStillAvatars();
-  const animated = animatedProp && !still;
   const picture = silhouette === undefined && look != null && wearsPicture(look);
+  // Three gates, cheapest first: the caller's own opt-out, reduce-motion, and
+  // a picture (a still image has no face engine to run). What survives asks to
+  // be on screen and to fit the frame budget — so a roster is alive where you
+  // are looking without every mascot in the app costing a frame.
+  const mayAnimate = animatedProp && !still && !picture;
+  const frame = useRef<HTMLSpanElement>(null);
+  const near = useNearViewport(frame, mayAnimate);
+  const animated = useAvatarFrameSlot(mayAnimate && near, priority);
   const inner = useRef<CursorAvatarHandle>(null);
   useImperativeHandle(ref, () => ({
     blink: () => inner.current?.blink(),
@@ -288,6 +308,7 @@ function MausAvatarComponent(
 
   return (
     <span
+      ref={frame}
       className="inline-flex shrink-0"
       onPointerEnter={trackPointer && animated ? onPointerEnter : undefined}
       onPointerMove={trackPointer && animated ? onPointerMove : undefined}
@@ -300,6 +321,7 @@ function MausAvatarComponent(
         size={size}
         silhouette={silhouetteFor(silhouette ?? look?.mascotSilhouette)}
         gradient={gradientFor(color)}
+        eyeColor={eyeInkFor(color)}
         title={label ?? null}
         lookAround={forward ? 0 : 1}
         gaze={gaze}

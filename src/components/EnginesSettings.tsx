@@ -9,9 +9,17 @@ import { Check, ChevronDown, Loader2, TriangleAlert } from "lucide-react";
 
 import { api, useStore, type InstanceInfo } from "@/state/store";
 import { EngineGroupLabel } from "./EngineGroupLabel";
+import { DeepSeekHarnessSettings } from "./DeepSeekHarnessSettings";
+import { ModelPickerToggle } from "./ModelPickerToggle";
 import { ProviderMark } from "./ProviderIcons";
-import { isPickerDefault, isPickerHarness, splitEngineRail } from "@/lib/engine-rail";
+import { splitEngineRail } from "@/lib/engine-rail";
 import { cn } from "@/lib/cn";
+
+/** DeepSeek Harness is configured by origin/pairing, not by a CLI path, so
+ * it gets its own settings card instead of an EngineRow. */
+export function deepSeekHarnessSettingsInstances(instances: readonly InstanceInfo[]): InstanceInfo[] {
+  return instances.filter((instance) => instance.driverKind === "deepseekHarness");
+}
 
 interface ProbeResult {
   ok: boolean;
@@ -202,27 +210,9 @@ function EngineRow({ instance }: { instance: InstanceInfo }) {
   const { refreshInstances } = useStore();
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const [savingVisibility, setSavingVisibility] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wasOpenFor = useRef<string | null>(null);
-  const visible = isPickerHarness(instance);
   const hasCli = instance.cli !== undefined || instance.cliDefault !== undefined;
-
-  // null instead of the boolean when the choice matches the shipped default:
-  // config.json then carries overrides only, so a later change to the default
-  // list still reaches engines the user never touched.
-  const setVisible = (next: boolean) => {
-    if (savingVisibility) return;
-    setSavingVisibility(true);
-    setError(null);
-    api(`/api/instances/${encodeURIComponent(instance.instanceId)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ pickerVisible: next === isPickerDefault(instance) ? null : next }),
-    })
-      .then(() => Promise.resolve(refreshInstances()).catch(() => {}))
-      .catch((e) => setError(e.message))
-      .finally(() => setSavingVisibility(false));
-  };
 
   // Close the picker when this instance's override changes to anything else
   // — a save from this row, another tab, or the 5-min refresh. The picker
@@ -288,36 +278,8 @@ function EngineRow({ instance }: { instance: InstanceInfo }) {
           </button>
         )}
       </div>
-      <div className="mt-1.5 flex items-center gap-2 pl-[26px] text-[12px]">
-        <span className="text-ink-secondary">Show in model picker</span>
-        {visible !== isPickerDefault(instance) && (
-          <button
-            onClick={() => setVisible(isPickerDefault(instance))}
-            disabled={savingVisibility}
-            className="text-[11px] text-ink-secondary underline decoration-dotted hover:text-ink disabled:opacity-50"
-          >
-            reset to default
-          </button>
-        )}
-        <span className="flex-1" />
-        <button
-          role="switch"
-          aria-checked={visible}
-          aria-label={`Show ${instance.displayName} in the model picker`}
-          disabled={savingVisibility}
-          onClick={() => setVisible(!visible)}
-          className={cn(
-            "relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50",
-            visible ? "bg-accent" : "bg-raised-hover",
-          )}
-        >
-          <span
-            className={cn(
-              "absolute top-0.5 size-4 rounded-full bg-white transition-all",
-              visible ? "left-[18px]" : "left-0.5",
-            )}
-          />
-        </button>
+      <div className="mt-1.5 pl-[26px]">
+        <ModelPickerToggle instance={instance} onSaved={refreshInstances} />
       </div>
       {error && <div role="alert" className="mt-1 text-[12px] text-danger">{error}</div>}
       {open && (
@@ -334,16 +296,23 @@ function EngineRow({ instance }: { instance: InstanceInfo }) {
 
 export function EnginesSettings() {
   const { state } = useStore();
+  const deepSeekHarnessInstances = deepSeekHarnessSettingsInstances(state.instances);
   // Every engine gets a row: the model-picker toggle applies to all of them,
   // including API-key engines with no CLI at all (those simply omit the
   // Set CLI… button) and unknown-driver shadows the running build can't load.
-  const rows = state.instances;
+  // DeepSeek Harness is the exception — a CLI row would offer a knob its
+  // driver cannot turn, so it renders its own connection card above.
+  const rows = state.instances.filter((i) => i.driverKind !== "deepseekHarness");
 
   return (
     <div className="flex flex-col gap-5">
-      {rows.length === 0 && (
+      {rows.length === 0 && deepSeekHarnessInstances.length === 0 && (
         <div className="text-[13px] text-ink-secondary">No engines detected yet.</div>
       )}
+      {deepSeekHarnessInstances.length > 0 && <EngineGroupLabel>Harness</EngineGroupLabel>}
+      {deepSeekHarnessInstances.map((instance) => (
+        <DeepSeekHarnessSettings key={instance.instanceId} instance={instance} />
+      ))}
       {(() => {
         const { subscription, custom } = splitEngineRail(rows);
         return (

@@ -51,6 +51,7 @@ export const STATE_GROUPS = {
 } satisfies Record<string, MausState[]>;
 
 export const MAUS_COLOR_NAMES = [
+  "white",
   "green",
   "blue",
   "red",
@@ -66,6 +67,10 @@ export const MAUS_COLOR_NAMES = [
 export type MausColor = (typeof MAUS_COLOR_NAMES)[number];
 
 export const MAUS_COLORS = {
+  // Not #ffffff: the mascot is drawn on light cards too, and a pure-white body
+  // would lose its edge against them. This is white enough to read as white
+  // and still has a silhouette.
+  white: "#F1F1F3",
   green: "#009957",
   blue: "#377FE6",
   red: "#D94B52",
@@ -77,6 +82,22 @@ export const MAUS_COLORS = {
   teal: "#01A492",
   coral: "#E5634E",
 } satisfies Record<MausColor, string>;
+
+/** Perceived lightness of a hex colour, 0..1 (Rec. 709 luma). */
+function luma(hex: string): number {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return (0.2126 * ((n >> 16) & 0xff) + 0.7152 * ((n >> 8) & 0xff) + 0.0722 * (n & 0xff)) / 255;
+}
+
+/**
+ * The eyes and mouth are painted in one flat colour on top of the body, so a
+ * light body needs dark ink: white-on-white is a blob with no face at all.
+ * Derived from the body colour rather than listed per colour, so a light
+ * colour added later cannot forget to do this.
+ */
+export function eyeInkFor(color: MausColor): string {
+  return luma(MAUS_COLORS[color] ?? MAUS_COLORS.green) > 0.72 ? "#2A2A30" : "#ffffff";
+}
 
 export const MAUS_MOTIONS = [
   "arrive",
@@ -152,6 +173,52 @@ export const PICKABLE_STATES: MausState[] = [
   "suspicious", // 14
   "proud", // 15
 ];
+
+/**
+ * The resting faces a bot with nothing to say about itself can wear.
+ *
+ * `stateForBot` used to end in `return "idle"`, so every bot whose name and
+ * title missed the keyword table below wore expression 0 — which is most of a
+ * fresh roster, and is why a sidebar of bots looked like one bot repeated.
+ * Picking from this list by identity gives that roster visible variety while
+ * keeping each bot's face fixed forever: the same bot must not change face
+ * between two launches, or its avatar stops being recognisable.
+ *
+ * A subset of PICKABLE_STATES, not the whole thing: `sleeping` and `drowsy`
+ * read as an engine that failed to start, and `suspicious` reads as a warning.
+ * A bot that has told us nothing has nothing to warn about, so the fallback
+ * stays inside the faces that mean "here, and fine".
+ */
+export const RESTING_FACES: MausState[] = [
+  "idle",
+  "happy",
+  "curious",
+  "working",
+  "thinking",
+  "listening",
+  "proud",
+];
+
+/** FNV-1a. Any stable string hash would do; this one is short and has no
+ * clustering on the short, similar strings bot names actually are. */
+function hash(value: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * The face a bot wears when nothing else has claimed it — derived from its
+ * identity, so it is varied across the roster and stable for each bot.
+ * Prefers the id: a rename should not repaint the face, and two bots that
+ * happen to share a name should still differ.
+ */
+export function restingFaceFor(identity: string): MausState {
+  return RESTING_FACES[hash(identity) % RESTING_FACES.length];
+}
 
 /* ---------------------------------------------------------------- silhouettes */
 
@@ -239,6 +306,32 @@ export const MAUS_SILHOUETTES = {
     "M 114.27 4.27 L 141.31 77.06 L 218.89 80.28 L 158.02 128.49 L 178.93 203.26 L 114.27 160.27 L 49.61 203.26 L 70.52 128.49 L 9.65 80.28 L 87.23 77.06 Z",
     { x: 114.27, y: 110, scale: 0.62 },
   ),
+  // A rounded rectangle wider than it is tall. The face scale is set by the
+  // HEIGHT here, not the width: at a circle's 0.86 the eyes would ride the
+  // flat top and bottom edges.
+  tile: fromPath(
+    "tile",
+    "M 52 40 H 176.54 A 46 46 0 0 1 222.54 86 V 142 A 46 46 0 0 1 176.54 188 H 52 A 46 46 0 0 1 6 142 V 86 A 46 46 0 0 1 52 40 Z",
+    { x: 114.27, y: 114, scale: 0.7 },
+  ),
+  oval: fromPath(
+    "oval",
+    "M 114.27 30.27 A 108 84 0 1 1 114.27 198.27 A 108 84 0 1 1 114.27 30.27 Z",
+    { x: 114.27, y: 115, scale: 0.74 },
+  ),
+  // Rounded through its vertices rather than mitred at them: three quadratics
+  // that bulge out to each corner, which is the soft triangle the design shows
+  // and needs no corner-arc arithmetic to stay closed.
+  triangle: fromPath(
+    "triangle",
+    "M 161.1 108 Q 208 198 114.25 198 Q 20.5 198 67.4 108 Q 114.27 18 161.1 108 Z",
+    { x: 114.27, y: 143, scale: 0.56 },
+  ),
+  blob: fromPath(
+    "blob",
+    "M 114 14 C 160 8 208 40 214 88 C 220 136 196 186 148 206 C 104 224 48 210 26 172 C 6 136 12 82 44 48 C 66 24 90 18 114 14 Z",
+    { x: 112, y: 116, scale: 0.78 },
+  ),
 } satisfies Record<string, CursorSilhouette>;
 
 export type MausSilhouetteId = keyof typeof MAUS_SILHOUETTES;
@@ -246,10 +339,36 @@ export type MausSilhouetteId = keyof typeof MAUS_SILHOUETTES;
 const isSilhouetteId = (value: string): value is MausSilhouetteId =>
   Object.prototype.hasOwnProperty.call(MAUS_SILHOUETTES, value);
 
-/** Picker order: the registry's own, with the default first. */
-export const MAUS_SILHOUETTE_IDS = Object.keys(MAUS_SILHOUETTES).filter(isSilhouetteId);
+/**
+ * The shapes the appearance picker offers, in the order it shows them.
+ *
+ * Deliberately not every registered shape, for the same reason PICKABLE_STATES
+ * is not every state: the registry is what the engine CAN draw, this is what
+ * the product asks for. `cursor`, `octagon`, `shield`, `egg`, `capsule` and
+ * `star` stay in MAUS_SILHOUETTES so a bot that already wears one keeps
+ * rendering it — dropping a shape from the picker must not repaint a bot that
+ * chose it — they are simply no longer offered to new ones.
+ */
+export const PICKABLE_SILHOUETTE_IDS: MausSilhouetteId[] = [
+  "circle",
+  "squircle",
+  "tile",
+  "oval",
+  "triangle",
+  "hexagon",
+  "blob",
+  "droplet",
+];
 
-export const DEFAULT_SILHOUETTE_ID: MausSilhouetteId = "cursor";
+/** Every shape the engine can draw, offered ones first. */
+export const MAUS_SILHOUETTE_IDS = [
+  ...PICKABLE_SILHOUETTE_IDS,
+  ...Object.keys(MAUS_SILHOUETTES)
+    .filter(isSilhouetteId)
+    .filter((id) => !PICKABLE_SILHOUETTE_IDS.includes(id)),
+];
+
+export const DEFAULT_SILHOUETTE_ID: MausSilhouetteId = "circle";
 
 /**
  * The id a picker should show as selected for a stored value. Unknown ids
@@ -272,6 +391,8 @@ type MascotMessage = {
 };
 
 export type MascotBotProfile = {
+  /** Seeds the resting face. Absent falls back to the name. */
+  id?: string;
   name: string;
   title?: string;
   description?: string;
@@ -329,5 +450,5 @@ export function stateForBot(bot: MascotBotProfile): MausState {
     return "happy";
   }
 
-  return "idle";
+  return restingFaceFor(bot.id ?? bot.name);
 }
