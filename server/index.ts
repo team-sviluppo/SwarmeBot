@@ -83,6 +83,7 @@ import { DeepSeekHarnessDriver, type DeepSeekHarnessConfig } from "./drivers/dee
 import { dshJsonValueSchema } from "./drivers/deepseek-harness/protocol.ts";
 import { getOrCreateChannel, mirrorActivity, mirrorExchange, mirrorReply, type CommsBus } from "./comms-visibility.ts";
 import { searchMessages } from "./message-db.ts";
+import { conversationMarkdown, exportFilename } from "./transcript-export.ts";
 import { _loadPending, discardDelegations, drainDelegations, pendingThreads, queueDelegation, type QueueResult } from "./delegations.ts";
 import { drainSteeredMessages, queueSteeredMessage } from "./steer-queue.ts";
 import { EventBus } from "./harness/bus.ts";
@@ -2950,7 +2951,7 @@ const server = createServer(async (req, res) => {
         return json(res, 400, { error: "format must be markdown or json" });
       }
       const title = bot ? (store.taskByThread(bot.id, threadId)?.title || bot.name) : group!.name;
-      const filename = (title.replace(/[^\w\- ]+/g, "").trim() || "conversation").slice(0, 60);
+      const filename = exportFilename(title).replace(/\.md$/, "");
       const messages = store.activePath(threadId);
       if (format === "json") {
         // pixels stripped — an export is for reading and archiving, and a
@@ -2963,21 +2964,15 @@ const server = createServer(async (req, res) => {
         return res.end(JSON.stringify({ name: title, threadId, messages: slim }, null, 2));
       }
       const userName = cfg.profile?.name?.trim() || "User";
-      const lines: string[] = [`# ${title}`, ""];
-      for (const msg of messages) {
-        const who = msg.role === "user" ? userName : (msg.from?.name ?? bot?.name ?? "Bot");
-        if (msg.kind === "text" && msg.text) lines.push(`**${who}:**`, "", msg.text, "");
-        else if (msg.kind === "activity" && msg.tool) lines.push(`> ${msg.tool.name}`, "");
-        else if (msg.kind === "screen") lines.push("> [screen capture]", "");
-        else if (msg.kind === "options" && msg.card) {
-          lines.push(`> ${msg.card.title}${msg.card.answered ? ` — answered: ${msg.card.answered}` : ""}`, "");
-        }
-      }
+      const md = conversationMarkdown(title, messages, {
+        userName,
+        botName: bot?.name ?? "Bot",
+      });
       res.writeHead(200, {
         "content-type": "text/markdown; charset=utf-8",
         "content-disposition": `attachment; filename="${filename}.md"`,
       });
-      return res.end(lines.join("\n"));
+      return res.end(md);
     }
 
     // ── rooms (group chats) ─────────────────────────────────────────────
@@ -3811,17 +3806,26 @@ const server = createServer(async (req, res) => {
     }
     if (m && method === "PATCH") {
       const body = await readBody(req);
-      const task = store.renameTask(m[1], m[2], String(body.title ?? ""));
+      let task = store.taskByThread(m[1], m[2]);
+      if (!task) return json(res, 404, { error: "no such task" });
+      if (typeof body.pinned === "boolean") {
+        task = store.setTaskPinned(m[1], m[2], body.pinned);
+      }
+      if (body.title !== undefined) {
+        task = store.renameTask(m[1], m[2], String(body.title ?? ""));
+      }
       if (!task) return json(res, 404, { error: "no such task" });
       const fresh = botWithThread(store.bot(m[1])!);
       broadcast({ kind: "bot", bot: fresh });
-      return json(res, 200, { task: wireTask(task) });
+      return json(res, 200, { bot: fresh, task: wireTask(task) });
     }
     if (m && method === "DELETE") {
       const bot = store.bot(m[1]);
       if (bot?.busy && (bot.threadId === m[2] || routines!.isActiveThread(m[2]))) {
         return json(res, 409, { error: "this task is running — stop it first" });
       }
+      const existing = store.taskByThread(m[1], m[2]);
+      if (existing?.pinned) return json(res, 409, { error: "unpin this task before deleting it" });
       const updated = store.deleteTask(m[1], m[2]);
       if (!updated) return json(res, 400, { error: "a bot keeps at least one task" });
       const fresh = botWithThread(updated);

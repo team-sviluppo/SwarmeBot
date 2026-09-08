@@ -130,6 +130,8 @@ export interface Task {
   threadId: string;
   title: string;
   createdAt: number;
+  /** kept until unpinned; cannot be deleted while set */
+  pinned?: boolean;
   /** what this task has spent, banked once per settled turn */
   usage?: TaskUsage;
   /** folder this task's turns run in, pinned on its first turn; null =
@@ -520,6 +522,7 @@ export type Action =
   | { type: "switchTask"; botId: string; threadId: string }
   | { type: "taskSwitched"; bot: Bot }
   | { type: "renameTask"; botId: string; threadId: string; title: string }
+  | { type: "pinTask"; botId: string; threadId: string; pinned: boolean }
   | { type: "deleteTask"; botId: string; threadId: string }
   | { type: "newBot" }
   | { type: "botAdded"; bot: Bot }
@@ -1048,6 +1051,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "newTask":
     case "switchTask":
     case "renameTask":
+    case "pinTask":
     case "deleteTask":
       return state;
     case "taskSwitched":
@@ -1538,7 +1542,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           api(`/api/bots/${action.botId}/tasks/${action.threadId}`, {
             method: "PATCH",
             body: JSON.stringify({ title: action.title }),
-          }).catch(showError);
+          })
+            .then((r: any) => r?.bot && dispatch({ type: "taskSwitched", bot: r.bot }))
+            .catch(showError);
+          break;
+        case "pinTask":
+          api(`/api/bots/${action.botId}/tasks/${action.threadId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ pinned: action.pinned }),
+          })
+            .then((r: any) => r?.bot && dispatch({ type: "taskSwitched", bot: r.bot }))
+            .catch(showError);
           break;
         case "deleteTask":
           api(`/api/bots/${action.botId}/tasks/${action.threadId}`, { method: "DELETE" })

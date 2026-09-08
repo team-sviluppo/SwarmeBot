@@ -18,6 +18,7 @@ import {
   Pin,
   PinOff,
   RefreshCw,
+  FileDown,
   Square,
   Webhook,
   X,
@@ -85,6 +86,21 @@ function DaySeparator({ at }: { at: number }) {
       {dayLabel(at)} {formatTime(at)}
     </div>
   );
+}
+
+async function downloadChatMarkdown(threadId: string, title: string) {
+  const res = await fetch(`/api/threads/${threadId}/export?format=markdown`);
+  if (!res.ok) throw new Error("Could not export this conversation");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  const name = (title.replace(/[^\w\- ]+/g, "").trim() || "conversation").slice(0, 60);
+  link.download = `${name}.md`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** Hover/focus-revealed copy control shared by user + bot bubbles. */
@@ -805,6 +821,8 @@ export function ChatView({ bot }: { bot: Bot }) {
     () => [...messages].reverse().find((m) => m.role === "user" && m.kind === "text"),
     [messages],
   );
+  const currentTask = bot.tasks?.find((t) => t.threadId === bot.threadId);
+  const conversationPinned = Boolean(currentTask?.pinned);
   // regenerate = fork the last user message with the same text — reuses the
   // existing branch machinery, so the old answer stays reachable via ‹ ›
   const regenerate = useCallback(() => {
@@ -983,6 +1001,38 @@ export function ChatView({ bot }: { bot: Bot }) {
             </button>
           )}
           <TaskPicker bot={bot} />
+          <button
+            onClick={() => {
+              if (!currentTask) return;
+              dispatch({
+                type: "pinTask",
+                botId: bot.id,
+                threadId: currentTask.threadId,
+                pinned: !conversationPinned,
+              });
+            }}
+            disabled={!currentTask}
+            aria-label={conversationPinned ? "Unpin conversation" : "Pin conversation"}
+            title={conversationPinned ? "Unpin this conversation" : "Pin this conversation"}
+            className={cn(
+              "rounded-md p-1.5 hover:bg-raised",
+              conversationPinned ? "text-accent" : "text-ink-secondary hover:text-ink",
+            )}
+          >
+            {conversationPinned ? <PinOff size={16} /> : <Pin size={16} />}
+          </button>
+          <button
+            onClick={() => {
+              void downloadChatMarkdown(bot.threadId, currentTask?.title ?? bot.name).catch((err) =>
+                dispatch({ type: "error", message: err instanceof Error ? err.message : "Export failed" }),
+              );
+            }}
+            aria-label="Export conversation as Markdown"
+            title="Export this chat as Markdown"
+            className="rounded-md p-1.5 text-ink-secondary hover:bg-raised hover:text-ink"
+          >
+            <FileDown size={16} />
+          </button>
           <UsageChip bot={bot} />
           <WorkingFolderChip bot={bot} />
           <ModelPicker bot={bot} />
