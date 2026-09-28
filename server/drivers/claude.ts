@@ -9,7 +9,8 @@
 //   - the bot's cloud computer (box.ascii.dev) via server/computer-proxy.ts
 //     — screenshot/exec/open_url, the CUA-on-the-box bridge
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -163,6 +164,119 @@ export function readClaudeModelCatalog(env: Record<string, string | undefined> =
     options.push(option);
   }
   return { default: STATIC_CLAUDE_MODELS.default, options };
+}
+
+const CLI_CATALOG_NEEDLE = Buffer.from('FABLE_ID:"claude-');
+const CLI_FAMILY_KEYS = ["fable", "opus", "sonnet", "haiku"] as const;
+
+function modelVersion(id: string): number[] {
+  const tail = id.replace(/^claude-(?:fable|opus|sonnet|haiku)-/, "");
+  const parts = tail.split("-").map((part) => (/^\d+$/.test(part) ? Number(part) : -1));
+  return parts.length ? parts : [-1];
+}
+
+function versionNewer(a: number[], b: number[]): boolean {
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i++) {
+    const av = a[i] ?? 0;
+    const bv = b[i] ?? 0;
+    if (av !== bv) return av > bv;
+  }
+  return false;
+}
+
+function familyOfKey(key: string): (typeof CLI_FAMILY_KEYS)[number] | null {
+  if (key.includes("MYTHOS") || !key.endsWith("_ID")) return null;
+  if (key.includes("FABLE")) return "fable";
+  if (key.includes("OPUS")) return "opus";
+  if (key.includes("SONNET")) return "sonnet";
+  if (key.includes("HAIKU")) return "haiku";
+  return null;
+}
+
+/** Latest first-party row per family, from the catalog baked into the installed `claude` binary. */
+export function readLatestClaudeModelsFromBinary(binaryPath: string): ModelCatalog["options"] | null {
+  let data: Buffer;
+  try {
+    data = readFileSync(binaryPath);
+  } catch {
+    return null;
+  }
+  const at = data.indexOf(CLI_CATALOG_NEEDLE);
+  if (at < 0) return null;
+  const slice = data.subarray(at, at + 1500).toString("utf8");
+  const fields = new Map<string, string>();
+  for (const match of slice.matchAll(/([A-Z_]+):"([^"]*)"/g)) fields.set(match[1], match[2]);
+
+  const best = new Map<string, { id: string; label: string; version: number[] }>();
+  for (const [key, id] of fields) {
+    const family = familyOfKey(key);
+    if (!family || !CLAUDE_MODEL_ID.test(id)) continue;
+    const label = fields.get(key.replace(/_ID$/, "_NAME")) || id;
+    const version = modelVersion(id);
+    const current = best.get(family);
+    if (!current || versionNewer(version, current.version)) best.set(family, { id, label, version });
+  }
+  const options = CLI_FAMILY_KEYS.flatMap((family) => {
+    const row = best.get(family);
+    return row ? [{ id: row.id, label: row.label }] : [];
+  });
+  return options.length ? options : null;
+}
+
+const cliCatalogCache = new Map<string, { mtimeMs: number; options: ModelCatalog["options"] | null }>();
+
+function installedClaudeBinary(cli: string, env: Record<string, string | undefined>): string | null {
+  const trimmed = cli.trim();
+  if (trimmed.includes("/") && existsSync(trimmed)) {
+    try {
+      return realpathSync(trimmed);
+    } catch {
+      return trimmed;
+    }
+  }
+  const head = trimmed.split(/\s+/)[0];
+  if (!head) return null;
+  try {
+    const found = execFileSync(process.platform === "win32" ? "where" : "which", [head], {
+      env: { ...process.env, ...env },
+      encoding: "utf8",
+      timeout: 2000,
+    })
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean);
+    return found ? realpathSync(found) : null;
+  } catch {
+    return null;
+  }
+}
+
+function latestModelsFromInstalledCli(cli: string, env: Record<string, string | undefined>): ModelCatalog["options"] | null {
+  const binary = installedClaudeBinary(cli, env);
+  if (!binary) return null;
+  let mtimeMs = 0;
+  try {
+    mtimeMs = statSync(binary).mtimeMs;
+  } catch {
+    return null;
+  }
+  const cached = cliCatalogCache.get(binary);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.options;
+  const options = readLatestClaudeModelsFromBinary(binary);
+  cliCatalogCache.set(binary, { mtimeMs, options });
+  return options;
+}
+
+function withCliModels(catalog: ModelCatalog, cliModels: ModelCatalog["options"] | null): ModelCatalog {
+  if (!cliModels?.length) return catalog;
+  const seen = new Set(cliModels.map((option) => option.id));
+  const extras = catalog.options.filter((option) => option.custom && !seen.has(option.id));
+  const options = [...cliModels, ...extras];
+  return {
+    default: options.some((option) => option.id === catalog.default) ? catalog.default : options[0].id,
+    options,
+  };
 }
 
 // Resolved from the server root, never relative to this file: bundling inlines
@@ -399,7 +513,10 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
     let models = STATIC_CLAUDE_MODELS;
     const refreshModels = async () => {
       try {
-        const resolved = await mergeLocalInject(readClaudeModelCatalog(catalogEnv), catalogEnv);
+        const resolved = await mergeLocalInject(
+          withCliModels(readClaudeModelCatalog(catalogEnv), latestModelsFromInstalledCli(config.cli, catalogEnv)),
+          catalogEnv,
+        );
         if (resolved.options.length) models = resolved;
       } catch {
         // Keep the last usable catalog when settings.json is unreadable.

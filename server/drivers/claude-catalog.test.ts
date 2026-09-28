@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ClaudeDriver, readClaudeModelCatalog, STATIC_CLAUDE_MODELS } from "./claude.ts";
+import { ClaudeDriver, readClaudeModelCatalog, readLatestClaudeModelsFromBinary, STATIC_CLAUDE_MODELS } from "./claude.ts";
 
 const scratchDirs: string[] = [];
 
@@ -58,6 +58,24 @@ describe("readClaudeModelCatalog", () => {
       custom: true,
       effortLevels: ["low"],
     });
+  });
+});
+
+describe("readLatestClaudeModelsFromBinary", () => {
+  it("keeps only the newest id of each family from the CLI catalog block", () => {
+    const dir = mkdtempSync(join(tmpdir(), "omb-claude-bin-"));
+    scratchDirs.push(dir);
+    const binary = join(dir, "claude");
+    writeFileSync(
+      binary,
+      'noise FABLE_ID:"claude-fable-5-1",FABLE_NAME:"Claude Fable 5.1",PREV_FABLE_ID:"claude-fable-5",PREV_FABLE_NAME:"Claude Fable 5",OPUS_ID:"claude-opus-5",OPUS_NAME:"Claude Opus 5",OPUS_NEXT_ID:"claude-opus-5-5",OPUS_NEXT_NAME:"Claude Opus 5.5",PREV_OPUS_ID:"claude-opus-4-8",PREV_OPUS_NAME:"Claude Opus 4.8",SONNET_ID:"claude-sonnet-5",SONNET_NAME:"Claude Sonnet 5",SONNET_NEXT_ID:"claude-sonnet-5",SONNET_NEXT_NAME:"Claude Sonnet 5",HAIKU_ID:"claude-haiku-4-5",HAIKU_NAME:"Claude Haiku 4.5",PREV_SONNET_ID:"claude-sonnet-4-6"',
+    );
+    expect(readLatestClaudeModelsFromBinary(binary)).toEqual([
+      { id: "claude-fable-5-1", label: "Claude Fable 5.1" },
+      { id: "claude-opus-5-5", label: "Claude Opus 5.5" },
+      { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
+      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
+    ]);
   });
 });
 
