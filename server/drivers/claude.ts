@@ -9,14 +9,13 @@
 //   - the bot's cloud computer (box.ascii.dev) via server/computer-proxy.ts
 //     — screenshot/exec/open_url, the CUA-on-the-box bridge
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 
 import { DATA_DIR, stripWorkspaceCredentialEnv } from "../config.ts";
-import { augmentedPath } from "../env-path.ts";
+import { augmentedPath, findCliCandidates } from "../env-path.ts";
 import { brokerSocketPath, describeSpawnFailure, execCli, killCliTree, spawnCli } from "../procs.ts";
 
 import type {
@@ -226,34 +225,19 @@ export function readLatestClaudeModelsFromBinary(binaryPath: string): ModelCatal
 
 const cliCatalogCache = new Map<string, { mtimeMs: number; options: ModelCatalog["options"] | null }>();
 
-function installedClaudeBinary(cli: string, env: Record<string, string | undefined>): string | null {
-  const trimmed = cli.trim();
-  if (trimmed.includes("/") && existsSync(trimmed)) {
-    try {
-      return realpathSync(trimmed);
-    } catch {
-      return trimmed;
-    }
-  }
-  const head = trimmed.split(/\s+/)[0];
-  if (!head) return null;
+function installedClaudeBinary(cli: string): string | null {
+  const head = cli.trim().split(/\s+/)[0];
+  const found = findCliCandidates(head)[0];
+  if (!found || !existsSync(found)) return null;
   try {
-    const found = execFileSync(process.platform === "win32" ? "where" : "which", [head], {
-      env: { ...process.env, ...env },
-      encoding: "utf8",
-      timeout: 2000,
-    })
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find(Boolean);
-    return found ? realpathSync(found) : null;
+    return realpathSync(found);
   } catch {
-    return null;
+    return found;
   }
 }
 
-function latestModelsFromInstalledCli(cli: string, env: Record<string, string | undefined>): ModelCatalog["options"] | null {
-  const binary = installedClaudeBinary(cli, env);
+function latestModelsFromInstalledCli(cli: string): ModelCatalog["options"] | null {
+  const binary = installedClaudeBinary(cli);
   if (!binary) return null;
   let mtimeMs = 0;
   try {
@@ -514,7 +498,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
     const refreshModels = async () => {
       try {
         const resolved = await mergeLocalInject(
-          withCliModels(readClaudeModelCatalog(catalogEnv), latestModelsFromInstalledCli(config.cli, catalogEnv)),
+          withCliModels(readClaudeModelCatalog(catalogEnv), latestModelsFromInstalledCli(config.cli)),
           catalogEnv,
         );
         if (resolved.options.length) models = resolved;
