@@ -302,6 +302,17 @@ function loadedProbeUrl(host: LocalHost): string | null {
   return null;
 }
 
+/** Picker text. A Local Endpoint id is `namespace/model`; the host name is
+ * already the panel title, so the row reads `namespace (model)`. */
+export function injectedModelLabel(host: LocalHost, model: string): string {
+  if (host.id === "local_endpoint") {
+    const slash = model.indexOf("/");
+    if (slash > 0) return `${model.slice(0, slash)} (${model.slice(slash + 1)})`;
+    return model;
+  }
+  return `${model} (${host.label})`;
+}
+
 /** Live models from the same local hosts the sidecar probed. */
 export async function probeLocalInjects(
   env: Record<string, string | undefined> = process.env,
@@ -339,7 +350,7 @@ export async function probeLocalInjects(
         id: encodeInjectId(host.id, model),
         host: host.id,
         model,
-        label: `${model} (${host.label})`,
+        label: injectedModelLabel(host, model),
         loaded: loaded.has(model),
       });
     }
