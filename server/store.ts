@@ -101,6 +101,8 @@ export interface Message {
    * them; a true stranded by a restart is inert because the client only
    * shows the affordance while the bot is busy. */
   queued?: boolean;
+  /** The user stopped the turn before this reply finished. */
+  interrupted?: boolean;
 }
 
 export type GroupDefaultResponder =

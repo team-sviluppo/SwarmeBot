@@ -87,6 +87,8 @@ export interface Message {
    * Rendered only while the bot is busy, so a flag stranded by a server
    * restart never shows a promise nothing will keep. */
   queued?: boolean;
+  /** The user stopped the turn before this reply finished. */
+  interrupted?: boolean;
 }
 
 export type GroupDefaultResponder =
@@ -1761,9 +1763,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               });
             }
           } else if (event.type === "turn.completed") {
-            // flush any buffered tail before clearing so no tokens are lost
+            // flush any buffered tail before clearing so no tokens are lost.
+            // A stopped turn keeps the visible text until the settled
+            // (possibly interrupted) message arrives and replaces it.
             flushDeltas();
-            clearStream(event.threadId);
+            setStream((prev) => {
+              const keepText = event.threadId in prev.streaming && prev.streaming[event.threadId].length > 0;
+              const { [event.threadId]: _r, ...reasoning } = prev.reasoning;
+              if (keepText) {
+                if (!(event.threadId in prev.reasoning)) return prev;
+                return { streaming: prev.streaming, reasoning };
+              }
+              if (!(event.threadId in prev.streaming) && !(event.threadId in prev.reasoning)) return prev;
+              const { [event.threadId]: _s, ...streaming } = prev.streaming;
+              return { streaming, reasoning };
+            });
           }
           break;
         }

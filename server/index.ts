@@ -602,6 +602,10 @@ function requestBehavior(value: unknown): "allow" | "deny" | "answer" | null {
 // the last settled assistant text per thread, so a "finished" notification
 // can carry what the bot actually said
 const lastReply = new Map<string, string>();
+// Assistant tokens already shown in the live bubble. item.completed is what
+// normally turns them into a transcript message; a stop often never emits
+// that item, so the partial is kept here until the turn settles.
+const streamedReply = new Map<string, string>();
 
 /** Put a notification on the wire. Clients decide what to do with it — a
  * desktop notification now, a push to a paired phone later. */
@@ -772,6 +776,11 @@ bus.subscribe((event: RuntimeEvent) => {
   };
 
   switch (event.type) {
+    case "content.delta":
+      if (event.streamKind === "assistant_text" && event.delta) {
+        streamedReply.set(event.threadId, (streamedReply.get(event.threadId) ?? "") + event.delta);
+      }
+      break;
     case "session.started":
       if (bot && event.sessionId && event.providerInstanceId) {
         store.setResumeCursor(bot.id, event.providerInstanceId, event.resumeCursor ?? event.sessionId, event.threadId);
@@ -782,6 +791,8 @@ bus.subscribe((event: RuntimeEvent) => {
     case "item.completed":
       if (event.itemType === "assistant_text") {
         pushMessage({ role: "bot", kind: "text", text: event.text });
+        // the settled item already contains the streamed tokens
+        streamedReply.delete(event.threadId);
         // kept so "finished" can say what it finished with, rather than
         // just that something ended
         lastReply.set(event.threadId, event.text);
@@ -1007,6 +1018,14 @@ bus.subscribe((event: RuntimeEvent) => {
       turnUsage.set(event.threadId, { input: event.input, output: event.output });
       break;
     case "turn.completed": {
+      const partial = streamedReply.get(event.threadId) ?? "";
+      streamedReply.delete(event.threadId);
+      // A finished reply arrives as item.completed and clears this buffer.
+      // Anything still here was shown live and then cut off — keep it.
+      if (partial.trim() && !lastReply.has(event.threadId)) {
+        pushMessage({ role: "bot", kind: "text", text: partial, interrupted: true });
+        lastReply.set(event.threadId, partial);
+      }
       const reply = lastReply.get(event.threadId) ?? "";
       lastReply.delete(event.threadId);
       const lastReported = turnUsage.get(event.threadId);

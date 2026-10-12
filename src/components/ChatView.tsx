@@ -437,6 +437,9 @@ function Bubble({
             <MessageBoundary fallbackText={text}>
               <ChatMarkdown text={text} />
             </MessageBoundary>
+            {message.interrupted && (
+              <div className="mt-2 text-[12px] text-ink-secondary">Interrupted</div>
+            )}
           )}
         </div>
         </div>

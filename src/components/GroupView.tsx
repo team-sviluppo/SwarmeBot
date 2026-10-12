@@ -149,7 +149,14 @@ const Transcript = memo(function Transcript({
                     )}
                     title={new Date(m.at).toLocaleString()}
                   >
-                    {user ? m.text : <ChatMarkdown text={m.text} />}
+                    {user ? m.text : (
+                      <>
+                        <ChatMarkdown text={m.text} />
+                        {m.interrupted && (
+                          <div className="mt-2 text-[12px] text-ink-secondary">Interrupted</div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
                 <span className="self-end pb-1 text-[11px] tabular-nums text-ink-secondary/70 opacity-0 transition-opacity group-hover:opacity-100">
