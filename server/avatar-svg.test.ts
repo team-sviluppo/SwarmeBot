@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canonicalDicebearRequest, validateAvatarSvg } from "./dicebear-import.ts";
+import { validateAvatarSvg } from "./avatar-svg.ts";
 
 /** Shaped like the real thing: metadata, a mask, a fragment reference. */
 const AVATAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 135 135" fill="none">
@@ -9,44 +9,7 @@ const AVATAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 135 135
 <g mask="url(#viewboxMask)"><use xlink:href="#part" /><path id="part" d="M0 0h1v1H0z" /></g>
 </svg>`;
 
-describe("dicebear import", () => {
-  it("rebuilds the URL against the API host", () => {
-    expect(canonicalDicebearRequest("https://api.dicebear.com/10.x/disco/svg?seed=Felix")).toEqual({
-      style: "disco",
-      url: "https://api.dicebear.com/10.x/disco/svg?seed=Felix",
-    });
-    // The playground's own link, and a bare style name.
-    expect(canonicalDicebearRequest("https://www.dicebear.com/styles/disco/")?.url).toBe(
-      "https://api.dicebear.com/9.x/disco/svg",
-    );
-    expect(canonicalDicebearRequest("disco")?.url).toBe("https://api.dicebear.com/9.x/disco/svg");
-  });
-
-  it("never points the fetch at another host", () => {
-    for (const input of [
-      "https://evil.com/10.x/disco/svg",
-      // No scheme, so a "://" test would miss it: this resolves to evil.com.
-      "//evil.com/10.x/disco/svg",
-      "http://api.dicebear.com.evil.com/10.x/disco/svg",
-      "file:///etc/passwd",
-      "",
-    ]) {
-      expect(canonicalDicebearRequest(input), input).toBeNull();
-    }
-    expect(canonicalDicebearRequest("http://api.dicebear.com/10.x/disco/svg")?.url).toBe(
-      "https://api.dicebear.com/10.x/disco/svg",
-    );
-  });
-
-  it("forwards the options it knows and drops the rest", () => {
-    const request = canonicalDicebearRequest(
-      "https://api.dicebear.com/10.x/disco/svg?seed=Felix&backgroundColor=b6e3f4&format=png&callback=x",
-    );
-    expect(request?.url).toBe(
-      "https://api.dicebear.com/10.x/disco/svg?backgroundColor=b6e3f4&seed=Felix",
-    );
-  });
-
+describe("avatar svg", () => {
   it("accepts a plain self-contained SVG", () => {
     const verdict = validateAvatarSvg(`<?xml version="1.0"?>\n${AVATAR_SVG}`);
     expect(verdict.ok).toBe(true);

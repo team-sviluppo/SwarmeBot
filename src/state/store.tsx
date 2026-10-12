@@ -163,9 +163,7 @@ export interface Bot {
   mascotExpression?: string | null;
   /** Body shape, from MAUS_SILHOUETTES; absent = the default cursor shape. */
   mascotSilhouette?: string | null;
-  /** A DiceBear URL. Set = this bot wears that picture instead of the mascot. */
-  mascotAvatar?: string | null;
-  /** The picture's markup, for styles this build cannot draw itself. */
+  /** An uploaded SVG's markup. Set = this bot wears it instead of the mascot. */
   mascotAvatarSvg?: string | null;
   /** An uploaded picture: an attachment filename served by the local server. */
   mascotAvatarImage?: string | null;
@@ -563,7 +561,6 @@ export type Action =
           | "color"
           | "mascotExpression"
           | "mascotSilhouette"
-          | "mascotAvatar"
           | "mascotAvatarSvg"
           | "mascotAvatarImage"
           | "mascotAvatarSheetRow"
@@ -986,7 +983,7 @@ export function reducer(state: AppState, action: Action): AppState {
         Object.prototype.hasOwnProperty.call(action.patch, "color") ||
         Object.prototype.hasOwnProperty.call(action.patch, "mascotExpression") ||
         Object.prototype.hasOwnProperty.call(action.patch, "mascotSilhouette") ||
-        Object.prototype.hasOwnProperty.call(action.patch, "mascotAvatar") ||
+        Object.prototype.hasOwnProperty.call(action.patch, "mascotAvatarSvg") ||
         Object.prototype.hasOwnProperty.call(action.patch, "mascotAvatarImage") ||
         Object.prototype.hasOwnProperty.call(action.patch, "mascotAvatarSheetRow");
       const animated = mascotChanged

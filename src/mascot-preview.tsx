@@ -365,7 +365,10 @@ function Preview() {
         </div>
 
         <div className="matrix-wrap">
-          <div className="matrix">
+          <div
+            className="matrix"
+            style={{ gridTemplateColumns: `150px repeat(${MAUS_SILHOUETTE_IDS.length}, 116px)` }}
+          >
             <div className="corner-label">Shape →</div>
             {MAUS_SILHOUETTE_IDS.map((id) => (
               <div className="column-label" key={id}>
@@ -403,7 +406,10 @@ function Preview() {
         </div>
 
         <div className="matrix-wrap">
-          <div className="matrix">
+          <div
+            className="matrix"
+            style={{ gridTemplateColumns: `150px repeat(${PICKABLE_STATES.length}, 116px)` }}
+          >
             <div className="corner-label">Color ↓ / state →</div>
             {PICKABLE_STATES.map((s) => (
               <div className="column-label" key={s}>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { schemaIssue, type JsonValue } from "./schema.ts";
-import { MAX_AVATAR_SVG_BYTES, validateAvatarSvg } from "./dicebear-import.ts";
+import { MAX_AVATAR_SVG_BYTES, validateAvatarSvg } from "./avatar-svg.ts";
 import type { MausColor } from "./store.ts";
 
 export const TEAM_MANIFEST_FORMAT = "swarme.team" as const;
@@ -50,9 +50,8 @@ const memberSchema = z.object({
     color: z.enum(COLORS, { error: "is not supported" }),
     mascotExpression: optionalText(80),
     mascotSilhouette: optionalText(40),
-    mascotAvatar: optionalText(600),
-    // A picture whose style this build cannot draw travels as markup, so a
-    // shared team does not need the network to look right.
+    // An SVG picture travels as markup, so a shared team does not need the
+    // network to look right.
     mascotAvatarSvg: optionalText(MAX_AVATAR_SVG_BYTES),
   }),
 });
@@ -97,7 +96,6 @@ export interface TeamManifestMember {
     color: MausColor;
     mascotExpression?: string;
     mascotSilhouette?: string;
-    mascotAvatar?: string;
     mascotAvatarSvg?: string;
   };
 }
@@ -145,7 +143,6 @@ interface ExportableBot {
   color: MausColor;
   mascotExpression?: string | null;
   mascotSilhouette?: string | null;
-  mascotAvatar?: string | null;
   mascotAvatarSvg?: string | null;
 }
 
@@ -178,8 +175,7 @@ export function parseTeamManifest(value: TeamManifestInput): ParsedTeamManifest 
     const appearance: TeamManifestMember["appearance"] = { color: member.appearance.color };
     if (member.appearance.mascotExpression) appearance.mascotExpression = member.appearance.mascotExpression;
     if (member.appearance.mascotSilhouette) appearance.mascotSilhouette = member.appearance.mascotSilhouette;
-    if (member.appearance.mascotAvatar) appearance.mascotAvatar = member.appearance.mascotAvatar;
-    // Untrusted markup: the same allowlist the import endpoint applies, so a
+    // Untrusted markup: the same allowlist the upload route applies, so a
     // shared file cannot smuggle in anything a page would run.
     if (member.appearance.mascotAvatarSvg) {
       const verdict = validateAvatarSvg(member.appearance.mascotAvatarSvg);
@@ -227,7 +223,6 @@ export interface ImportedMemberProfile {
   color: MausColor;
   mascotExpression?: string;
   mascotSilhouette?: string;
-  mascotAvatar?: string;
   mascotAvatarSvg?: string;
 }
 
@@ -283,7 +278,6 @@ export function importedMemberProfile(
   };
   if (member.appearance.mascotExpression) profile.mascotExpression = member.appearance.mascotExpression;
   if (member.appearance.mascotSilhouette) profile.mascotSilhouette = member.appearance.mascotSilhouette;
-  if (member.appearance.mascotAvatar) profile.mascotAvatar = member.appearance.mascotAvatar;
   if (member.appearance.mascotAvatarSvg) profile.mascotAvatarSvg = member.appearance.mascotAvatarSvg;
   return profile;
 }
@@ -315,7 +309,6 @@ export function createTeamManifest(team: ExportableTeam, bots: ExportableBot[]):
     const appearance: TeamManifestMember["appearance"] = { color: bot.color };
     if (bot.mascotExpression) appearance.mascotExpression = bot.mascotExpression;
     if (bot.mascotSilhouette) appearance.mascotSilhouette = bot.mascotSilhouette;
-    if (bot.mascotAvatar) appearance.mascotAvatar = bot.mascotAvatar;
     if (bot.mascotAvatarSvg) appearance.mascotAvatarSvg = bot.mascotAvatarSvg;
     return {
       key,

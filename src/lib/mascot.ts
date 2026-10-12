@@ -248,6 +248,80 @@ const fromPath = (
   anchor,
 });
 
+/** Centre of the face box, which every generated shape is drawn around. */
+const BOX_CENTRE = 114.27;
+
+type Point = [number, number];
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * A closed curve through every point, smooth at each one: a Catmull-Rom
+ * spline written out as the cubic Béziers SVG understands.
+ */
+function smoothClosedPath(points: Point[]): string {
+  const at = (i: number) => points[(i + points.length) % points.length]!;
+  let d = `M ${round2(points[0]![0])} ${round2(points[0]![1])}`;
+  for (let i = 0; i < points.length; i++) {
+    const [p0, p1, p2, p3] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
+    d += ` C ${round2(p1[0] + (p2[0] - p0[0]) / 6)} ${round2(p1[1] + (p2[1] - p0[1]) / 6)}`;
+    d += ` ${round2(p2[0] - (p3[0] - p1[0]) / 6)} ${round2(p2[1] - (p3[1] - p1[1]) / 6)}`;
+    d += ` ${round2(p2[0])} ${round2(p2[1])}`;
+  }
+  return `${d} Z`;
+}
+
+/**
+ * A shape described by its radius at each angle around the box centre — how
+ * the lobed and spiked shapes (cloud, flower, sparkle, burst) are drawn.
+ * `sx`/`sy` stretch it before `rotate` (degrees) tilts it.
+ */
+function polarPath(
+  radius: (angle: number) => number,
+  { samples = 96, rotate = 0, sx = 1, sy = 1 } = {},
+): string {
+  const tilt = (rotate * Math.PI) / 180;
+  const points = Array.from({ length: samples }, (_, i): Point => {
+    const angle = (i / samples) * 2 * Math.PI;
+    const r = radius(angle);
+    const x = r * Math.cos(angle) * sx;
+    const y = r * Math.sin(angle) * sy;
+    return [
+      BOX_CENTRE + x * Math.cos(tilt) - y * Math.sin(tilt),
+      BOX_CENTRE + x * Math.sin(tilt) + y * Math.cos(tilt),
+    ];
+  });
+  return smoothClosedPath(points);
+}
+
+/** `count` rounded bumps around the edge, meeting in soft creases. */
+const lobes = (count: number, fullness: number) => (angle: number) =>
+  Math.abs(Math.cos((count / 2) * angle)) ** fullness;
+
+/** `count` points around the edge; a higher `sharpness` narrows each one. */
+const spikes = (count: number, sharpness: number) => (angle: number) =>
+  ((1 + Math.cos(count * angle)) / 2) ** sharpness;
+
+/**
+ * A regular polygon whose corners are rounded with a quadratic through each
+ * vertex, like the triangle below. `rounding` is how far along each edge the
+ * curve starts, as a fraction of the edge; `rotate` is in degrees.
+ */
+function roundedPolygon(sides: number, radius: number, rounding: number, rotate = 0): string {
+  const vertices = Array.from({ length: sides }, (_, i): Point => {
+    const angle = ((rotate - 90) * Math.PI) / 180 + (i / sides) * 2 * Math.PI;
+    return [BOX_CENTRE + radius * Math.cos(angle), BOX_CENTRE + radius * Math.sin(angle)];
+  });
+  const toward = (from: Point, to: Point): string =>
+    `${round2(from[0] + (to[0] - from[0]) * rounding)} ${round2(from[1] + (to[1] - from[1]) * rounding)}`;
+  const corners = vertices.map((vertex, i) => {
+    const prev = vertices[(i - 1 + sides) % sides]!;
+    const next = vertices[(i + 1) % sides]!;
+    return `${toward(vertex, prev)} Q ${round2(vertex[0])} ${round2(vertex[1])} ${toward(vertex, next)}`;
+  });
+  return `M ${corners.join(" L ")} Z`;
+}
+
 /**
  * The pack's baked-in silhouette was exported with the body fill hardcoded to
  * black instead of the {{GRADIENT}} placeholder the component substitutes,
@@ -332,6 +406,58 @@ export const MAUS_SILHOUETTES = {
     "M 114 14 C 160 8 208 40 214 88 C 220 136 196 186 148 206 C 104 224 48 210 26 172 C 6 136 12 82 44 48 C 66 24 90 18 114 14 Z",
     { x: 112, y: 116, scale: 0.78 },
   ),
+  // The shapes below are generated rather than hand-written: lobes, spikes
+  // and rounded corners are much easier to tune as numbers than as paths.
+  cloud: fromPath(
+    "cloud",
+    polarPath((a) => 92 * (0.9 + 0.1 * lobes(6, 1)(a)), { sx: 1.12, sy: 0.96, rotate: 8 }),
+    { x: 114.27, y: 116, scale: 0.8 },
+  ),
+  // A squircle leaning to one side; the face stays level.
+  slanted: fromPath(
+    "slanted",
+    polarPath((a) => 86 / (Math.abs(Math.cos(a)) ** 4 + Math.abs(Math.sin(a)) ** 4) ** 0.25, {
+      rotate: -16,
+    }),
+    { x: 114.27, y: 116, scale: 0.78 },
+  ),
+  sparkle: fromPath(
+    "sparkle",
+    polarPath((a) => 110 * (0.6 + 0.4 * spikes(4, 1.6)(a)), { rotate: -8, samples: 128 }),
+    { x: 114.27, y: 116, scale: 0.58 },
+  ),
+  clover: fromPath(
+    "clover",
+    polarPath((a) => 106 * (0.78 + 0.22 * lobes(4, 0.8)(a - Math.PI / 4)), { rotate: 8, samples: 128 }),
+    { x: 114.27, y: 116, scale: 0.78 },
+  ),
+  // An egg on its side, its narrow end pointing up and to the left.
+  pebble: fromPath(
+    "pebble",
+    polarPath((a) => 88 * (1 + 0.24 * spikes(1, 5)(a - Math.PI)), { sy: 0.9, rotate: -20 }),
+    { x: 124, y: 118, scale: 0.72 },
+  ),
+  flower: fromPath(
+    "flower",
+    polarPath((a) => 104 * (0.8 + 0.2 * lobes(7, 0.8)(a)), { samples: 140 }),
+    { x: 114.27, y: 116, scale: 0.72 },
+  ),
+  pill: fromPath(
+    "pill",
+    "M 66 50 H 162.54 A 64 64 0 0 1 162.54 178 H 66 A 64 64 0 0 1 66 50 Z",
+    { x: 114.27, y: 114, scale: 0.66 },
+  ),
+  pentagon: fromPath("pentagon", roundedPolygon(5, 108, 0.2, -12), {
+    x: 114.27,
+    y: 120,
+    scale: 0.76,
+  }),
+  burst: fromPath(
+    "burst",
+    polarPath((a) => 108 * (0.72 + 0.28 * spikes(7, 1)(a)), { rotate: -90, samples: 168 }),
+    { x: 114.27, y: 116, scale: 0.62 },
+  ),
+  gem: fromPath("gem", roundedPolygon(6, 106, 0.2, 18), { x: 114.27, y: 116, scale: 0.8 }),
 } satisfies Record<string, CursorSilhouette>;
 
 export type MausSilhouetteId = keyof typeof MAUS_SILHOUETTES;
@@ -340,32 +466,34 @@ const isSilhouetteId = (value: string): value is MausSilhouetteId =>
   Object.prototype.hasOwnProperty.call(MAUS_SILHOUETTES, value);
 
 /**
- * The shapes the appearance picker offers, in the order it shows them.
- *
- * Deliberately not every registered shape, for the same reason PICKABLE_STATES
- * is not every state: the registry is what the engine CAN draw, this is what
- * the product asks for. `cursor`, `octagon`, `shield`, `egg`, `capsule` and
- * `star` stay in MAUS_SILHOUETTES so a bot that already wears one keeps
- * rendering it — dropping a shape from the picker must not repaint a bot that
- * chose it — they are simply no longer offered to new ones.
+ * Every shape the engine draws, in the order the appearance picker shows
+ * them: the designed set first, then the earlier shapes.
  */
-export const PICKABLE_SILHOUETTE_IDS: MausSilhouetteId[] = [
+export const MAUS_SILHOUETTE_IDS: MausSilhouetteId[] = [
   "circle",
+  "cloud",
+  "slanted",
+  "sparkle",
+  "clover",
+  "pebble",
+  "flower",
+  "droplet",
+  "pill",
+  "triangle",
+  "pentagon",
+  "burst",
+  "gem",
   "squircle",
   "tile",
   "oval",
-  "triangle",
   "hexagon",
   "blob",
-  "droplet",
-];
-
-/** Every shape the engine can draw, offered ones first. */
-export const MAUS_SILHOUETTE_IDS = [
-  ...PICKABLE_SILHOUETTE_IDS,
-  ...Object.keys(MAUS_SILHOUETTES)
-    .filter(isSilhouetteId)
-    .filter((id) => !PICKABLE_SILHOUETTE_IDS.includes(id)),
+  "cursor",
+  "octagon",
+  "shield",
+  "egg",
+  "capsule",
+  "star",
 ];
 
 export const DEFAULT_SILHOUETTE_ID: MausSilhouetteId = "circle";

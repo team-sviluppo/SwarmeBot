@@ -3,22 +3,12 @@ import { useEffect, useState } from "react";
 import { api, useStore, type Bot } from "@/state/store";
 import { effortLevelsForModel } from "@/lib/model-effort";
 import { MausAvatar, wearsPicture } from "./Avatar";
-import { DicebearAvatar, useDicebearReady } from "./DicebearAvatar";
-import {
-  DICEBEAR_STYLE_IDS,
-  dicebearMeta,
-  dicebearStyleSlug,
-  dicebearUrl,
-  importDicebearAvatar,
-  parseDicebearAvatar,
-  randomSeed,
-} from "@/lib/dicebear";
 import {
   PICKABLE_STATES,
   stateForBot,
   MAUS_COLORS,
   MAUS_COLOR_NAMES,
-  PICKABLE_SILHOUETTE_IDS,
+  MAUS_SILHOUETTE_IDS,
   normalizeSilhouette,
 } from "@/lib/mascot";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
@@ -329,58 +319,10 @@ function MemoryCard({ bot }: { bot: Bot }) {
   );
 }
 
-/** The seed a stored URL carries, for a picture we cannot parse as a style. */
-function seedOf(url: string | null | undefined): string | null {
-  if (!url) return null;
-  try {
-    return new URL(url, "https://api.dicebear.com").searchParams.get("seed");
-  } catch {
-    return null;
-  }
-}
-
-/** The same URL with another seed, leaving its other options alone. */
-function withSeed(url: string | null | undefined, seed: string): string {
-  const next = new URL(url ?? "https://api.dicebear.com/9.x/bottts/svg", "https://api.dicebear.com");
-  next.searchParams.set("seed", seed);
-  return next.toString();
-}
-
 /**
- * A seed field. For a locally drawn style every keystroke is free, so it types
- * live; for a fetched one each change costs a request, so it commits on Enter
- * or on leaving the field.
- */
-function SeedInput({
-  seed,
-  commitOnBlur,
-  onCommit,
-}: {
-  seed: string;
-  commitOnBlur: boolean;
-  onCommit: (seed: string) => void;
-}) {
-  const [draft, setDraft] = useState(seed);
-  useEffect(() => setDraft(seed), [seed]);
-  return (
-    <input
-      className={inputCls}
-      value={commitOnBlur ? draft : seed}
-      onChange={(e) => (commitOnBlur ? setDraft(e.target.value) : onCommit(e.target.value))}
-      onBlur={() => commitOnBlur && draft !== seed && onCommit(draft)}
-      onKeyDown={(e) => e.key === "Enter" && commitOnBlur && onCommit(draft)}
-    />
-  );
-}
-
-/**
- * DiceBear picture avatars. A picture replaces the mascot, so this is a mode
+ * A picture of your own. A picture replaces the mascot, so this is a mode
  * switch rather than another appearance knob: while one is set, shape,
  * expression and color describe a mascot nobody is looking at.
- *
- * What we store is the DiceBear URL itself — paste one from dicebear.com and
- * the style, the seed and every option chosen there come with it. Nothing is
- * fetched; the SVG is generated locally from the bundled styles.
  */
 function PictureSection({
   bot,
@@ -388,40 +330,17 @@ function PictureSection({
 }: {
   bot: Bot;
   patch: (p: {
-    mascotAvatar?: string | null;
     mascotAvatarSvg?: string | null;
     mascotAvatarImage?: string | null;
     mascotAvatarSheetRow?: number | null;
   }) => void;
 }) {
-  const ready = useDicebearReady();
-  const picture = parseDicebearAvatar(bot.mascotAvatar);
-  // A style we cannot draw was fetched once and stored as markup; its seed
-  // lives in the URL beside it, and changing it means fetching again.
-  const fetched = Boolean(bot.mascotAvatarSvg);
-  const seed = picture?.seed ?? seedOf(bot.mascotAvatar) ?? bot.name;
-  const [pasted, setPasted] = useState("");
-  const [pasteError, setPasteError] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
-  const meta = ready && picture ? dicebearMeta(picture.style) : null;
-
-  /** Fetches a style this build cannot draw. The bot frame arrives over SSE. */
-  const importRemote = async (url: string) => {
-    setImporting(true);
-    try {
-      await api(`/api/bots/${bot.id}/avatar`, { method: "POST", body: JSON.stringify({ url }) });
-      setPasteError(null);
-      setPasted("");
-    } catch (error) {
-      setPasteError(error instanceof Error ? error.message : "Could not import that avatar");
-    } finally {
-      setImporting(false);
-    }
-  };
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   /** Your own file. The bot frame comes back with whichever field it landed in. */
   const uploadPicture = async (rawFile: File) => {
-    setImporting(true);
+    setUploading(true);
     try {
       // An oversized sheet is resampled here, before it is stored: sheets are
       // authored at sizes the browser then rescales on every single paint.
@@ -434,49 +353,12 @@ function PictureSection({
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error ?? `${response.status} ${response.statusText}`);
-      setPasteError(null);
+      setUploadError(null);
     } catch (error) {
-      setPasteError(error instanceof Error ? error.message : "Could not use that file");
+      setUploadError(error instanceof Error ? error.message : "Could not use that file");
     } finally {
-      setImporting(false);
+      setUploading(false);
     }
-  };
-
-  const importPasted = () => {
-    const result = importDicebearAvatar(pasted);
-    if (result.ok) {
-      setPasteError(null);
-      setPasted("");
-      const { spec } = result;
-      patch({
-        mascotAvatar: dicebearUrl(spec.style, spec.seed ?? seed, spec.options),
-        mascotAvatarSvg: null,
-        mascotAvatarImage: null,
-        mascotAvatarSheetRow: null,
-      });
-      return;
-    }
-    if (result.reason === "not-dicebear") {
-      setPasteError("That is not a DiceBear style or avatar URL.");
-      return;
-    }
-    // A real DiceBear style we have no package for: fetch it once.
-    void importRemote(pasted.trim());
-  };
-
-  /** Where a new seed goes: into the URL, or back to dicebear.com for it. */
-  const applySeed = (next: string) => {
-    if (fetched) {
-      void importRemote(withSeed(bot.mascotAvatar, next));
-      return;
-    }
-    if (!picture) return;
-    patch({
-      mascotAvatar: dicebearUrl(picture.style, next, picture.options),
-      mascotAvatarSvg: null,
-      mascotAvatarImage: null,
-      mascotAvatarSheetRow: null,
-    });
   };
 
   return (
@@ -485,11 +367,9 @@ function PictureSection({
         <span className="rounded-lg bg-raised px-3 py-1.5 text-[14px] font-medium text-ink">
           Picture
         </span>
-        {(picture || fetched || bot.mascotAvatarImage) && (
+        {wearsPicture(bot) && (
           <button
-            onClick={() =>
-              patch({ mascotAvatar: null, mascotAvatarSvg: null, mascotAvatarImage: null, mascotAvatarSheetRow: null })
-            }
+            onClick={() => patch({ mascotAvatarSvg: null, mascotAvatarImage: null, mascotAvatarSheetRow: null })}
             className="rounded-md px-2 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink"
           >
             Use the mascot
@@ -510,7 +390,7 @@ function PictureSection({
           }}
           className={cn(
             "flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-hairline/70 bg-inset px-3 py-2.5 text-[13px] text-ink-secondary transition-colors hover:bg-raised",
-            importing && "opacity-60",
+            uploading && "opacity-60",
           )}
         >
           <input
@@ -523,7 +403,7 @@ function PictureSection({
               if (file) void uploadPicture(file);
             }}
           />
-          {bot.mascotAvatarImage ? (
+          {wearsPicture(bot) ? (
             <MausAvatar color={bot.color} look={bot} state={stateForBot(bot)} size={38} />
           ) : (
             <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-raised">
@@ -531,7 +411,7 @@ function PictureSection({
             </span>
           )}
           <span className="min-w-0 flex-1">
-            {bot.mascotAvatarImage
+            {wearsPicture(bot)
               ? "Drop another image, or click to pick one"
               : "Drop a PNG, JPG, GIF, WebP or SVG here, or click to pick one"}
           </span>
@@ -602,108 +482,7 @@ function PictureSection({
           </div>
         )}
 
-        <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-          Import from dicebear.com
-        </div>
-        <div className="flex gap-2">
-          <input
-            className={inputCls}
-            placeholder="https://api.dicebear.com/9.x/bottts/svg?seed=Mira"
-            value={pasted}
-            onChange={(e) => {
-              setPasted(e.target.value);
-              setPasteError(null);
-            }}
-            onKeyDown={(e) => e.key === "Enter" && importPasted()}
-          />
-          <button
-            onClick={importPasted}
-            disabled={!pasted.trim() || importing}
-            className="shrink-0 rounded-lg bg-raised px-3 text-[13px] font-medium text-ink hover:bg-inset disabled:opacity-40"
-          >
-            {importing ? "Importing…" : "Import"}
-          </button>
-        </div>
-        {pasteError ? (
-          <p className="mt-1.5 text-[12px] text-danger">{pasteError}</p>
-        ) : (
-          <p className="mt-1.5 text-[12px] text-ink-secondary">
-            Build one on dicebear.com and paste its URL — the options you picked come with it.
-          </p>
-        )}
-
-        {(picture || fetched) && (
-          <>
-            <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-              Seed
-            </div>
-            <div className="flex gap-2">
-              <SeedInput seed={seed} commitOnBlur={fetched} onCommit={applySeed} />
-              <button
-                onClick={() => applySeed(randomSeed())}
-                disabled={importing}
-                className="shrink-0 rounded-lg bg-raised px-3 text-[13px] font-medium text-ink hover:bg-inset disabled:opacity-40"
-              >
-                Randomize
-              </button>
-            </div>
-          </>
-        )}
-
-        <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-          Style
-        </div>
-        <div className="grid grid-cols-5 gap-2">
-          {DICEBEAR_STYLE_IDS.map((style) => (
-            <button
-              key={style}
-              // The options belong to the style that was showing when they were
-              // picked, so a style change keeps only the seed.
-              onClick={() =>
-                patch({
-                  mascotAvatar: dicebearUrl(style, seed),
-                  mascotAvatarSvg: null,
-                  mascotAvatarImage: null,
-                  mascotAvatarSheetRow: null,
-                })
-              }
-              className={cn(
-                "flex h-[58px] items-center justify-center rounded-xl bg-inset transition-colors hover:bg-raised",
-                picture?.style === style && "ring-2 ring-accent-border",
-              )}
-              title={style}
-              aria-label={`Use the ${style} picture style`}
-            >
-              <DicebearAvatar avatar={dicebearUrl(style, seed)} size={42} />
-            </button>
-          ))}
-        </div>
-        {fetched && (
-          <p className="mt-2.5 text-[12px] text-ink-secondary">
-            Wearing the {dicebearStyleSlug(bot.mascotAvatar) ?? "imported"} style, fetched from
-            dicebear.com once and stored with this bot. Picking one above swaps to a style drawn
-            here.
-          </p>
-        )}
-        {meta && (
-          <p className="mt-2.5 text-[12px] text-ink-secondary">
-            {meta.title}
-            {meta.creator ? ` by ${meta.creator}` : ""}
-            {meta.license && (
-              <>
-                {" — "}
-                <a
-                  className="underline hover:text-ink"
-                  href={meta.license.url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {meta.license.name}
-                </a>
-              </>
-            )}
-          </p>
-        )}
+        {uploadError && <p className="mt-1.5 text-[12px] text-danger">{uploadError}</p>}
       </div>
     </div>
   );
@@ -754,7 +533,6 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
         | "color"
         | "mascotExpression"
         | "mascotSilhouette"
-        | "mascotAvatar"
         | "mascotAvatarSvg"
         | "mascotAvatarImage"
         | "mascotAvatarSheetRow"
@@ -770,11 +548,6 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
   ) => dispatch({ type: "updateBot", botId: bot.id, patch: p });
   const activeState = stateForBot(bot);
   const activeSilhouette = normalizeSilhouette(bot.mascotSilhouette);
-  // A bot that chose one of the retired shapes keeps it, so the gallery has to
-  // show it too — a picker with no visible selection reads as "none of these".
-  const silhouetteChoices = PICKABLE_SILHOUETTE_IDS.includes(activeSilhouette)
-    ? PICKABLE_SILHOUETTE_IDS
-    : [...PICKABLE_SILHOUETTE_IDS, activeSilhouette];
   const hasPicture = wearsPicture(bot);
   const mascotMotion = state.mascotMotion?.botId === bot.id ? state.mascotMotion : null;
   const engine = state.instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId);
@@ -847,7 +620,6 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                     color: "green",
                     mascotExpression: null,
                     mascotSilhouette: null,
-                    mascotAvatar: null,
                     mascotAvatarSvg: null,
                     mascotAvatarImage: null,
                     mascotAvatarSheetRow: null,
@@ -870,10 +642,10 @@ export function SettingsPanel({ bot }: { bot: Bot }) {
                 Shape
               </div>
               {!painted ? (
-                <GalleryPlaceholder count={silhouetteChoices.length} />
+                <GalleryPlaceholder count={MAUS_SILHOUETTE_IDS.length} />
               ) : (
-              <div className="grid grid-cols-4 gap-2">
-                {silhouetteChoices.map((silhouette) => (
+              <div className="grid grid-cols-5 gap-2">
+                {MAUS_SILHOUETTE_IDS.map((silhouette) => (
                   <button
                     key={silhouette}
                     onClick={() => patch({ mascotSilhouette: silhouette })}

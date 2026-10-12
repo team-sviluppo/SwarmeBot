@@ -12,11 +12,7 @@ import { z } from "zod";
 import { approvalKey, autoVerdict } from "./auto-approve.ts";
 import { appendDecision, readDecisions } from "./decision-log.ts";
 import { validateBotCwd } from "./bot-cwd.ts";
-import {
-  fetchDicebearAvatar,
-  MAX_AVATAR_SVG_BYTES,
-  validateAvatarSvg,
-} from "./dicebear-import.ts";
+import { MAX_AVATAR_SVG_BYTES, validateAvatarSvg } from "./avatar-svg.ts";
 import {
   AVATAR_IMAGE_MAX_BYTES,
   extensionForMime,
@@ -3281,28 +3277,13 @@ const server = createServer(async (req, res) => {
       broadcast({ kind: "bot", bot: visible });
       return json(res, 200, { bot: visible });
     }
-    m = path.match(/^\/api\/bots\/([\w-]+)\/avatar$/);
-    if (m && method === "POST") {
-      // Importing a DiceBear style the client cannot draw itself. The client
-      // renders every bundled style locally and never calls this; what lands
-      // here are the API-only styles (all of DiceBear 10's). One fetch, then
-      // the markup lives with the bot and renders offline forever after.
-      const body = await readBody(req);
-      if (typeof body.url !== "string") return json(res, 400, { error: "url must be a string" });
-      if (!store.bot(m[1])) return json(res, 404, { error: "no such bot" });
-      const fetched = await fetchDicebearAvatar(body.url);
-      if (!fetched.ok) return json(res, fetched.status, { error: fetched.error });
-      const bot = store.patchBot(m[1], { mascotAvatar: fetched.url, mascotAvatarSvg: fetched.svg });
-      if (!bot) return json(res, 404, { error: "no such bot" });
-      return json(res, 200, { bot: wireBot(bot) });
-    }
     m = path.match(/^\/api\/bots\/([\w-]+)\/avatar\/upload$/);
     if (m && method === "POST") {
       // Your own picture for a bot: raw bytes, like /api/attachments. Which
       // way it is stored follows the content type — a raster becomes a file
-      // served by name, an SVG becomes markup, validated by the same
-      // allowlist the DiceBear import uses. Setting one clears the others so
-      // a bot never carries two pictures and a guess about which wins.
+      // served by name, an SVG becomes markup, validated against an
+      // allowlist. Setting one clears the other so a bot never carries two
+      // pictures and a guess about which wins.
       const bot = store.bot(m[1]!);
       if (!bot) return json(res, 404, { error: "no such bot" });
       const rawType = Array.isArray(req.headers["content-type"])
@@ -3316,7 +3297,6 @@ const server = createServer(async (req, res) => {
         if (!verdict.ok) return json(res, 400, { error: verdict.error });
         const patched = store.patchBot(bot.id, {
           mascotAvatarSvg: verdict.svg,
-          mascotAvatar: null,
           mascotAvatarImage: null,
           mascotAvatarSheetRow: null,
         });
@@ -3332,7 +3312,6 @@ const server = createServer(async (req, res) => {
       const saved = saveImage(imageBytes, mime);
       const patched = store.patchBot(bot.id, {
         mascotAvatarImage: basename(saved.path),
-        mascotAvatar: null,
         mascotAvatarSvg: null,
         // A still photo and a 9x8 sprite sheet arrive through the same route,
         // so the picture's own shape decides which it is: only a grid of
@@ -3434,24 +3413,11 @@ const server = createServer(async (req, res) => {
       for (const key of ["name", "title", "description", "notifications", "modelSelection", "unread", "computer", "cloudBackend", "color", "mascotExpression", "mascotSilhouette", "pinned", "hidden", "speakReplies", "voice"] as const) {
         if (body[key] !== undefined) patch[key] = body[key];
       }
-      // A picture avatar is stored as the DiceBear URL it came from; the
-      // client renders it from the bundled styles and nothing here ever
-      // fetches it. Bounded so a stray payload cannot park an unbounded
-      // string in the record; null/"" goes back to the mascot.
-      if (body.mascotAvatar !== undefined) {
-        // Cleared as an explicit null, not by dropping the key: a bot frame
-        // is merged into what a client already holds, so an absent key would
-        // leave the old picture standing on every other connected client.
-        if (body.mascotAvatar === null || body.mascotAvatar === "") patch.mascotAvatar = null;
-        else if (typeof body.mascotAvatar !== "string") {
-          return json(res, 400, { error: "mascotAvatar must be a string" });
-        } else if (body.mascotAvatar.length > 600) {
-          return json(res, 400, { error: "mascotAvatar must be at most 600 characters" });
-        } else patch.mascotAvatar = body.mascotAvatar;
-      }
-      // Markup only ever enters through the import endpoint above, which
-      // validated what it fetched. A PATCH may only clear it — which is what
-      // switching to a style we can draw ourselves does.
+      // Markup only ever enters through the upload route above, which
+      // validated it. A PATCH may only clear it — which is what going back
+      // to the mascot does. Cleared as an explicit null, not by dropping the
+      // key: a bot frame is merged into what a client already holds, so an
+      // absent key would leave the old picture standing on other clients.
       if (body.mascotAvatarSvg !== undefined) {
         if (body.mascotAvatarSvg === null || body.mascotAvatarSvg === "") {
           patch.mascotAvatarSvg = null;

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { createTeamManifest, importedMemberProfile, parseTeamManifest } from "./team-manifest.ts";
 
+const AVATAR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8"/></svg>';
+
 describe("team manifests", () => {
   it("exports portable member keys without room or runtime state", () => {
     const manifest = createTeamManifest(
@@ -49,19 +51,19 @@ describe("team manifests", () => {
         description: "Coordinates the work",
         color: "purple",
         mascotSilhouette: "hexagon",
-        mascotAvatar: "https://api.dicebear.com/9.x/bottts/svg?seed=Mira",
+        mascotAvatarSvg: AVATAR_SVG,
       },
     ]);
 
     expect(manifest.team.members[0]?.appearance).toMatchObject({
       mascotSilhouette: "hexagon",
-      mascotAvatar: "https://api.dicebear.com/9.x/bottts/svg?seed=Mira",
+      mascotAvatarSvg: AVATAR_SVG,
     });
 
     const parsed = parseTeamManifest(manifest);
     const profile = importedMemberProfile(parsed.team.members[0]!, new Set());
     expect(profile.mascotSilhouette).toBe("hexagon");
-    expect(profile.mascotAvatar).toBe("https://api.dicebear.com/9.x/bottts/svg?seed=Mira");
+    expect(profile.mascotAvatarSvg).toBe(AVATAR_SVG);
   });
 
   it("parses legacy room files while dropping unrelated settings", () => {

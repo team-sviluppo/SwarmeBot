@@ -257,16 +257,12 @@ export interface BotRecord {
   /** Body shape id (see MAUS_SILHOUETTES); absent = the default shape. An
    * unknown id renders as the default rather than failing. */
   mascotSilhouette?: string | null;
-  /** A DiceBear URL this bot wears as a picture instead of the mascot. For a
-   * bundled style the client renders it locally and nothing is fetched. */
-  mascotAvatar?: string | null;
-  /** The picture's markup, stored only for styles the client cannot draw
-   * itself (DiceBear 10 published none of its styles as packages). Fetched
-   * once at import and validated there, so rendering stays offline after. */
+  /** An uploaded SVG this bot wears as a picture instead of the mascot,
+   * stored as markup. Validated at upload, so rendering stays offline. */
   mascotAvatarSvg?: string | null;
   /** A picture of your own: the attachment filename, served by name from
    * /api/attachments. Local to this machine, so it does not travel in a
-   * shared team file the way a generated picture does. */
+   * shared team file the way an SVG picture does. */
   mascotAvatarImage?: string | null;
   /** Row (0–8) of a 9×8 sprite sheet to animate. Absent means a still photo. */
   mascotAvatarSheetRow?: number | null;
@@ -800,7 +796,6 @@ export class Store {
         | "color"
         | "mascotExpression"
         | "mascotSilhouette"
-        | "mascotAvatar"
         | "mascotAvatarSvg"
         | "modelSelection"
       >
@@ -822,7 +817,6 @@ export class Store {
       color: profile.color ?? COLORS[this.bots.length % COLORS.length],
       ...(profile.mascotExpression ? { mascotExpression: profile.mascotExpression } : {}),
       ...(profile.mascotSilhouette ? { mascotSilhouette: profile.mascotSilhouette } : {}),
-      ...(profile.mascotAvatar ? { mascotAvatar: profile.mascotAvatar } : {}),
       ...(profile.mascotAvatarSvg ? { mascotAvatarSvg: profile.mascotAvatarSvg } : {}),
       unread: false,
       computer: "off",

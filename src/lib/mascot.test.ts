@@ -6,7 +6,6 @@ import {
   MAUS_SILHOUETTE_IDS,
   MAUS_COLOR_NAMES,
   MAUS_COLORS,
-  PICKABLE_SILHOUETTE_IDS,
   PICKABLE_STATES,
   RESTING_FACES,
   eyeInkFor,
@@ -17,29 +16,44 @@ import {
 } from "./mascot";
 
 describe("silhouettes", () => {
-  it("knows every registered shape, offered ones first", () => {
+  it("offers every registered shape exactly once, the default first", () => {
     expect(MAUS_SILHOUETTE_IDS[0]).toBe(DEFAULT_SILHOUETTE_ID);
+    expect(new Set(MAUS_SILHOUETTE_IDS).size).toBe(MAUS_SILHOUETTE_IDS.length);
     expect([...MAUS_SILHOUETTE_IDS].sort()).toEqual(Object.keys(MAUS_SILHOUETTES).sort());
   });
 
-  it("offers the product's shapes and can draw every one of them", () => {
-    expect(PICKABLE_SILHOUETTE_IDS).toHaveLength(8);
-    for (const id of PICKABLE_SILHOUETTE_IDS) expect(MAUS_SILHOUETTES[id]).toBeDefined();
-    expect(PICKABLE_SILHOUETTE_IDS).toContain(DEFAULT_SILHOUETTE_ID);
+  it("offers the designed shapes", () => {
+    for (const id of [
+      "circle",
+      "cloud",
+      "slanted",
+      "sparkle",
+      "clover",
+      "pebble",
+      "flower",
+      "droplet",
+      "pill",
+      "triangle",
+      "pentagon",
+      "burst",
+      "gem",
+    ]) {
+      expect(MAUS_SILHOUETTE_IDS).toContain(id);
+    }
   });
 
-  it("keeps drawing a retired shape a bot already chose", () => {
-    // Dropping a shape from the picker must not repaint a bot that picked it.
-    for (const retired of ["cursor", "octagon", "shield", "egg", "capsule", "star"]) {
-      expect(PICKABLE_SILHOUETTE_IDS).not.toContain(retired);
-      expect(normalizeSilhouette(retired)).toBe(retired);
+  it("generates closed paths with finite coordinates", () => {
+    for (const id of MAUS_SILHOUETTE_IDS) {
+      const { clip } = MAUS_SILHOUETTES[id];
+      expect(clip, id).not.toMatch(/NaN|Infinity/);
+      expect(clip, id).toMatch(/Z\s*"/);
     }
   });
 
   it("falls back to the default for junk, absent and inherited names", () => {
     // A bot saved by a newer build, or seeded from an untrusted team file,
     // must still render rather than throwing on an id we do not have.
-    for (const value of [null, undefined, "", "pentagon", "toString", "__proto__"]) {
+    for (const value of [null, undefined, "", "dodecagon", "toString", "__proto__"]) {
       expect(normalizeSilhouette(value)).toBe(DEFAULT_SILHOUETTE_ID);
       expect(silhouetteFor(value)).toBe(MAUS_SILHOUETTES[DEFAULT_SILHOUETTE_ID]);
     }

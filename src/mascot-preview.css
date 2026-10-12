@@ -223,8 +223,8 @@ h1 {
 
 .matrix {
   display: grid;
-  grid-template-columns: 150px repeat(10, minmax(116px, 1fr));
-  min-width: 1410px;
+  /* Columns are set inline: one per registered shape. */
+  width: max-content;
 }
 
 .corner-label,

@@ -13,7 +13,6 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { wearsDicebearPicture } from "@/lib/dicebear";
 import {
   MAUS_COLORS,
   eyeInkFor,
@@ -23,8 +22,8 @@ import {
   type MausState,
 } from "@/lib/mascot";
 import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
-import { DicebearAvatar } from "./DicebearAvatar";
 import { SpriteSheetAvatar } from "./SpriteSheetAvatar";
+import { SvgAvatar } from "./SvgAvatar";
 import { clampSheetRow } from "@/lib/sprite-sheet";
 import { useStillAvatars } from "@/lib/still-avatars";
 import { useAvatarFrameSlot, useNearViewport } from "@/lib/avatar-frames";
@@ -34,28 +33,19 @@ import { useAvatarFrameSlot, useNearViewport } from "@/lib/avatar-frames";
  * new appearance field reaches every avatar in the app without touching the
  * thirty places that render one.
  */
-/**
- * Whether a bot wears a picture at all: an uploaded file, imported markup, or
- * a DiceBear style we can draw. A URL naming a style we lack and carrying no
- * markup — a team file imported on a build without it — is not a picture, and
- * the bot falls back to its mascot instead of an empty hole.
- */
+/** Whether a bot wears a picture of its own — a file or SVG markup. */
 export function wearsPicture(look: MausLook): boolean {
-  return Boolean(look.mascotAvatarImage) || wearsDicebearPicture(look);
+  return Boolean(look.mascotAvatarImage) || Boolean(look.mascotAvatarSvg);
 }
 
 export type MausLook = {
   mascotSilhouette?: string | null;
-  /** A DiceBear picture, which replaces the mascot entirely when set. */
-  mascotAvatar?: string | null;
-  /** Its markup, for a style this build cannot draw itself. */
+  /** An uploaded SVG, which replaces the mascot entirely when set. */
   mascotAvatarSvg?: string | null;
   /** A picture of your own, as an attachment filename on this machine. */
   mascotAvatarImage?: string | null;
   /** Row of a 9×8 sheet to animate. */
   mascotAvatarSheetRow?: number | null;
-  /** Seeds a picture whose stored URL carries no seed of its own. */
-  name?: string;
 };
 
 /**
@@ -294,16 +284,8 @@ function MausAvatarComponent(
     );
   }
 
-  if (picture) {
-    return (
-      <DicebearAvatar
-        avatar={look?.mascotAvatar}
-        svg={look?.mascotAvatarSvg}
-        seed={look?.name}
-        size={size}
-        label={label ?? null}
-      />
-    );
+  if (picture && look?.mascotAvatarSvg) {
+    return <SvgAvatar svg={look.mascotAvatarSvg} size={size} label={label ?? null} />;
   }
 
   return (

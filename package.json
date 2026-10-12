@@ -62,8 +62,6 @@
     "broker:deploy": "wrangler deploy --config cloudflare/composio-broker/wrangler.jsonc"
   },
   "dependencies": {
-    "@dicebear/collection": "^9.2.4",
-    "@dicebear/core": "^9.4.3",
     "@trycua/cua-driver": "0.20.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.539.0",
