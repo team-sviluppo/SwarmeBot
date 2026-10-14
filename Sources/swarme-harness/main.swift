@@ -1,0 +1,80 @@
+// swarme-harness — the Swift engine, on the same port, data dir and HTTP
+// contract as `node server/index.ts`. Started by the app's HarnessLauncher
+// when Settings › Engine is Swift; runnable by hand for development:
+//
+//   OMB_PORT=8799 OMB_DATA_DIR=/tmp/swarme swift run swarme-harness
+import Foundation
+import HarnessCore
+import HarnessDrivers
+
+// `swarme-harness mcp-permission <socket>`: the MCP permission proxy a CLI
+// spawns for --permission-prompt-tool (PermissionProxy.swift). Checked
+// first, so the helper never touches the data dir or the port.
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "mcp-permission" {
+    PermissionProxy.run(socketPath: CommandLine.arguments[2])
+}
+// `swarme-harness mcp-agents`: peer comms tools for a bot's CLI (AgentsProxy.swift)
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mcp-agents" {
+    AgentsProxy.run()
+}
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mcp-container" {
+    McpBridge.runContainer(Array(CommandLine.arguments.dropFirst(2)))
+}
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mcp-vps" {
+    McpBridge.runVPS(Array(CommandLine.arguments.dropFirst(2)))
+}
+
+let env = ProcessInfo.processInfo.environment
+let port = UInt16(env["OMB_PORT"] ?? env["OGB_PORT"] ?? "8799") ?? 8799
+let paths = DataPaths.fromEnvironment(env)
+
+setvbuf(stdout, nil, _IOLBF, 0)
+
+@MainActor
+func boot() async {
+    do {
+        let harness = try Harness(paths: paths, environment: env, drivers: HarnessDrivers.all)
+        await harness.boot()
+        let routes = Routes(harness: harness)
+        let server = HTTPServer { request in await routes.handle(request) }
+        try await server.start(port: port)
+        harness.harnessURL = "http://127.0.0.1:\(port)"
+        // webhook deliveries get their own loopback listener, never the control API
+        let webhookPort = UInt16(env["OMB_WEBHOOK_PORT"] ?? "8800") ?? 8800
+        harness.webhookIngressBaseUrl = "http://127.0.0.1:\(webhookPort)"
+        let ingress = HTTPServer { request in WebhookIngress.handle(request, manager: harness.webhooks) }
+        ingress.maxBody = 1024 * 1024 // the 256 KiB limit answers with its own message
+        do {
+            try await ingress.start(port: webhookPort)
+            print("swarmebot webhook receiver on \(harness.webhookIngressBaseUrl)")
+        } catch {
+            harness.webhookIngressError = error.localizedDescription
+            FileHandle.standardError.write(Data("swarmebot webhook receiver unavailable: \(error.localizedDescription)\n".utf8))
+        }
+        print("swarmebot server on http://127.0.0.1:\(port) (swift engine, data \(paths.root.path))")
+
+        for signalNumber in [SIGTERM, SIGINT] {
+            signal(signalNumber, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+            source.setEventHandler {
+                Task { @MainActor in
+                    await harness.shutdown()
+                    server.stop()
+                    exit(0)
+                }
+            }
+            source.resume()
+            signalSources.append(source)
+        }
+        keepAlive = (harness, routes, server, ingress)
+    } catch {
+        FileHandle.standardError.write(Data("swarme-harness: \(error.localizedDescription)\n".utf8))
+        exit(1)
+    }
+}
+
+nonisolated(unsafe) var signalSources: [DispatchSourceSignal] = []
+nonisolated(unsafe) var keepAlive: Any?
+
+Task { @MainActor in await boot() }
+dispatchMain()

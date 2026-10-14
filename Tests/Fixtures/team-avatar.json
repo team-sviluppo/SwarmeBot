@@ -1,0 +1,730 @@
+{
+ "manifests": [
+  {
+   "input": "\"hello\"",
+   "error": "Invalid input: expected object, received string"
+  },
+  {
+   "input": "null",
+   "error": "Invalid input: expected object, received null"
+  },
+  {
+   "input": "[]",
+   "error": "Invalid input: expected object, received array"
+  },
+  {
+   "input": "{}",
+   "error": "Team file version is not supported"
+  },
+  {
+   "input": "true",
+   "error": "Invalid input: expected object, received boolean"
+  },
+  {
+   "input": "3",
+   "error": "Invalid input: expected object, received number"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\"}",
+   "error": "Team file version is not supported"
+  },
+  {
+   "input": "{\"format\":\"x\",\"version\":2,\"team\":{}}",
+   "error": "This is not a SwarmeBot team file"
+  },
+  {
+   "input": "{\"format\":\"x\",\"version\":9}",
+   "error": "Team file version is not supported"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":\"2\"}",
+   "error": "Team file version is not supported"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":null}",
+   "error": "Team file version is not supported"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2}",
+   "error": "team Invalid input: expected object, received undefined"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":\"x\"}",
+   "error": "team Invalid input: expected object, received string"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":null}",
+   "error": "team Invalid input: expected object, received null"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{}}",
+   "error": "team.name must be text"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":5,\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.name must be text"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"  ﻿ \",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.name is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"members\":\"no\"}}",
+   "error": "team.name is too long"
+  },
+  {
+   "input": "{\"format\":1,\"version\":2,\"team\":{}}",
+   "error": "This is not a SwarmeBot team file"
+  },
+  {
+   "input": "{\"format\":\"y\",\"version\":1}",
+   "error": "This is not a SwarmeBot team file"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"description\":5,\"members\":5,\"name\":1}}",
+   "error": "team.name must be text"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":{}}}",
+   "error": "team.members Invalid input: expected array, received object"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[]}}",
+   "error": "team.members A team needs at least one member"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[\"x\"]}}",
+   "error": "team.members.0 Invalid input: expected object, received string"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[null]}}",
+   "error": "team.members.0 Invalid input: expected object, received null"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"k0\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k1\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k2\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k3\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k4\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k5\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k6\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k7\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k8\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k9\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k10\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k11\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k12\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k13\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k14\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k15\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k16\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k17\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k18\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k19\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k20\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k21\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k22\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k23\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k24\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k25\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k26\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k27\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k28\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k29\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k30\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k31\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k32\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k33\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k34\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k35\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k36\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k37\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k38\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k39\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k40\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k41\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k42\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k43\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k44\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k45\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k46\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k47\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k48\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k49\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k50\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k51\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k52\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k53\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k54\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k55\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k56\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k57\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k58\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k59\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k60\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k61\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k62\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k63\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k64\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k65\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k66\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k67\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k68\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k69\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k70\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k71\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k72\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k73\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k74\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k75\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k76\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k77\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k78\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k79\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k80\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k81\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k82\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k83\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k84\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k85\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k86\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k87\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k88\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k89\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k90\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k91\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k92\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k93\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k94\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k95\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k96\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k97\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k98\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k99\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k100\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k101\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k102\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k103\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k104\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k105\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k106\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k107\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k108\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k109\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k110\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k111\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k112\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k113\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k114\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k115\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k116\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k117\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k118\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k119\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k120\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k121\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k122\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k123\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k124\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k125\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k126\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k127\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k128\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k129\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k130\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k131\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k132\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k133\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k134\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k135\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k136\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k137\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k138\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k139\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k140\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k141\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k142\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k143\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k144\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k145\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k146\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k147\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k148\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k149\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k150\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k151\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k152\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k153\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k154\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k155\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k156\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k157\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k158\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k159\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k160\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k161\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k162\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k163\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k164\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k165\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k166\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k167\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k168\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k169\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k170\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k171\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k172\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k173\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k174\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k175\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k176\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k177\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k178\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k179\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k180\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k181\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k182\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k183\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k184\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k185\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k186\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k187\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k188\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k189\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k190\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k191\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k192\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k193\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k194\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k195\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k196\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k197\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k198\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k199\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k200\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members A team can have at most 200 members"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"BAD\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k1\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k2\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k3\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k4\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k5\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k6\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k7\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k8\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k9\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k10\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k11\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k12\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k13\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k14\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k15\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k16\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k17\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k18\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k19\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k20\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k21\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k22\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k23\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k24\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k25\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k26\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k27\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k28\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k29\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k30\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k31\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k32\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k33\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k34\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k35\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k36\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k37\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k38\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k39\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k40\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k41\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k42\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k43\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k44\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k45\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k46\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k47\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k48\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k49\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k50\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k51\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k52\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k53\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k54\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k55\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k56\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k57\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k58\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k59\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k60\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k61\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k62\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k63\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k64\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k65\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k66\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k67\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k68\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k69\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k70\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k71\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k72\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k73\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k74\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k75\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k76\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k77\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k78\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k79\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k80\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k81\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k82\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k83\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k84\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k85\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k86\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k87\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k88\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k89\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k90\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k91\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k92\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k93\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k94\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k95\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k96\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k97\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k98\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k99\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k100\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k101\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k102\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k103\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k104\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k105\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k106\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k107\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k108\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k109\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k110\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k111\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k112\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k113\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k114\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k115\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k116\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k117\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k118\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k119\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k120\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k121\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k122\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k123\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k124\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k125\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k126\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k127\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k128\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k129\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k130\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k131\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k132\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k133\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k134\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k135\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k136\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k137\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k138\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k139\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k140\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k141\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k142\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k143\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k144\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k145\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k146\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k147\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k148\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k149\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k150\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k151\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k152\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k153\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k154\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k155\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k156\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k157\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k158\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k159\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k160\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k161\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k162\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k163\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k164\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k165\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k166\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k167\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k168\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k169\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k170\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k171\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k172\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k173\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k174\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k175\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k176\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k177\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k178\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k179\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k180\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k181\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k182\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k183\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k184\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k185\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k186\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k187\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k188\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k189\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k190\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k191\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k192\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k193\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k194\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k195\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k196\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k197\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k198\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k199\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"k200\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.key may only contain lowercase letters, numbers, - and _"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"A\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.key may only contain lowercase letters, numbers, - and _"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.key is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":1,\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.key must be text"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.key is too long"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.key is too long"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" ok_key-1 \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"ok_key-1\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}]}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.name must be text"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.name is too long"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}]}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\" nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \",\"appearance\":{\"color\":\"red\"}}]}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}]}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"},\"title\":3}]}}",
+   "error": "team.members.0.title Invalid input"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"},\"title\":null}]}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}]}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"},\"title\":\"  \"}]}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}]}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"},\"description\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}]}}",
+   "error": "team.members.0.description is too long"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\"}]}}",
+   "error": "team.members.0.appearance Invalid input: expected object, received undefined"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":[]}]}}",
+   "error": "team.members.0.appearance Invalid input: expected object, received array"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"black\"}}]}}",
+   "error": "team.members.0.appearance.color is not supported"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{}}]}}",
+   "error": "team.members.0.appearance.color is not supported"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":null}}]}}",
+   "error": "team.members.0.appearance.color is not supported"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\",\"mascotExpression\":1}}]}}",
+   "error": "team.members.0.appearance.mascotExpression Invalid input"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"white\",\"mascotExpression\":\" focused \",\"mascotSilhouette\":\"hexagon\",\"mascotAvatarSvg\":\"  <?xml version='1.0'?><svg></svg>  \"}}]}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"white\",\"mascotExpression\":\"focused\",\"mascotSilhouette\":\"hexagon\",\"mascotAvatarSvg\":\"<svg></svg>\"}}]}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\",\"mascotAvatarSvg\":\"<svg onload=x></svg>\"}}]}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}]}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\",\"mascotSilhouette\":\"sssssssssssssssssssssssssssssssssssssssss\"}}]}}",
+   "error": "team.members.0.appearance.mascotSilhouette is too long"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"B\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.members.0.name is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"description\":\"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\"}}",
+   "error": "team.description is too long"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"description\":\" Una squadra \"}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}],\"description\":\"Una squadra\"}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}},{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "Duplicate member key: a"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}]}}",
+   "error": "team.room Invalid input: expected object, received undefined"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":{\"kind\":\"x\"}}}}",
+   "error": "team.room.defaultResponder.kind Invalid discriminator value. Expected 'member' | 'everyone' | 'mentions'"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\"}}}",
+   "error": "team.room.defaultResponder Invalid input: expected object, received undefined"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":{\"kind\":\"member\"}}}}",
+   "error": "team.room.defaultResponder.member must be text"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":{}}}}",
+   "error": "team.room.defaultResponder.kind Invalid discriminator value. Expected 'member' | 'everyone' | 'mentions'"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":{\"kind\":5}}}}",
+   "error": "team.room.defaultResponder.kind Invalid discriminator value. Expected 'member' | 'everyone' | 'mentions'"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":\"x\"}}}",
+   "error": "team.room.defaultResponder Invalid input: expected object, received string"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":null}}}",
+   "error": "team.room.defaultResponder Invalid input: expected object, received null"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":{\"kind\":\"member\",\"member\":\" \"}}}}",
+   "error": "team.room.defaultResponder.member is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":{\"kind\":\"member\",\"member\":\"zz\"}}}}",
+   "error": "Unknown default responder: zz"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":{\"kind\":\"member\",\"member\":\" a \"},\"bulletin\":null}}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"bulletin\":\"\",\"defaultResponder\":{\"kind\":\"member\",\"member\":\"a\"}}}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"defaultResponder\":{\"kind\":\"everyone\",\"member\":\"q\"},\"bulletin\":\" hi \"}}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"R\",\"bulletin\":\"hi\",\"defaultResponder\":{\"kind\":\"everyone\"}}}}"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\" a \",\"name\":\"A\",\"appearance\":{\"color\":\"red\"}}],\"room\":{\"name\":\"\",\"defaultResponder\":{\"kind\":\"mentions\"}}}}",
+   "error": "team.room.name is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":1,\"team\":{\"name\":\"T\",\"members\":[],\"room\":\"x\"}}",
+   "error": "team.members A team needs at least one member"
+  },
+  {
+   "input": "{\"format\":\"openmaus.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"appearance\":{\"color\":\"red\"},\"title\":\"  \"}]}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"T\",\"members\":[{\"key\":\"a\",\"name\":\"A\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}]}}"
+  },
+  {
+   "input": "[\"openmaus.team\"]",
+   "error": "Invalid input: expected object, received array"
+  },
+  {
+   "input": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"Trap\",\"members\":[{\"key\":\"mole\",\"name\":\"Mole\",\"appearance\":{\"color\":\"red\",\"extra\":1},\"id\":\"bot-1\",\"autoApprove\":true,\"alwaysAllow\":[\"Bash\"],\"chiefOfStaff\":true,\"composio\":true,\"cwd\":\"/\",\"modelSelection\":{\"instanceId\":\"ghost\"}}],\"room\":{\"name\":\"x\"}}}",
+   "ok": "{\"format\":\"swarme.team\",\"version\":2,\"team\":{\"name\":\"Trap\",\"members\":[{\"key\":\"mole\",\"name\":\"Mole\",\"title\":\"\",\"description\":\"\",\"appearance\":{\"color\":\"red\"}}]}}"
+  }
+ ],
+ "svgs": [
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<?xml version=\"1.0\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<?XML version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "﻿ <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>\n ",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That is not an SVG image"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<script>fetch(\"//x\")</script><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an element we do not allow"
+  },
+  {
+   "input": "<svg onload=\"alert(1)\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an event handler"
+  },
+  {
+   "input": "<svg\u000bonload=\"alert(1)\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an event handler"
+  },
+  {
+   "input": "<svg ONLOAD = \"x\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an event handler"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<foreignObject><b>hi</b></foreignObject><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an element we do not allow"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n< ForeignObject/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an element we do not allow"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"https://evil.com/x.svg\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a reference outside the document"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use HREF = 'data:x' /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a reference outside the document"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(https://evil.com/x.svg)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a reference outside the document"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"URL( '#ok')\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a reference outside the document"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url( \"x\")\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a reference outside the document"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<image src=\"https://evil.com/x.png\" /><metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an external source"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<image datasrc=\"x\" /><metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<image datasrc=\"x\" /><metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<image data-src=\"x\" /><metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an external source"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<image ésrc=\"x\" /><metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an external source"
+  },
+  {
+   "input": "<!DOCTYPE svg [<!ENTITY x \"y\">]><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That is not an SVG image"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<!entity x><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a document definition"
+  },
+  {
+   "input": "<html><body>nope</body></html>",
+   "error": "That is not an SVG image"
+  },
+  {
+   "input": "",
+   "error": "That image is empty"
+  },
+  {
+   "input": "   ",
+   "error": "That image is empty"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"",
+   "error": "That SVG image is incomplete"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<scripté/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an element we do not allow"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<ſcript/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<ſcript/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<scripts/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<scripts/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<script_x/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<script_x/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<SCRIPT/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an element we do not allow"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n< iframe/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an element we do not allow"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<style>@IMPORT 'x';</style><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a stylesheet import"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<a href=\"javascript :x\"/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a script URL"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<a title=\"vbscript:\"/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries a script URL"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<handlers/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<handlers/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<metadata2/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<metadata2/><mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</SVG>",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</SVG>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>\n\t ",
+   "ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>x",
+   "error": "That SVG image is incomplete"
+  },
+  {
+   "input": "<SVG></svg>",
+   "error": "That is not an SVG image"
+  },
+  {
+   "input": "<svg></svg>",
+   "ok": "<svg></svg>"
+  },
+  {
+   "input": "<?xml?>  <svg></svg>",
+   "ok": "<svg></svg>"
+  },
+  {
+   "input": "<svg on=\"x\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg on=\"x\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg xon=1 xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "ok": "<svg xon=1 xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>"
+  },
+  {
+   "input": "<svg\nonclick\n=\n1 xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 135 135\" fill=\"none\">\n<metadata xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:RDF /></metadata>\n<mask id=\"viewboxMask\"><rect width=\"135\" height=\"135\" fill=\"#fff\" /></mask>\n<g mask=\"url(#viewboxMask)\"><use xlink:href=\"#part\" /><path id=\"part\" d=\"M0 0h1v1H0z\" /></g>\n</svg>",
+   "error": "That SVG image carries an event handler"
+  }
+ ],
+ "urls": [
+  {
+   "input": "https://github.com/acme/team",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  },
+  {
+   "input": " https://github.com/acme/team ",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://www.github.com/acme/team/",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://GitHub.com/acme/team",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "HTTPS://github.com/acme/team",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://github.com:443/acme/team",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://github.com:8443/acme/team",
+   "error": "Only public HTTPS GitHub links are supported"
+  },
+  {
+   "input": "https://u@github.com/acme/team",
+   "error": "Only public HTTPS GitHub links are supported"
+  },
+  {
+   "input": "https://u:p@github.com/acme/team",
+   "error": "Only public HTTPS GitHub links are supported"
+  },
+  {
+   "input": "http://github.com/acme/team",
+   "error": "Only public HTTPS GitHub links are supported"
+  },
+  {
+   "input": "http://example.com/team.json",
+   "error": "Only public HTTPS GitHub links are supported"
+  },
+  {
+   "input": "nope",
+   "error": "Enter a valid GitHub URL"
+  },
+  {
+   "input": "",
+   "error": "Enter a valid GitHub URL"
+  },
+  {
+   "input": "github.com/acme/team",
+   "error": "Enter a valid GitHub URL"
+  },
+  {
+   "input": "https://github.com/acme/team/blob/main/presets/seo.mausteam.json",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/presets/seo.mausteam.json\"]"
+  },
+  {
+   "input": "https://github.com/acme/team/raw/v1/a/b.json",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/v1/a/b.json\"]"
+  },
+  {
+   "input": "https://github.com/acme/team/blob/main/run.sh",
+   "error": "The GitHub link must point to a JSON team file"
+  },
+  {
+   "input": "https://github.com/acme/team/tree/main/x.json",
+   "error": "Paste a GitHub repository or JSON file link"
+  },
+  {
+   "input": "https://github.com/acme",
+   "error": "Paste a GitHub repository or JSON file link"
+  },
+  {
+   "input": "https://raw.githubusercontent.com/acme/team/main/team.mausteam.json",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://raw.githubusercontent.com/acme/team/main",
+   "error": "Paste a GitHub repository or JSON file link"
+  },
+  {
+   "input": "https://raw.githubusercontent.com/acme/team/main/x.txt",
+   "error": "The GitHub link must point to a JSON team file"
+  },
+  {
+   "input": "https://gitlab.com/acme/team",
+   "error": "Paste a GitHub repository or JSON file link"
+  },
+  {
+   "input": "https://github.com/acme/../team/x",
+   "ok": "[\"https://raw.githubusercontent.com/team/x/main/team.mausteam.json\",\"https://raw.githubusercontent.com/team/x/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://github.com/a%2F../b",
+   "error": "That GitHub path is not supported"
+  },
+  {
+   "input": "https://github.com/a%20b/c",
+   "error": "That GitHub path is not supported"
+  },
+  {
+   "input": "https://github.com/a b/c",
+   "error": "That GitHub path is not supported"
+  },
+  {
+   "input": "https://github.com/acme/team?x=1#y",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://github.com/acme/te@m",
+   "error": "That GitHub path is not supported"
+  },
+  {
+   "input": "https://github.com/acme/team.git",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team.git/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team.git/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://github.com/./acme/team",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "https://github.com/acme/%2e%2e/team/x",
+   "ok": "[\"https://raw.githubusercontent.com/team/x/main/team.mausteam.json\",\"https://raw.githubusercontent.com/team/x/master/team.mausteam.json\"]"
+  },
+  {
+   "input": "ftp://github.com/a/b",
+   "error": "Only public HTTPS GitHub links are supported"
+  },
+  {
+   "input": "https://github.com//acme//team",
+   "ok": "[\"https://raw.githubusercontent.com/acme/team/main/team.mausteam.json\",\"https://raw.githubusercontent.com/acme/team/master/team.mausteam.json\"]"
+  }
+ ],
+ "catalogs": [
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "ok": "{\"format\":\"swarme.catalog\",\"version\":1,\"repositoryUrl\":\"https://github.com/milind-soni/swarmebot-teams\",\"teams\":[{\"slug\":\"engineering\",\"name\":\"Engineering Team\",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]}}]}"
+  },
+  {
+   "input": "null",
+   "error": "The team library catalog is not supported"
+  },
+  {
+   "input": "[]",
+   "error": "The team library catalog is not supported"
+  },
+  {
+   "input": "{\"format\":\"openmaus.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "ok": "{\"format\":\"swarme.catalog\",\"version\":1,\"repositoryUrl\":\"https://github.com/milind-soni/swarmebot-teams\",\"teams\":[{\"slug\":\"engineering\",\"name\":\"Engineering Team\",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]}}]}"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":2,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "The team library catalog is not supported"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":{}}",
+   "error": "The team library catalog is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}",
+   "error": "The team library catalog is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[5]}",
+   "error": "teams[0] is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"Eng\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].slug is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].slug is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true},{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[1].slug is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"../private.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].manifest is not a safe catalog path"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering//x.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].manifest is not a safe catalog path"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/other/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].manifest is not a safe catalog path"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/readme.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].readme is not a safe catalog path"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":0,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].members is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1.5,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].members is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":201,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].members is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":\"1\",\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].members is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":null,\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].skills is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].skills[0] is not a safe catalog path"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":null,\"extra\":true}]}",
+   "ok": "{\"format\":\"swarme.catalog\",\"version\":1,\"repositoryUrl\":\"https://github.com/milind-soni/swarmebot-teams\",\"teams\":[{\"slug\":\"engineering\",\"name\":\"Engineering Team\",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[]}}]}"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":null},\"extra\":true}]}",
+   "ok": "{\"format\":\"swarme.catalog\",\"version\":1,\"repositoryUrl\":\"https://github.com/milind-soni/swarmebot-teams\",\"teams\":[{\"slug\":\"engineering\",\"name\":\"Engineering Team\",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[]}}]}"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":\"x\"},\"extra\":true}]}",
+   "error": "teams[0].requires.apps is invalid"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\" \"]},\"extra\":true}]}",
+   "error": "teams[0].requires.apps[0] is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].name is too long"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":5,\"category\":\"Eng\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].summary is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"\",\"manifest\":\"teams/engineering/team.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].category is required"
+  },
+  {
+   "input": "{\"format\":\"swarme.catalog\",\"version\":1,\"teams\":[{\"slug\":\"engineering\",\"name\":\" Engineering Team \",\"summary\":\"Plan.\",\"category\":\"Eng\",\"manifest\":\"teams/engineering/a\\\\b.mausteam.json\",\"readme\":\"teams/engineering/README.md\",\"members\":1,\"skills\":[\"teams/engineering/skills/release/SKILL.md\"],\"requires\":{\"apps\":[\"GitHub\"]},\"extra\":true}]}",
+   "error": "teams[0].manifest is not a safe catalog path"
+  }
+ ]
+}

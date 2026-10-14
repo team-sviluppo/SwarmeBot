@@ -1,7 +1,0 @@
-Welcome to SwarmeMobile 1.0.
-
-• Pair securely with your SwarmeBot computer
-• Chat with bots and rooms
-• Answer approvals and questions
-• Search, manage tasks, edit versions, react, and share transcripts
-• Follow live work and reconnect without losing events
