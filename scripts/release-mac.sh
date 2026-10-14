@@ -3,7 +3,8 @@
 # distribution — the native app's version of SwarmeBot/scripts/package-mac-dmg.sh,
 # with the same Developer ID and notarization credentials.
 #
-#   scripts/release-mac.sh [--version 0.3.0] [--arch arm64|x64|arm64,x64] [--skip-notarize]
+#   scripts/release-mac.sh [--version 0.3.0] [--arch arm64|x64|arm64,x64]
+#                          [--skip-notarize] [--no-publish]
 #
 # Credentials, read from .env.mac-release.local in this repo or, failing
 # that, in the Electron checkout (../SwarmeBot/.env.mac-release.local):
@@ -12,18 +13,26 @@
 #   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarization
 #   NOTARY_PROFILE      a `xcrun notarytool store-credentials` profile, used
 #                       when the Apple ID trio is not set (default AC_PASSWORD)
+#   SPARKLE_PUBLIC_KEY  EdDSA public key from Sparkle's generate_keys
+#   SPARKLE_PRIVATE_KEY the matching private key (base64). Omit it to use the
+#                       key generate_keys stored in the login keychain.
 #
 # Other environment: VERSION, BUILD_NUMBER (default: the git commit count),
-# MAC_ARCHES (default arm64,x64), SWARMEBOT_REPO (default ../SwarmeBot).
+# MAC_ARCHES (default arm64,x64), SWARMEBOT_REPO (default ../SwarmeBot),
+# RELEASES_REPO (default team-sviluppo/swarmebot-releases).
 #
 # Output: release/SwarmeBot-<version>-arm64.dmg and -x64.dmg, plus the stable
 # names release/SwarmeBot.dmg (Apple silicon) and release/SwarmeBot-intel.dmg.
+# Unless --no-publish, also a zip per arch and appcast.xml, uploaded as a
+# GitHub release so Sparkle can install the update.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="${SWARMEBOT_REPO:-$ROOT/../SwarmeBot}"
 OUT="$ROOT/release"
+RELEASES_REPO="${RELEASES_REPO:-team-sviluppo/swarmebot-releases}"
 SKIP_NOTARIZE=0
+PUBLISH=1
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -32,7 +41,8 @@ while [[ $# -gt 0 ]]; do
     --version) VERSION="$2"; shift ;;
     --arch) MAC_ARCHES="$2"; shift ;;
     --skip-notarize) SKIP_NOTARIZE=1 ;;
-    --help|-h) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --no-publish) PUBLISH=0 ;;
+    --help|-h) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option $1 (try --help)" ;;
   esac
   shift
@@ -95,9 +105,35 @@ BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "VERSION must look like 1.2.3 (got $VERSION)"
 echo "→ version $VERSION ($BUILD_NUMBER)"
 
+if [[ $PUBLISH == 1 && -z "${SPARKLE_PUBLIC_KEY:-}" ]]; then
+  die "set SPARKLE_PUBLIC_KEY (from Sparkle generate_keys) or pass --no-publish"
+fi
+if [[ $PUBLISH == 1 ]]; then
+  command -v gh >/dev/null || die "gh is required to publish (or pass --no-publish)"
+  gh auth status >/dev/null 2>&1 || die "gh is not logged in to a account that can write $RELEASES_REPO"
+fi
+
+# Sparkle's sign_update is not inside the framework SwiftPM fetches.
+ensure_sign_update() {
+  if command -v sign_update >/dev/null 2>&1; then SIGN_UPDATE="$(command -v sign_update)"; return; fi
+  local dir="$ROOT/.build/sparkle-tools" ver="${SPARKLE_TOOLS_VERSION:-2.6.4}"
+  if [[ ! -x "$dir/sign_update" ]]; then
+    mkdir -p "$dir"
+    echo "→ downloading Sparkle ${ver} sign_update"
+    curl -fsSL -o "$dir/Sparkle.tar.xz" \
+      "https://github.com/sparkle-project/Sparkle/releases/download/${ver}/Sparkle-${ver}.tar.xz"
+    tar -xJf "$dir/Sparkle.tar.xz" -C "$dir" bin/sign_update
+    mv -f "$dir/bin/sign_update" "$dir/sign_update"
+    chmod +x "$dir/sign_update"
+    rm -rf "$dir/bin" "$dir/Sparkle.tar.xz"
+  fi
+  SIGN_UPDATE="$dir/sign_update"
+}
+
 mkdir -p "$OUT"
 IFS=',' read -r -a ARCHES <<<"${MAC_ARCHES:-arm64,x64}"
 BUILT=()
+ZIPS=()
 for arch in "${ARCHES[@]}"; do
   arch="$(echo "$arch" | tr -d '[:space:]')"
   case "$arch" in
@@ -108,6 +144,7 @@ for arch in "${ARCHES[@]}"; do
   echo
   echo "=== $arch ==="
   SIGN_IDENTITY="$MAC_SIGN_IDENTITY" VERSION="$VERSION" BUILD_NUMBER="$BUILD_NUMBER" \
+    SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}" \
     "$ROOT/scripts/bundle-app.sh" --arch "$swift_arch" --dmg
 
   # bundle-app.sh signs with the Hardened Runtime; refuse anything else
@@ -135,10 +172,91 @@ for arch in "${ARCHES[@]}"; do
     arm64) cp -f "$dmg" "$OUT/SwarmeBot.dmg" ;;
     x64) cp -f "$dmg" "$OUT/SwarmeBot-intel.dmg" ;;
   esac
+
+  # Sparkle replaces the .app from a zip. The DMG stays the first-install download.
+  if [[ $PUBLISH == 1 ]]; then
+    zip="$OUT/SwarmeBot-$VERSION-$arch.zip"
+    rm -f "$zip"
+    ditto -c -k --keepParent "$ROOT/build/SwarmeBot.app" "$zip"
+    if [[ $SKIP_NOTARIZE == 0 ]]; then
+      echo "→ notarizing $(basename "$zip")…"
+      result="$(xcrun notarytool submit "$zip" "${NOTARY_ARGS[@]}" --wait 2>&1)" || true
+      echo "$result"
+      if ! grep -q "status: Accepted" <<<"$result"; then
+        id="$(sed -nE 's/^ *id: ([0-9a-f-]+).*/\1/p' <<<"$result" | head -1)"
+        [[ -n "$id" ]] && xcrun notarytool log "$id" "${NOTARY_ARGS[@]}" || true
+        die "notarization of $(basename "$zip") failed"
+      fi
+    fi
+    ZIPS+=("$zip")
+  fi
 done
+
+if [[ $PUBLISH == 1 ]]; then
+  ensure_sign_update
+  keyfile=""
+  if [[ -n "${SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then
+    keyfile="$SPARKLE_PRIVATE_KEY_FILE"
+  elif [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
+    keyfile="$(mktemp)"
+    printf '%s' "$SPARKLE_PRIVATE_KEY" > "$keyfile"
+    chmod 600 "$keyfile"
+  fi
+  enclosures=""
+  for zip in "${ZIPS[@]}"; do
+    base="$(basename "$zip")"
+    case "$base" in
+      *-arm64.zip) sparkle_arch=arm64 ;;
+      *-x64.zip) sparkle_arch=x86_64 ;;
+      *) die "cannot tell the architecture of $base" ;;
+    esac
+    echo "→ signing $base"
+    if [[ -n "$keyfile" ]]; then
+      sig="$("$SIGN_UPDATE" --ed-key-file "$keyfile" "$zip")"
+    else
+      sig="$("$SIGN_UPDATE" "$zip")"
+    fi
+    length="$(stat -f %z "$zip")"
+    url="https://github.com/${RELEASES_REPO}/releases/download/v${VERSION}/${base}"
+    enclosures+="      <enclosure url=\"${url}\" sparkle:edSignature=\"$(sed -nE 's/.*edSignature="([^"]+)".*/\1/p' <<<"$sig")\" length=\"${length}\" type=\"application/octet-stream\" sparkle:os=\"macos\" sparkle:arch=\"${sparkle_arch}\"/>"$'\n'
+  done
+  [[ -n "$keyfile" && -n "${SPARKLE_PRIVATE_KEY:-}" && -z "${SPARKLE_PRIVATE_KEY_FILE:-}" ]] && rm -f "$keyfile"
+
+  pubdate="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+  appcast="$OUT/appcast.xml"
+  cat > "$appcast" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>SwarmeBot</title>
+    <item>
+      <title>Version ${VERSION}</title>
+      <pubDate>${pubdate}</pubDate>
+      <sparkle:version>${BUILD_NUMBER}</sparkle:version>
+      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+${enclosures}    </item>
+  </channel>
+</rss>
+EOF
+  grep -q 'sparkle:edSignature="[^"]\+"' "$appcast" || die "sign_update did not produce an EdDSA signature"
+
+  tag="v${VERSION}"
+  echo "→ publishing $tag on $RELEASES_REPO"
+  if gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+    gh release upload "$tag" --repo "$RELEASES_REPO" --clobber \
+      "${BUILT[@]}" "${ZIPS[@]}" "$appcast"
+  else
+    gh release create "$tag" --repo "$RELEASES_REPO" \
+      --title "SwarmeBot ${VERSION}" \
+      --notes "SwarmeBot ${VERSION} (${BUILD_NUMBER}) per macOS. Apple silicon: SwarmeBot-${VERSION}-arm64.dmg. Intel: SwarmeBot-${VERSION}-x64.dmg." \
+      "${BUILT[@]}" "${ZIPS[@]}" "$appcast"
+  fi
+fi
 
 echo
 echo "Done:"
-ls -lh "${BUILT[@]}"
+ls -lh "${BUILT[@]}" ${ZIPS[@]+"${ZIPS[@]}"}
 [[ $SKIP_NOTARIZE == 1 ]] && echo "Not notarized: other Macs will block these DMGs."
 echo "Apple silicon → release/SwarmeBot.dmg · Intel → release/SwarmeBot-intel.dmg"
+[[ $PUBLISH == 1 ]] && echo "Appcast → https://github.com/${RELEASES_REPO}/releases/latest/download/appcast.xml"
