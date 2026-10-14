@@ -37,6 +37,33 @@ SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=… SPARKLE_PUBLIC_
   scripts/bundle-app.sh --with-harness --arch arm64 --dmg --notarize
 ```
 
+## Release e aggiornamenti
+
+`scripts/release-mac.sh` firma, notarizza e, salvo `--no-publish`, carica DMG, zip e `appcast.xml` sulla GitHub Release `vX.Y.Z` di `team-sviluppo/swarmebot-releases`. L'app pacchettizzata (con `SUPublicEDKey`) controlla quell'appcast con Sparkle e installa lo zip firmato EdDSA.
+
+Le chiavi si generano una volta sola, sul Mac che pubblica. La pubblica finisce in `.env.mac-release.local` (già in `.gitignore`); la privata resta nel Portachiavi.
+
+```sh
+curl -fsSL -o /tmp/Sparkle.tar.xz \
+  https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
+mkdir -p /tmp/sparkle && tar -xJf /tmp/Sparkle.tar.xz -C /tmp/sparkle
+/tmp/sparkle/bin/generate_keys
+```
+
+`generate_keys` stampa `SUPublicEDKey`. Copiala:
+
+```
+SPARKLE_PUBLIC_KEY=<stringa stampata>
+```
+
+in `.env.mac-release.local`, accanto a `MAC_SIGN_IDENTITY` e alle credenziali di notarizzazione. Poi:
+
+```sh
+scripts/release-mac.sh --version 0.3.0
+```
+
+`gh` deve essere autenticato su un account che può scrivere il repo delle release. Senza `SPARKLE_PRIVATE_KEY`, `sign_update` usa la chiave che `generate_keys` ha messo nel Portachiavi.
+
 Il `node` di Homebrew non è incorporabile (linka libnode/libuv/abseil da `/opt/homebrew`),
 per questo lo script scarica la build ufficiale. 
 
