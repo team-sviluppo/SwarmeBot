@@ -21,6 +21,22 @@ public struct MCPConnector: Decodable, Hashable, Identifiable, Sendable {
     public var lastCheck: MCPConnectorCheck?
 
     public var isEnabled: Bool { enabled ?? true }
+
+    /// Whether the tool filter lets a tool through to bots.
+    public func allows(tool name: String) -> Bool {
+        switch tools?.mode {
+        case "allow": return tools?.names.contains(name) ?? false
+        case "deny": return !(tools?.names.contains(name) ?? false)
+        default: return true
+        }
+    }
+
+    /// Roughly what this connector's tool definitions cost a prompt, from
+    /// the last check (characters / 4). Nil before any successful check.
+    public var estimatedTokens: Int? {
+        guard let listed = lastCheck?.tools, !listed.isEmpty else { return nil }
+        return listed.filter { allows(tool: $0.name) }.reduce(0) { $0 + ($1.chars ?? 0) } / 4
+    }
 }
 
 /// An env or header value: plain text, or a secret that is (or is not) set.

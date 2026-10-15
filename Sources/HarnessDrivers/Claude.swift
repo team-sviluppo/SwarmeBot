@@ -205,6 +205,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         capabilities.agentsMcp = true
         capabilities.computerMcp = true
         capabilities.localComputerMcp = config.permissionMode != .bypassPermissions
+        capabilities.connectors = .mcp
         capabilities.images = true
         return capabilities
     }
@@ -325,6 +326,11 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         if let agents = turn.agents {
             mcpServers["agents"] = agents.json
             allowed.append("mcp__agents")
+        }
+        // connectors run without asking: the user chose them for this bot (plan D7)
+        for connector in turn.connectors {
+            mcpServers[connector.name] = connector.server.json
+            allowed.append("mcp__\(connector.name)")
         }
         var broker: PermissionBroker?
         if config.permissionMode != .bypassPermissions {

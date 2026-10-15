@@ -46,6 +46,8 @@ public final class Harness {
     // connectors: MCP servers the user hands to bots (MCPConnectors.swift)
     public private(set) lazy var mcpConnectors = MCPConnectors(paths: paths)
     public private(set) lazy var mcpPool = MCPConnectorPool(paths: paths, environment: environment)
+    /// Turn grant token → what its connector proxies may reach (ConnectorTurns.swift).
+    var connectorGrants: [String: ConnectorGrant] = [:]
     public private(set) lazy var box = BoxComputer(environment: environment) { [weak self] in self?.config.secret("box", "token") }
     var screenPollers: [String: ScreenPoller] = [:]
 
@@ -135,6 +137,7 @@ public final class Harness {
             case .requestResolved: self.watchdog.setWaitingOnHuman(event.threadId, false)
             case .turnCompleted:
                 self.watchdog.settle(event.threadId)
+                self.revokeConnectorGrants(threadId: event.threadId)
                 self.localVM.lease.release(threadId: event.threadId)
                 if self.localVM.activeThread == event.threadId { self.localVM.activeThread = nil }
             default:
@@ -630,6 +633,8 @@ public final class Harness {
                     : agents != nil ? "You can work with the user's other bots through the agents tools — list_bots shows who's available, ask_bot sends one of them a message and returns their reply." : ""
                 let tags = tagged.isEmpty ? "" : " The user tagged \(tagged.map { "@\($0["name"]?.string ?? "") (ask_bot bot_id \($0["id"]?.string ?? ""))" }.joined(separator: " and ")) in their message — bring them in with ask_bot and fold their reply into your answer."
                 let computer = try await self.prepareComputer(bot: bot, instance: instance, threadId: threadId, runOn: options.runOn)
+                let connectors = self.mountConnectors(bot: bot, task: self.store.taskByThread(botId, threadId), threadId: threadId,
+                                                      mount: instance.adapter.capabilities.connectors)
                 let webhook = options.automationSource == "webhook" ? Self.webhookBoundary : ""
                 // the library goes before the per-turn tags, so the text a server caches stays put
                 let system = (persona + computer.prompt + (coordination.isEmpty ? "" : " \(coordination)") + (library.isEmpty ? "" : "\n\n\(library)\n\n") + webhook + tags).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -641,6 +646,7 @@ public final class Harness {
                 input.cloudBoxId = computer.boxId
                 input.computer = computer.server
                 input.computerScope = computer.scope
+                input.connectors = connectors
                 self.watchdog.watch(threadId, botId: botId)
                 _ = try await instance.adapter.sendTurn(input)
                 if rewound { self.store.patchBot(botId, ["rewound": false, "resumeCursors": [:]]) }

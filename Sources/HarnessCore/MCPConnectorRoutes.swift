@@ -77,6 +77,7 @@ enum MCPConnectorRoutes {
         case "DELETE":
             _ = try registry.delete(id)
             harness.mcpPool.invalidate(id)
+            harness.store.forgetConnector(id)
             changed(harness)
             return respond(200, ["ok": true])
         default:

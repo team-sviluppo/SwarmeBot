@@ -528,6 +528,44 @@ public final class Store {
         updateTask(botId, threadId) { $0["libraryOff"] = off.isEmpty ? nil : .strings(off) }
     }
 
+    /// Per-conversation connector switches: only the choices that differ
+    /// from the bot's defaults (docs/plans/2026-10-15-connettori-mcp.md §2.3).
+    @discardableResult
+    public func setTaskConnectors(_ botId: String, _ threadId: String, _ overrides: [String: Bool]) -> JSONObject? {
+        updateTask(botId, threadId) { task in
+            var map = JSONObject()
+            for (id, on) in overrides.sorted(by: { $0.key < $1.key }) { map[id] = .bool(on) }
+            // explicit Optional: a bare nil here would be JSON null, not a removal
+            task["connectors"] = map.isEmpty ? Optional<JSON>.none : .object(map)
+        }
+    }
+
+    /// A deleted connector leaves no trace on bots or their conversations.
+    public func forgetConnector(_ id: String) {
+        var changed: [String] = []
+        for index in bots.indices {
+            var touched = false
+            if let list = bots[index]["connectors"]?.array, list.contains(where: { $0["id"]?.string == id }) {
+                bots[index]["connectors"] = .array(list.filter { $0["id"]?.string != id })
+                touched = true
+            }
+            if var tasks = bots[index]["tasks"]?.array {
+                for at in tasks.indices {
+                    guard var task = tasks[at].object, var map = task["connectors"]?.object, map[id] != nil else { continue }
+                    map = map.removing(id)
+                    task["connectors"] = map.isEmpty ? Optional<JSON>.none : .object(map)
+                    tasks[at] = .object(task)
+                    touched = true
+                }
+                if touched { bots[index]["tasks"] = .array(tasks) }
+            }
+            if touched, let botId = bots[index]["id"]?.string { changed.append(botId) }
+        }
+        guard !changed.isEmpty else { return }
+        saveBots()
+        for botId in changed { emit(.bot(botId: botId)) }
+    }
+
     public func titleTaskFromFirstMessage(_ botId: String, text: String, threadId: String) {
         guard taskByThread(botId, threadId)?["title"]?.string == untitledTask else { return }
         _ = updateTask(botId, threadId) { $0["title"] = .string(titleFromMessage(text)) }

@@ -1,4 +1,5 @@
 @testable import HarnessCore
+@testable import HarnessDrivers
 import XCTest
 
 /// Connectors, phase 1 (docs/plans/2026-10-15-connettori-mcp.md): the
@@ -280,5 +281,80 @@ final class MCPConnectorsTests: XCTestCase {
         (status, _) = try await call("GET", "/api/mcp-connectors/altro")
         XCTAssertEqual(status, 404)
         harness.mcpPool.stopAll()
+    }
+    // MARK: Phase 2: turns
+
+    func testActiveConnectorsMatrix() throws {
+        let registry = MCPConnectors(paths: try temporaryPaths())
+        try registry.create(stdioBody("uno"))
+        try registry.create(stdioBody("due"))
+        var off = stdioBody("spento")
+        off["enabled"] = false
+        try registry.create(off)
+        let bot: JSONObject = ["id": "b", "connectors": [
+            ["id": "uno", "defaultOn": true], ["id": "due", "defaultOn": false], ["id": "spento", "defaultOn": true],
+            ["id": "sparito", "defaultOn": true], ["id": "uno", "defaultOn": false],
+        ]]
+        func ids(_ task: JSONObject?) -> [String] { Harness.activeConnectors(bot: bot, task: task, registry: registry).map(\.id) }
+        XCTAssertEqual(ids(nil), ["uno"], "defaults; disabled, deleted and duplicate entries drop out")
+        XCTAssertEqual(ids(["connectors": ["due": true]]), ["uno", "due"])
+        XCTAssertEqual(ids(["connectors": ["uno": false, "due": true]]), ["due"])
+        XCTAssertEqual(ids(["connectors": ["spento": true]]), ["uno"], "a switch cannot revive a disabled connector")
+        XCTAssertEqual(Harness.activeConnectors(bot: ["id": "b"], task: nil, registry: registry).count, 0)
+    }
+
+    func testGrantsGateTheInternalRoutesAndEndWithTheTurn() async throws {
+        let paths = try temporaryPaths()
+        let harness = try Harness(paths: paths, environment: ProcessInfo.processInfo.environment, drivers: [])
+        defer { harness.mcpPool.stopAll() }
+        try harness.mcpConnectors.create(stdioBody("fake"))
+        try harness.mcpConnectors.create(stdioBody("altro"))
+        let bot: JSONObject = ["id": "b", "connectors": [["id": "fake", "defaultOn": true], ["id": "altro", "defaultOn": false]]]
+
+        XCTAssertTrue(harness.mountConnectors(bot: bot, task: nil, threadId: "t", mount: .none).isEmpty, "an engine without connectors mounts nothing")
+        let mounted = harness.mountConnectors(bot: bot, task: nil, threadId: "t", mount: .mcp)
+        XCTAssertEqual(mounted.map(\.name), ["fake"])
+        XCTAssertEqual(mounted[0].server.args, ["mcp-connector", "fake"])
+        let grant = try XCTUnwrap(mounted[0].server.env["OMB_CONNECTOR_GRANT"]?.string)
+        XCTAssertNil(mounted[0].server.env["FAKE_MCP_SECRET"], "secrets stay in the engine")
+
+        func call(_ path: String, grant: String, body: JSON? = nil) async -> (Int, JSON) {
+            var headers = ["authorization": "Bearer \(harness.commsToken)", ConnectorGrant.header: grant]
+            if body != nil { headers["content-type"] = "application/json" }
+            let request = HTTPRequest(method: body == nil ? "GET" : "POST", path: path, query: [:], headers: headers, body: body?.data ?? Data())
+            let response = await harness.internalRoute(request)!
+            return (response.status, (try? JSON.parse(response.body)) ?? .null)
+        }
+        var (status, body) = await call("/api/internal/mcp-connectors/fake/tools", grant: grant)
+        XCTAssertEqual(status, 200)
+        XCTAssertEqual(body["tools"]?.array?.count, 7)
+        (status, body) = await call("/api/internal/mcp-connectors/fake/call", grant: grant, body: ["name": "echo", "arguments": ["text": "hi"]])
+        XCTAssertEqual(body["content"]?.array?.first?["text"]?.string, "hi (secret len 12)")
+        (status, body) = await call("/api/internal/mcp-connectors/fake/call", grant: grant, body: ["name": "nope", "arguments": [:]])
+        XCTAssertEqual(status, 200)
+        XCTAssertEqual(body["isError"], true, "a failing tool is a tool error, not a broken protocol")
+
+        (status, _) = await call("/api/internal/mcp-connectors/altro/tools", grant: grant)
+        XCTAssertEqual(status, 403, "not given to this turn")
+        (status, _) = await call("/api/internal/mcp-connectors/fake/tools", grant: "guess")
+        XCTAssertEqual(status, 403)
+
+        harness.revokeConnectorGrants(threadId: "t")
+        (status, _) = await call("/api/internal/mcp-connectors/fake/tools", grant: grant)
+        XCTAssertEqual(status, 403, "a settled turn's grant is gone")
+    }
+
+    func testACPRecognizesOnlyThisTurnsConnectorTools() {
+        func check(_ title: String, _ names: [String] = ["github"]) -> Bool {
+            ACPTurn.isConnectorTool(["title": .string(title)], names: names)
+        }
+        XCTAssertTrue(check("mcp__github__create_issue"))
+        XCTAssertTrue(check("github__create_issue"))
+        XCTAssertTrue(check("github/create_issue"))
+        XCTAssertTrue(check("create_issue (github MCP Server)"))
+        XCTAssertFalse(check("mcp__githubx__create_issue"))
+        XCTAssertFalse(check("rm -rf /tmp/x"))
+        XCTAssertFalse(check("mcp__github__create_issue", []))
+        XCTAssertFalse(check("mcp__agents__ask_bot"))
     }
 }

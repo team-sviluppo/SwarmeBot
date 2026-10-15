@@ -1,6 +1,6 @@
 # Connettori (server MCP) — piano di implementazione
 
-Stato: fase 1 fatta (branch `feat/mcp-connectors`), vedi §12. Data: 2026-10-15.
+Stato: fasi 1 e 2 fatte (branch `feat/mcp-connectors`), vedi §12. Data: 2026-10-15.
 Motore: solo Swift (`HarnessCore` / `HarnessDrivers`); il motore Node non riceve la funzione.
 
 ## 0. Obiettivo e decisioni prese
@@ -438,3 +438,42 @@ cambiano. Per il resto si verifica con:
   `https://mcp.deepwiki.com/mcp` → 3 strumenti in 2 s. I segreti di prova compaiono solo in
   `mcp-connector-secrets.json`; nessun processo `npx` rimasto dopo la prova.
 - **Non verificato**: la scheda Impostazioni › Connettori è compilata ma non provata a mano.
+
+### Fase 2 — fatta (2026-10-15)
+
+- Motore:
+  - `ConnectorTurns.swift`: insieme effettivo (`Harness.activeConnectors`); grant per turno (token
+    casuale nell'env dei proxy, revocato al `turn.completed` del thread, scartato dopo 24 h se il turno
+    non si è mai chiuso); avvio anticipato dei server mentre la CLI parte; rotte interne
+    `/api/internal/mcp-connectors/<id>/tools|call` (403 senza grant valido per quel connettore; un
+    errore del server diventa `isError` per il modello, non un errore di protocollo);
+  - `ConnectorProxy.swift` (`swarme-harness mcp-connector <id>`);
+  - `startTurn` e i turni dei canali passano `SendTurnInput.connectors`; nei canali valgono i default
+    di ogni bot (D8);
+  - capability `connectors` in `/api/instances`: `mcp` su Claude, Codex e ACP, `none` sugli altri;
+  - Claude: `mcp__<id>` in `--allowedTools`. Codex: `-c mcp_servers.<id>.*`, con
+    `default_tools_approval_mode="auto"` già presente. ACP: `mcpServers`, più il permesso automatico
+    quando `toolCall.title` (o `_meta.toolName`) nomina un connettore **di quel turno**
+    (`mcp__<id>__`, `<id>__`, `<id>/`, `(<id> MCP Server)`);
+  - `PATCH /api/bots/:id` accetta `connectors` (id esistenti, senza doppioni, massimo 20);
+    `PATCH /api/bots/:id/tasks/:tid` accetta `connectors` come mappa id → bool;
+  - `DELETE` di un connettore lo toglie da tutti i bot e i task (`Store.forgetConnector`).
+- App: `Bot.connectors`, `BotTask.connectors`, `InstanceCapabilities.connectors`; card «Connettori» in
+  Dettagli (usa / acceso nelle nuove chat, stima dei token); `ConnectorsChip` accanto alla libreria
+  (interruttori della chat, «Ripristina predefiniti», token degli attivi). Finché l'elenco dei motori
+  non è arrivato, la chip non afferma che il motore non supporta i connettori.
+- Test:
+  - `MCPConnectorsTests` sale a 12: matrice dell'insieme effettivo, grant (403, revoca),
+    riconoscimento dei tool su ACP; `swift test` verde (100 + 112 + 12);
+  - `parity/connectors_e2e.py`, sul motore vero con i CLI finti estesi (`CONNETTORE <id> <testo>` in
+    `fake_claude.py`, `fake_codex.py`, `fake_acp.py`): Claude, Codex, ACP gemini e kimi chiamano `echo`
+    attraverso proxy e pool; il segreto arriva al server; gli interruttori della chat cambiano il server
+    montato; un connettore disattivato non viene mai montato; l'eliminazione pulisce bot e task.
+- Regressione: `parity/swift-vs-ref.sh`, 27 scenari su 27 identici a `main`.
+- UI vista dal vivo (bundle di sviluppo collegato a un motore temporaneo): la chip mostra `1/2` con un
+  connettore acceso e uno spento di default. **Non viste**: il popover della chip e la card in Dettagli
+  (lo snapshot fotografa solo la finestra com'è).
+- **Rimandato**: esportare e importare i team con i connettori (§8). Oggi l'export dei team non porta
+  `connectors`, quindi un team importato parte senza connettori, che è il comportamento sicuro.
+- **Da verificare con gli agenti ACP reali**: il titolo con cui ciascun agente chiede il permesso per
+  un tool MCP (§11.2). Se non viene riconosciuto, compare la normale card di approvazione.

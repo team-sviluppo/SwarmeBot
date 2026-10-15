@@ -103,6 +103,7 @@ struct ComposerView: View {
                     .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
                     .help(missing ? "La cartella \(folder) non esiste più: clicca per sceglierne un'altra" : "Cartella di lavoro: \(folder)")
                     LibraryChip(bot: bot)
+                    ConnectorsChip(bot: bot)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 6)

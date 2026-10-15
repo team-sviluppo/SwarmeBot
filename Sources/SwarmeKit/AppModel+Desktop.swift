@@ -387,6 +387,38 @@ extension AppModel {
         }
     }
 
+    public func setConnectors(_ bot: Bot, _ connectors: [BotConnector]) async {
+        await perform { try await $0.setBotConnectors(botId: bot.id, connectors) }
+    }
+
+    /// Whether a connector is on in the chat that is open: the chat's own
+    /// switch, else the bot's default.
+    public func connectorIsOn(_ bot: Bot, _ id: String) -> Bool {
+        let task = bot.tasks?.first { $0.threadId == bot.threadId }
+        return task?.connectors?[id] ?? bot.connectors?.first { $0.id == id }?.defaultOn ?? false
+    }
+
+    /// Flip a connector for the chat that is open; a switch back to the
+    /// default is dropped, so the chat follows the bot again.
+    public func setConnector(_ bot: Bot, _ id: String, on: Bool) async {
+        var overrides = bot.tasks?.first { $0.threadId == bot.threadId }?.connectors ?? [:]
+        let fallback = bot.connectors?.first { $0.id == id }?.defaultOn ?? false
+        overrides[id] = on == fallback ? nil : on
+        await perform { try await $0.setTaskConnectors(botId: bot.id, threadId: bot.threadId, overrides) }
+    }
+
+    /// Back to the bot's defaults for the chat that is open.
+    public func resetConnectors(_ bot: Bot) async {
+        await perform { try await $0.setTaskConnectors(botId: bot.id, threadId: bot.threadId, [:]) }
+    }
+
+    /// What the bot's engine can do with connectors: "none", "mcp" or "inline";
+    /// nil while the engines are not known yet, so nothing is claimed early.
+    public func connectorMount(_ bot: Bot) -> String? {
+        guard let instance = instances.first(where: { $0.instanceId == bot.modelSelection.instanceId }) else { return nil }
+        return instance.capabilities?.connectors ?? "none"
+    }
+
     private func upsert(_ connector: MCPConnector) {
         if let index = mcpConnectors.firstIndex(where: { $0.id == connector.id }) {
             mcpConnectors[index] = connector

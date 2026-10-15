@@ -162,6 +162,19 @@ public struct BotTask: Codable, Hashable, Sendable {
     public var cwd: String?
     /// Library documents switched off in this chat.
     public var libraryOff: [String]?
+    /// Connector switches that differ from the bot's defaults, id → on.
+    public var connectors: [String: Bool]?
+}
+
+/// A connector handed to a bot, and whether new chats start with it on.
+public struct BotConnector: Codable, Hashable, Sendable {
+    public var id: String
+    public var defaultOn: Bool
+
+    public init(id: String, defaultOn: Bool) {
+        self.id = id
+        self.defaultOn = defaultOn
+    }
 }
 
 public struct Bot: Codable, Hashable, Identifiable, Sendable {
@@ -181,6 +194,8 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     public var chiefOfStaff: Bool?
     public var autoApprove: Bool?
     public var alwaysAllow: [String]?
+    /// Desktop: the connectors this bot may use.
+    public var connectors: [BotConnector]?
     public var computer: String?
     /// Which cloud computer backs `computer == "cloud"`. Absent (older
     /// harnesses included) means the hosted Box; "vps" means the user's own
@@ -382,6 +397,8 @@ public struct InstanceCapabilities: Codable, Hashable, Sendable {
     public var computerMcp: Bool?
     public var agentsMcp: Bool?
     public var localComputerMcp: Bool?
+    /// "none", "mcp" or "inline": whether the engine can take connectors.
+    public var connectors: String?
     /// Ascending. Absent means the driver cannot set effort at all.
     public var effortLevels: [String]?
 }

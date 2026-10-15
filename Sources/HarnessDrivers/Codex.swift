@@ -300,6 +300,7 @@ final class CodexInstance: ProviderInstance, ProviderAdapter {
         capabilities.agentsMcp = true
         capabilities.computerMcp = true
         capabilities.localComputerMcp = !fullAuto
+        capabilities.connectors = .mcp
         capabilities.images = true
         return capabilities
     }
@@ -580,6 +581,7 @@ final class CodexTurn {
         var args = ["app-server"] + CodexCatalog.localProviderArgs(&env, model: turn.model)
         if let agents = turn.agents { args += Self.mount(&env, name: "agents", agents) }
         if let computer = turn.computer { args += Self.mount(&env, name: "computer", computer) }
+        for connector in turn.connectors { args += Self.mount(&env, name: connector.name, connector.server) }
         let cwd = turn.cwd ?? NSHomeDirectory()
         do {
             process = try CLIProcess(cli: instance.cli, args: args, cwd: cwd, environment: env)

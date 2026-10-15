@@ -8,6 +8,7 @@ The prompt picks the script:
   PERMESSO  asks `approve` for a destructive Bash command, reports the verdict
   DOMANDA   asks `ask_user` with choices, reports the answer
   LENTO     streams slowly (for interrupts)
+  CONNETTORE <server> <text>  calls `echo` on that connector, lists the mounted servers
   anything else: streamed text, one tool call, a result
 
 FAKE_CLAUDE_RECORD appends one JSON line per turn: the flags that matter.
@@ -77,7 +78,7 @@ def mcp_call(tool, arguments, server_name="ogb"):
     tools = [t["name"] for t in rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]]
     if server_name == "computer":
         assert "ping" in tools, tools
-    else:
+    elif server_name in ("ogb", "agents"):
         assert tools == (["approve", "ask_user"] if server_name == "ogb" else ["list_bots", "ask_bot", "delegate_bot"]), tools
     reply = rpc({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": tool, "arguments": arguments}})
     server.stdin.close()
@@ -109,7 +110,13 @@ def peer_id(name):
     return "missing"
 
 
-if "COMPUTER" in prompt and "PERMESSO" not in prompt and "DOMANDA" not in prompt:
+if "CONNETTORE " in prompt:
+    name, _, text = prompt.split("CONNETTORE ", 1)[1].strip().partition(" ")
+    config = after("--mcp-config")
+    servers = sorted(json.load(open(config))["mcpServers"]) if config else []
+    answer = mcp_call("echo", {"text": text}, name) if name in servers else f"nessun server {name}"
+    finish(f"{answer} | server: {','.join(s for s in servers if s != 'ogb')} | allowed: {after('--allowedTools')}", tool=False)
+elif "COMPUTER" in prompt and "PERMESSO" not in prompt and "DOMANDA" not in prompt:
     answer = mcp_call("ping", {}, "computer")
     finish(answer, tool=False)
 elif prompt.startswith("CHIEDI ") or prompt.startswith("DELEGA "):

@@ -262,6 +262,25 @@ public struct MCPServer: Sendable, Equatable {
     }
 }
 
+/// A connector as one turn mounts it: the proxy that stands in for the
+/// server (`swarme-harness mcp-connector <id>`) and the name the CLI shows
+/// its tools under (`mcp__<name>__tool`).
+public struct MountedConnector: Sendable, Equatable {
+    public var name: String
+    public var server: MCPServer
+
+    public init(name: String, server: MCPServer) {
+        self.name = name
+        self.server = server
+    }
+}
+
+/// How an engine takes connectors: not at all, as MCP servers it spawns
+/// itself, or through the engine's own tool loop (Local Endpoint, phase 3).
+public enum ConnectorMount: String, Sendable {
+    case none, mcp, inline
+}
+
 public struct SendTurnInput: Sendable {
     public var threadId: ThreadID
     public var sessionKey: String?
@@ -281,6 +300,9 @@ public struct SendTurnInput: Sendable {
     public var computer: MCPServer?
     /// `local-computer` routes every tool through the approval broker.
     public var computerScope: String?
+    /// The bot's connectors for this turn, only for engines whose
+    /// capabilities say `connectors == .mcp`. Empty changes nothing.
+    public var connectors: [MountedConnector] = []
 
     public init(threadId: ThreadID, text: String, model: String? = nil, effort: String? = nil, resumeCursor: JSON? = nil,
                 transcript: [(role: String, text: String)] = [], system: String? = nil, cwd: String? = nil,
@@ -332,6 +354,7 @@ public struct AdapterCapabilities: Sendable {
     public var effortLevels: [String]?
     public var queueing = false
     public var localComputerMcp = false
+    public var connectors = ConnectorMount.none
 
     public init() {}
 
@@ -345,6 +368,7 @@ public struct AdapterCapabilities: Sendable {
         o["images"] = .bool(images)
         if let effortLevels { o["effortLevels"] = .strings(effortLevels) }
         o["localComputerMcp"] = .bool(localComputerMcp)
+        o["connectors"] = .string(connectors.rawValue)
         return .object(o)
     }
 }
