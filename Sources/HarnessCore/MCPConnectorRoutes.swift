@@ -10,10 +10,13 @@ enum MCPConnectorRoutes {
 
     static func handle(_ r: HTTPRequest, harness: Harness) async throws -> RouteResult? {
         let path = r.path
+        if path == MCPOAuth.callbackPath, r.method == "GET" { return await oauthCallback(r, harness: harness) }
         guard path == "/api/mcp-connectors" || path.hasPrefix("/api/mcp-connectors/") else { return nil }
         let method = r.method
-        // mutations must declare JSON, like every other dangerous route
-        if method != "GET", !r.isJSON, !(method == "DELETE" && r.body.isEmpty), !(method == "POST" && path.hasSuffix("/test") && r.body.isEmpty) {
+        // mutations must declare JSON, like every other dangerous route; the
+        // body-less actions (test, login, logout) carry nothing a form could forge
+        let bodyless = ["/test", "/oauth/start", "/oauth/logout"].contains(where: path.hasSuffix)
+        if method != "GET", !r.isJSON, !(method == "DELETE" && r.body.isEmpty), !(method == "POST" && bodyless && r.body.isEmpty) {
             return fail(415, "content-type must be application/json")
         }
         let registry = harness.mcpConnectors
@@ -60,6 +63,25 @@ enum MCPConnectorRoutes {
             changed(harness)
             return respond(200, ["connector": registry.wire(registry.connector(id) ?? JSONObject())])
         }
+        if parts.count == 3, parts[1] == "oauth", method == "POST" {
+            guard registry.connector(id) != nil else { return fail(404, "no such connector") }
+            switch parts[2] {
+            case "start":
+                do {
+                    let url = try await harness.mcpOAuth.start(id)
+                    return respond(200, ["authorizationUrl": .string(url.absoluteString), "redirectUri": .string(harness.mcpOAuth.redirectUri)])
+                } catch {
+                    return fail(400, error.localizedDescription)
+                }
+            case "logout":
+                harness.mcpOAuth.logout(id)
+                harness.mcpPool.invalidate(id)
+                changed(harness)
+                return respond(200, ["connector": registry.wire(registry.connector(id) ?? JSONObject())])
+            default:
+                return nil
+            }
+        }
         guard parts.count == 1 else { return nil }
         guard registry.connector(id) != nil else { return fail(404, "no such connector") }
         switch method {
@@ -83,6 +105,30 @@ enum MCPConnectorRoutes {
         default:
             return nil
         }
+    }
+
+    /// Where the browser lands after the login: a page to close, and the
+    /// connector tested straight away so Settings shows its tools.
+    static func oauthCallback(_ r: HTTPRequest, harness: Harness) async -> RouteResult {
+        let outcome = await harness.mcpOAuth.complete(state: r.query["state"] ?? "", code: r.query["code"],
+                                                      error: r.query["error_description"] ?? r.query["error"])
+        if let id = outcome.id {
+            harness.mcpPool.invalidate(id)
+            if outcome.ok, let spec = harness.mcpConnectors.spec(id) {
+                let check = await probe(spec, previous: harness.mcpConnectors.connector(id)?["lastCheck"], pool: harness.mcpPool)
+                harness.mcpConnectors.setLastCheck(id, check)
+            }
+            changed(harness)
+        }
+        let escaped = outcome.message.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+        let html = """
+        <!doctype html><html lang="it"><head><meta charset="utf-8"><title>SwarmeBot</title>
+        <style>body{font:16px -apple-system,system-ui,sans-serif;background:#111;color:#eee;display:grid;place-items:center;height:100vh;margin:0}
+        p{max-width:28em;text-align:center;line-height:1.5}b{color:\(outcome.ok ? "#38D591" : "#FF5667")}</style></head>
+        <body><p><b>\(outcome.ok ? "Fatto" : "Accesso non riuscito")</b><br>\(escaped)</p></body></html>
+        """
+        return .response(HTTPResponse(status: outcome.ok ? 200 : 400, headers: [("Content-Type", "text/html; charset=utf-8"),
+                                                                            ("Cache-Control", "no-store")], body: Data(html.utf8)))
     }
 
     private static func changed(_ harness: Harness) {

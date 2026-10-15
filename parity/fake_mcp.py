@@ -18,9 +18,19 @@ HTTP mode answers `initialize` with an Mcp-Session-Id and requires it after;
 `tools/call` answers as an SSE stream, everything else as plain JSON. A
 request with header `X-Fake-Auth: wrong` is refused with 401.
 Every message received is appended to the record file, when one is given.
+
+FAKE_MCP_OAUTH=1 (http) puts the MCP endpoint behind OAuth, as the MCP
+authorization spec has it: a 401 naming the protected-resource metadata,
+an authorization server under /auth with dynamic registration, PKCE (S256)
+and `resource` checked, access tokens that live FAKE_MCP_TOKEN_TTL seconds
+(default 3600) and refresh tokens. POST /control/revoke forgets every token
+and GET /control/stats counts the grants, for the tests.
 """
+import base64
+import hashlib
 import json
 import os
+import urllib.parse
 import sys
 import threading
 import time
@@ -129,6 +139,17 @@ def run_stdio():
 
 
 SESSIONS = set()
+OAUTH = os.environ.get("FAKE_MCP_OAUTH") == "1"
+TTL = float(os.environ.get("FAKE_MCP_TOKEN_TTL", "3600"))
+CLIENTS = {}     # client_id -> redirect_uris
+CODES = {}       # code -> (client_id, redirect_uri, challenge, resource)
+ACCESS = {}      # token -> expiry
+REFRESH = set()
+STATS = {"authorization_code": 0, "refresh_token": 0, "register": 0}
+
+
+def b64url(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -146,13 +167,92 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def base(self):
+        return f"http://{self.headers.get('Host')}"
+
+    def do_GET(self):
+        url = urllib.parse.urlparse(self.path)
+        query = dict(urllib.parse.parse_qsl(url.query))
+        if url.path == "/.well-known/oauth-protected-resource/mcp" and OAUTH:
+            return self._send(200, json.dumps({"resource": self.base() + "/mcp", "authorization_servers": [self.base() + "/auth"],
+                                               "scopes_supported": ["mcp:tools"]}).encode())
+        if url.path == "/.well-known/oauth-authorization-server/auth" and OAUTH:
+            b = self.base() + "/auth"
+            return self._send(200, json.dumps({"issuer": b, "authorization_endpoint": b + "/authorize", "token_endpoint": b + "/token",
+                                               "registration_endpoint": b + "/register", "code_challenge_methods_supported": ["S256"]}).encode())
+        if url.path == "/auth/authorize" and OAUTH:
+            client, redirect = query.get("client_id"), query.get("redirect_uri")
+            if redirect not in CLIENTS.get(client, []):
+                return self._send(400, b'{"error":"unknown client or redirect"}')
+            if query.get("code_challenge_method") != "S256" or not query.get("code_challenge"):
+                return self._send(400, b'{"error":"PKCE required"}')
+            if query.get("resource") != self.base() + "/mcp":
+                return self._send(400, b'{"error":"wrong resource"}')
+            code = uuid.uuid4().hex
+            CODES[code] = (client, redirect, query["code_challenge"], query["resource"])
+            # the user said yes at once
+            location = redirect + "?" + urllib.parse.urlencode({"code": code, "state": query.get("state", "")})
+            return self._send(302, headers={"Location": location})
+        if url.path == "/control/stats":
+            return self._send(200, json.dumps(STATS).encode())
+        self._send(404, b'{"error":"not found"}')
+
+    def oauth_post(self, path, raw):
+        if path == "/auth/register":
+            body = json.loads(raw)
+            client = f"client-{len(CLIENTS) + 1}"
+            CLIENTS[client] = body.get("redirect_uris", [])
+            STATS["register"] += 1
+            return self._send(201, json.dumps({"client_id": client, "redirect_uris": CLIENTS[client]}).encode())
+        if path == "/auth/token":
+            form = dict(urllib.parse.parse_qsl(raw.decode()))
+            grant = form.get("grant_type")
+            if grant == "authorization_code":
+                entry = CODES.pop(form.get("code"), None)
+                if not entry or entry[0] != form.get("client_id") or entry[1] != form.get("redirect_uri"):
+                    return self._send(400, b'{"error":"invalid_grant"}')
+                if b64url(hashlib.sha256(form.get("code_verifier", "").encode()).digest()) != entry[2]:
+                    return self._send(400, b'{"error":"invalid_grant","error_description":"PKCE mismatch"}')
+            elif grant == "refresh_token":
+                if form.get("refresh_token") not in REFRESH:
+                    return self._send(400, b'{"error":"invalid_grant","error_description":"refresh token revoked"}')
+                REFRESH.discard(form["refresh_token"])
+            else:
+                return self._send(400, b'{"error":"unsupported_grant_type"}')
+            STATS[grant] += 1
+            access, refresh = "at-" + uuid.uuid4().hex, "rt-" + uuid.uuid4().hex
+            ACCESS[access] = time.time() + TTL
+            REFRESH.add(refresh)
+            return self._send(200, json.dumps({"access_token": access, "token_type": "Bearer", "expires_in": TTL,
+                                               "refresh_token": refresh}).encode())
+        if path == "/control/revoke":
+            ACCESS.clear()
+            REFRESH.clear()
+            return self._send(200, b"{}")
+        return False  # not an OAuth path; every handled path returned _send's None
+
     def do_DELETE(self):
         SESSIONS.discard(self.headers.get("Mcp-Session-Id"))
         self._send(200)
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))
-        message = json.loads(self.rfile.read(length))
+        raw = self.rfile.read(length)
+        path = urllib.parse.urlparse(self.path).path
+        if path.startswith(("/auth/", "/control/")):
+            if self.oauth_post(path, raw) is False:
+                self._send(404, b'{"error":"not found"}')
+            return
+        if OAUTH:
+            token = (self.headers.get("Authorization") or "").removeprefix("Bearer ")
+            if ACCESS.get(token, 0) < time.time():
+                meta = self.base() + "/.well-known/oauth-protected-resource/mcp"
+                return self._send(401, b'{"error":"unauthorized"}',
+                                  headers={"WWW-Authenticate": f'Bearer resource_metadata="{meta}", scope="mcp:tools"'})
+        if not raw.strip():
+            sys.stderr.write(f"empty POST {self.path} {dict(self.headers)}\n")
+            return self._send(400, b'{"error":"empty body"}')
+        message = json.loads(raw)
         if self.headers.get("X-Fake-Auth") == "wrong":
             return self._send(401, b'{"error":"bad credentials"}')
         session = self.headers.get("Mcp-Session-Id")

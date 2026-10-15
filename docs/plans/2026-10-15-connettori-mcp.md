@@ -1,6 +1,6 @@
 # Connettori (server MCP) — piano di implementazione
 
-Stato: fasi 1, 2 e 3 fatte (branch `feat/mcp-connectors`), vedi §12. Data: 2026-10-15.
+Stato: fasi 1–4 fatte (branch `feat/mcp-connectors`), vedi §12. Data: 2026-10-15.
 Motore: solo Swift (`HarnessCore` / `HarnessDrivers`); il motore Node non riceve la funzione.
 
 ## 0. Obiettivo e decisioni prese
@@ -517,3 +517,41 @@ cambiano. Per il resto si verifica con:
     `clientTools: false`.
 - **Non verificato dal vivo**: un turno con strumenti su un endpoint OpenAI-compatible reale non Hermes
   (nessuno disponibile).
+
+### Fase 4 — fatta (2026-10-15)
+
+- Motore (`MCPOAuth.swift`):
+  - discovery: 401 dell'MCP con `WWW-Authenticate: resource_metadata` → metadati della risorsa
+    (RFC 9728, anche `/.well-known/oauth-protected-resource[/path]`) → metadati del server di
+    autorizzazione (RFC 8414 con il path dell'issuer, poi OpenID); se mancano, il ripiego della spec
+    2025-03-26 (`/authorize`, `/token`, `/register` sull'origine);
+  - registrazione dinamica (RFC 7591) come client pubblico (`token_endpoint_auth_method: none`),
+    riusata finché issuer e redirect non cambiano; oppure client ID (e secret) inseriti a mano;
+  - PKCE S256, `state` casuale monouso valido 10 minuti, `resource` (RFC 8707) sia in `authorize` sia
+    nelle richieste di token, `scope` dal campo del connettore, dal 401 o da `scopes_supported`;
+  - callback del browser `GET /oauth/mcp/callback` sul motore (loopback, il gate lo accetta perché una
+    navigazione GET non manda `Origin`): scambio del codice, pagina «Fatto» da chiudere, prova della
+    connessione subito dopo così le Impostazioni mostrano gli strumenti;
+  - token in `mcp-connector-secrets.json` (`access`, `refresh`, `expiresAt`, `issuedAt`); refresh prima
+    della scadenza (margine: il minore tra 60 s e un quarto della durata del token) e una volta su un
+    401; un refresh rifiutato cancella il login e l'errore dice di premere «Accedi»;
+  - il pool aggiunge `Authorization: Bearer` alle richieste HTTP; le CLI non vedono mai i token;
+  - un connettore che cambia URL, client ID o modo di autenticazione perde login e client registrato;
+    il client secret inserito a mano resta;
+  - rotte: `POST /api/mcp-connectors/:id/oauth/start` (→ `authorizationUrl`, `redirectUri`),
+    `POST …/oauth/logout`; il connettore espone `oauthState` (`connected` / `expired` /
+    `disconnected`) e `oauthClient` (client e issuer, niente segreti).
+- App: autenticazione «Nessuna o header» / «OAuth» nei connettori HTTP; sezione OAuth con stato,
+  «Accedi…» (salva, poi apre il browser), «Esci», client registrato a mano (ID, secret, scope, redirect
+  URI da registrare); nell'elenco, «da collegare» finché manca il login.
+- Verifica:
+  - `MCPConnectorsTests` sale a 18 (PKCE confrontato con `hashlib`, `WWW-Authenticate`, URL canonico,
+    form, validazione, token tenuti o cancellati alla modifica);
+  - `fake_mcp.py` con `FAKE_MCP_OAUTH=1`: server di autorizzazione completo che controlla PKCE,
+    `resource` e redirect, con token di 3 secondi;
+  - `parity/connectors_e2e.py oauth`: login completo con i redirect seguiti come farebbe il browser;
+    token assente dalle risposte API e dalle definizioni; turno di un bot (Local Endpoint) che chiama
+    il server con il Bearer, oscurato nella trascrizione; refresh dopo la scadenza sia in «Prova» sia nel
+    turno; secondo login senza nuova registrazione; refresh revocato → disconnesso; callback con `state`
+    sconosciuto → 400; logout.
+- **Non verificato dal vivo**: un server MCP OAuth reale (serve il tuo account nel browser).

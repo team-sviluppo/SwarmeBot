@@ -19,8 +19,13 @@ public struct MCPConnector: Decodable, Hashable, Identifiable, Sendable {
     public var tools: MCPToolFilter?
     public var toolTimeoutSeconds: Double?
     public var lastCheck: MCPConnectorCheck?
+    /// "none" or "oauth".
+    public var auth: String?
+    public var oauth: MCPOAuthSettings?
+    public var oauthState: MCPOAuthState?
 
     public var isEnabled: Bool { enabled ?? true }
+    public var usesOAuth: Bool { auth == "oauth" }
 
     /// Whether the tool filter lets a tool through to bots.
     public func allows(tool name: String) -> Bool {
@@ -57,6 +62,20 @@ public enum MCPConnectorValue: Decodable, Hashable, Sendable {
             self = .secret(set: (try container.decode(Secret.self)).set ?? false)
         }
     }
+}
+
+/// What the user typed for an OAuth login; all optional.
+public struct MCPOAuthSettings: Decodable, Hashable, Sendable {
+    public var clientId: String?
+    public var scope: String?
+    public var clientSecret: MCPConnectorValue?
+}
+
+/// Whether the engine holds a usable login.
+public struct MCPOAuthState: Decodable, Hashable, Sendable {
+    /// "connected", "expired" or "disconnected".
+    public var status: String
+    public var expiresAt: Double?
 }
 
 public struct MCPToolFilter: Decodable, Hashable, Sendable {
@@ -120,6 +139,13 @@ public struct MCPConnectorInput: Sendable {
     public var toolMode: String
     public var toolNames: [String]
     public var toolTimeoutSeconds: Double
+    /// "none" or "oauth".
+    public var auth = "none"
+    public var oauthClientId = ""
+    public var oauthScope = ""
+    /// Typed only to set or change it; empty keeps what is stored.
+    public var oauthClientSecret = ""
+    public var oauthClientSecretStored = false
 
     public init(id: String = "", name: String = "", transport: String = "stdio", command: String = "", args: [String] = [],
                 cwd: String = "", url: String = "", env: [Entry] = [], headers: [Entry] = [], enabled: Bool = true,
@@ -154,6 +180,10 @@ public struct MCPConnectorInput: Sendable {
                   env: entries(connector.env), headers: entries(connector.headers), enabled: connector.isEnabled,
                   toolMode: connector.tools?.mode ?? "all", toolNames: connector.tools?.names ?? [],
                   toolTimeoutSeconds: connector.toolTimeoutSeconds ?? 120)
+        auth = connector.auth ?? "none"
+        oauthClientId = connector.oauth?.clientId ?? ""
+        oauthScope = connector.oauth?.scope ?? ""
+        if case let .secret(set)? = connector.oauth?.clientSecret { oauthClientSecretStored = set }
     }
 
     var json: [String: Any] {
@@ -181,6 +211,13 @@ public struct MCPConnectorInput: Sendable {
             body["cwd"] = cwd
         } else {
             body["url"] = url
+        }
+        body["auth"] = transport == "http" ? auth : "none"
+        if transport == "http", auth == "oauth" {
+            var oauth: [String: Any] = ["clientId": oauthClientId, "scope": oauthScope]
+            if !oauthClientSecret.isEmpty { oauth["clientSecret"] = ["secret": true, "value": oauthClientSecret] }
+            else if oauthClientSecretStored { oauth["clientSecret"] = ["secret": true] }
+            body["oauth"] = oauth
         }
         return body
     }
@@ -224,6 +261,22 @@ extension CompanionClient {
         var request = try makeRequest("POST", "/api/mcp-connectors/\(id)/test")
         request.timeoutInterval = 120
         return try await send(request, as: MCPConnectorResponse.self).connector
+    }
+
+    /// Where to send the user to log in. The engine gets the answer back on
+    /// its own loopback callback and tells the app with an `mcpConnectors` frame.
+    public func startMCPOAuth(_ id: String) async throws -> (authorizationURL: URL, redirectURI: String) {
+        struct Started: Decodable { var authorizationUrl: String; var redirectUri: String }
+        var request = try makeRequest("POST", "/api/mcp-connectors/\(id)/oauth/start")
+        request.timeoutInterval = 60
+        let started = try await send(request, as: Started.self)
+        guard let url = URL(string: started.authorizationUrl) else { throw APIError.badURL }
+        return (url, started.redirectUri)
+    }
+
+    @discardableResult
+    public func logoutMCPOAuth(_ id: String) async throws -> MCPConnector {
+        try await send(try makeRequest("POST", "/api/mcp-connectors/\(id)/oauth/logout"), as: MCPConnectorResponse.self).connector
     }
 
     /// `{"mcpServers": {…}}` as Claude Desktop and `.mcp.json` write it.

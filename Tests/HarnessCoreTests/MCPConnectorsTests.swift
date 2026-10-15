@@ -397,4 +397,54 @@ final class MCPConnectorsTests: XCTestCase {
         let payload = try JSON.parse(#"{"data":[{"id":"default/x","owned_by":"hermes"},{"id":"gpt-4o","owned_by":"openai"},{"id":"plain"}]}"#)
         XCTAssertEqual(LocalHosts.hermesModels(fromModelsPayload: payload), ["default/x"])
     }
+    // MARK: Phase 4: OAuth
+
+    func testPKCEAndHeaderParsing() {
+        // S256 = base64url(sha256(verifier)), checked against Python's hashlib
+        XCTAssertEqual(MCPOAuth.challenge("dBjftJeZ4CVP-mJ92K9b6hlA25qBXFROkPbcCfwx4Mo"), "yCB6KWWMNT9T1MW4F3j_wL6jjA0BMP7ozcLtkaOqb9U")
+        XCTAssertEqual(MCPOAuth.randomToken(32).count, 43)
+        let header = #"Bearer error="invalid_token", resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource", scope="read write""#
+        XCTAssertEqual(MCPOAuth.parameter("resource_metadata", in: header), "https://mcp.example.com/.well-known/oauth-protected-resource")
+        XCTAssertEqual(MCPOAuth.parameter("scope", in: header), "read write")
+        XCTAssertNil(MCPOAuth.parameter("realm", in: header))
+        XCTAssertEqual(MCPOAuth.canonical(URL(string: "HTTPS://MCP.Example.com/mcp/#x")!), "https://mcp.example.com/mcp")
+        XCTAssertEqual(MCPOAuth.formEncode(["b": "a b&c", "a": "x/y"]), "a=x%2Fy&b=a%20b%26c")
+    }
+
+    func testOAuthDefinitionsAndTheirTokens() throws {
+        let registry = MCPConnectors(paths: try temporaryPaths())
+        XCTAssertThrowsError(try registry.create(["id": "s", "transport": "stdio", "command": "x", "auth": "oauth"]))
+        XCTAssertThrowsError(try registry.create(["id": "h", "transport": "http", "url": "https://a.example/mcp", "auth": "oauth",
+                                                  "headers": ["authorization": "Bearer x"]]))
+        XCTAssertThrowsError(try registry.create(["id": "h", "transport": "http", "url": "https://a.example/mcp", "auth": "basic"]))
+        let body: JSONObject = ["id": "web", "transport": "http", "url": "https://a.example/mcp", "auth": "oauth",
+                                "oauth": ["clientId": "mine", "scope": "read", "clientSecret": ["secret": true, "value": "cs-123456"]]]
+        try registry.create(body)
+        var wire = registry.wire(registry.connector("web")!)
+        XCTAssertEqual(wire["oauth"]?["clientSecret"], ["secret": true, "set": true])
+        XCTAssertEqual(wire["oauthState"]?["status"], "disconnected")
+        XCTAssertFalse(wire.serialized().contains("cs-123456"))
+        XCTAssertTrue(registry.spec("web")!.oauth)
+
+        registry.setOAuthSecrets("web", registry.oauthSecrets("web").merging(["access": "at-1", "refresh": "rt-1", "expiresAt": 9_999_999_999]))
+        registry.setOAuthClient("web", ["issuer": "https://a.example", "tokenEndpoint": "https://a.example/token"])
+        wire = registry.wire(registry.connector("web")!)
+        XCTAssertEqual(wire["oauthState"]?["status"], "connected")
+        XCTAssertFalse(wire.serialized().contains("at-1"))
+        XCTAssertTrue(registry.spec("web")!.secretValues.contains("at-1"), "tokens are scrubbed from logs too")
+
+        // an edit that keeps the server keeps the login; another server drops it
+        var edit = body
+        edit["name"] = "Web 2"
+        edit["oauth"] = ["clientId": "mine", "scope": "read", "clientSecret": ["secret": true]]
+        try registry.update("web", edit)
+        XCTAssertEqual(registry.oauthSecrets("web")["access"], "at-1")
+        XCTAssertEqual(registry.oauthSecrets("web")["clientSecret"], "cs-123456")
+        XCTAssertNotNil(registry.connector("web")?["oauthClient"])
+        edit["url"] = "https://b.example/mcp"
+        try registry.update("web", edit)
+        XCTAssertNil(registry.oauthSecrets("web")["access"])
+        XCTAssertNil(registry.connector("web")?["oauthClient"])
+        XCTAssertEqual(registry.oauthSecrets("web")["clientSecret"], "cs-123456", "the user's own client secret stays")
+    }
 }

@@ -6,8 +6,9 @@
 // - `mcp-connectors.json` — the definitions, records as JSON objects so a
 //   field this build does not know survives every write;
 // - `mcp-connector-secrets.json` (0600) — `{id: {env: {NAME: value},
-//   headers: {Name: value}}}`. A secret value is never in the first file,
-//   never in an API answer and never in a log.
+//   headers: {Name: value}, oauth: {access, refresh, expiresAt, clientSecret,
+//   registeredSecret}}}`. A secret value is never in the first file, never
+//   in an API answer and never in a log.
 //
 // An env or header value in a definition is either a plain string or
 // `{"secret": true}`, which points at the second file.
@@ -37,6 +38,9 @@ public struct MCPConnectorSpec: Equatable, Sendable {
         default: return true
         }
     }
+
+    /// The connector logs in with OAuth (phase 4): the engine adds the bearer token.
+    public var oauth = false
 
     /// Every secret this spec carries, for scrubbing logs.
     var secretValues: [String] = []
@@ -92,6 +96,21 @@ public final class MCPConnectors {
             }
             out[kind] = .object(shown)
         }
+        if var oauth = connector["oauth"]?.object, oauth["clientSecret"] != nil {
+            oauth["clientSecret"] = ["secret": true, "set": .bool(secrets[id]?["oauth"]?["clientSecret"]?.string?.isEmpty == false)]
+            out["oauth"] = .object(oauth)
+        }
+        if connector["auth"]?.string == "oauth" {
+            let tokens = secrets[id]?["oauth"]
+            let expiresAt = tokens?["expiresAt"]?.double
+            let status: String
+            if tokens?["access"]?.string == nil { status = "disconnected" }
+            else if let expiresAt, expiresAt < Date().timeIntervalSince1970, tokens?["refresh"]?.string == nil { status = "expired" }
+            else { status = "connected" }
+            var state: JSONObject = ["status": .string(status)]
+            if let expiresAt { state["expiresAt"] = .number(expiresAt) }
+            out["oauthState"] = .object(state)
+        }
         return .object(out)
     }
 
@@ -131,6 +150,10 @@ public final class MCPConnectors {
             toolMode: record["tools"]?["mode"]?.string ?? "all",
             toolNames: Set(record["tools"]?["names"]?.array?.compactMap(\.string) ?? [])
         )
+        spec.oauth = record["auth"]?.string == "oauth"
+        for key in ["access", "refresh", "clientSecret", "registeredSecret"] {
+            if let value = secrets[id]?["oauth"]?[key]?.string { secretValues.append(value) }
+        }
         spec.secretValues = secretValues
         return spec
     }
@@ -161,10 +184,20 @@ public final class MCPConnectors {
     @discardableResult
     public func update(_ id: String, _ body: JSONObject) throws -> JSONObject? {
         guard let index = connectors.firstIndex(where: { $0["id"]?.string == id }) else { return nil }
-        let (record, secretValues) = try Self.validate(body, id: id, previousSecrets: secrets[id])
+        var (record, secretValues) = try Self.validate(body, id: id, previousSecrets: secrets[id])
+        let before = connectors[index]
+        // another server, another client or no OAuth at all: the login was for something else
+        let sameLogin = before["url"] == record["url"] && before["auth"] == record["auth"]
+            && before["oauth"]?["clientId"] == record["oauth"]?["clientId"] && record["auth"]?.string == "oauth"
+        if sameLogin, let previous = secrets[id]?["oauth"]?.object {
+            var oauth = secretValues["oauth"]?.object ?? JSONObject()
+            for key in ["access", "refresh", "expiresAt", "issuedAt", "registeredSecret"] where previous[key] != nil { oauth[key] = previous[key] }
+            secretValues["oauth"] = .object(oauth)
+        }
         // the definition is replaced whole; createdAt, lastCheck and unknown fields stay
-        var merged = connectors[index]
+        var merged = before
         for (key, value) in record { merged[key] = value }
+        if !sameLogin { merged["oauthClient"] = nil }
         connectors[index] = merged
         secrets[id] = secretValues
         try save()
@@ -177,6 +210,25 @@ public final class MCPConnectors {
         secrets[id] = nil
         try save()
         return true
+    }
+
+    // MARK: OAuth state (MCPOAuth.swift)
+
+    func oauthSecrets(_ id: String) -> JSONObject { secrets[id]?["oauth"]?.object ?? JSONObject() }
+
+    func setOAuthSecrets(_ id: String, _ values: JSONObject) {
+        guard connector(id) != nil else { return }
+        var entry = secrets[id] ?? JSONObject()
+        entry["oauth"] = values.isEmpty ? Optional<JSON>.none : .object(values)
+        secrets[id] = entry
+        try? save()
+    }
+
+    /// What the engine learned about the login: client, issuer, token endpoint.
+    func setOAuthClient(_ id: String, _ values: JSONObject?) {
+        guard let index = connectors.firstIndex(where: { $0["id"]?.string == id }) else { return }
+        connectors[index]["oauthClient"] = values.map(JSON.object)
+        try? save()
     }
 
     /// The outcome of "Prova connessione".
@@ -272,6 +324,38 @@ public final class MCPConnectors {
             }
             record[kind] = .object(shown)
             if !hidden.isEmpty { stored[kind] = .object(hidden) }
+        }
+
+        let auth = body["auth"]?.string ?? "none"
+        guard ["none", "oauth"].contains(auth) else { throw MCPConnectorInvalid("auth must be none or oauth") }
+        record["auth"] = .string(auth)
+        if auth == "oauth" {
+            guard transport == "http" else { throw MCPConnectorInvalid("OAuth needs an http connector") }
+            if (body["headers"]?.object ?? JSONObject()).contains(where: { $0.key.lowercased() == "authorization" }) {
+                throw MCPConnectorInvalid("headers: Authorization is set by the OAuth login")
+            }
+            var oauth = JSONObject()
+            let clientId = body["oauth"]?["clientId"]?.string?.trimmingCharacters(in: .whitespaces) ?? ""
+            if !clientId.isEmpty {
+                guard clientId.count <= 512 else { throw MCPConnectorInvalid("oauth.clientId too long") }
+                oauth["clientId"] = .string(clientId)
+            }
+            let scope = body["oauth"]?["scope"]?.string?.trimmingCharacters(in: .whitespaces) ?? ""
+            if !scope.isEmpty {
+                guard scope.count <= 1024, !scope.contains("\n") else { throw MCPConnectorInvalid("oauth.scope too long") }
+                oauth["scope"] = .string(scope)
+            }
+            if let secret = body["oauth"]?["clientSecret"], secret["secret"]?.bool == true {
+                let value = secret["value"]?.string ?? previousSecrets?["oauth"]?["clientSecret"]?.string ?? ""
+                if !value.isEmpty {
+                    try checkValue(value, "oauth", "clientSecret")
+                    stored["oauth"] = ["clientSecret": .string(value)]
+                }
+                oauth["clientSecret"] = ["secret": true]
+            }
+            record["oauth"] = .object(oauth)
+        } else {
+            record["oauth"] = .null
         }
 
         let mode = body["tools"]?["mode"]?.string ?? "all"
@@ -396,6 +480,9 @@ public final class MCPConnectorPool {
     private let logDir: URL
     private var reaper: Task<Void, Never>?
     var idleSeconds: TimeInterval = 600
+    /// The bearer token for an OAuth connector; `true` forces a refresh (the
+    /// server just answered 401). Nil result: the connector does not use OAuth.
+    public var tokenProvider: ((MCPConnectorSpec, Bool) async throws -> String?)?
 
     public init(paths: DataPaths, environment: [String: String]) {
         var env = environment
@@ -410,22 +497,37 @@ public final class MCPConnectorPool {
 
     /// The tools a connector offers bots: the server's list, filtered.
     public func tools(_ spec: MCPConnectorSpec) async throws -> [JSON] {
-        let client = try await client(spec)
-        if let cached = entries[spec.id]?.tools, entries[spec.id]?.client === client { return cached }
-        let tools = try await client.listTools(timeout: 30).filter { spec.allows(tool: $0["name"]?.string ?? "") }
-        if entries[spec.id]?.client === client { entries[spec.id]?.tools = tools }
-        return tools
+        try await withFreshLogin(spec) {
+            let client = try await self.client(spec)
+            if let cached = self.entries[spec.id]?.tools, self.entries[spec.id]?.client === client { return cached }
+            let tools = try await client.listTools(timeout: 30).filter { spec.allows(tool: $0["name"]?.string ?? "") }
+            if self.entries[spec.id]?.client === client { self.entries[spec.id]?.tools = tools }
+            return tools
+        }
+    }
+
+    /// An OAuth server that answers 401 gets one refreshed token and one more try.
+    private func withFreshLogin<T>(_ spec: MCPConnectorSpec, _ body: () async throws -> T) async throws -> T {
+        do {
+            return try await body()
+        } catch let error as MCPError where spec.oauth && error.status == 401 {
+            invalidate(spec.id)
+            _ = try await tokenProvider?(spec, true)
+            return try await body()
+        }
     }
 
     public func call(_ spec: MCPConnectorSpec, tool: String, arguments: JSON) async throws -> JSON {
         guard spec.allows(tool: tool) else { throw MCPError("lo strumento \(tool) è escluso dal filtro del connettore \(spec.name)") }
-        let client = try await client(spec)
-        do {
-            return try await client.callTool(tool, arguments: arguments, timeout: spec.toolTimeout)
-        } catch is MCPError where client.closed {
-            // the server died under us: one fresh start, then the error stands
-            invalidate(spec.id)
-            return try await self.client(spec).callTool(tool, arguments: arguments, timeout: spec.toolTimeout)
+        return try await withFreshLogin(spec) {
+            let client = try await self.client(spec)
+            do {
+                return try await client.callTool(tool, arguments: arguments, timeout: spec.toolTimeout)
+            } catch let error as MCPError where client.closed && error.status == nil {
+                // the server died under us: one fresh start, then the error stands
+                self.invalidate(spec.id)
+                return try await self.client(spec).callTool(tool, arguments: arguments, timeout: spec.toolTimeout)
+            }
         }
     }
 
@@ -445,7 +547,15 @@ public final class MCPConnectorPool {
     /// A one-off connection for "Prova connessione": the server's own list,
     /// unfiltered, so the user can choose what to keep.
     public func probe(_ spec: MCPConnectorSpec) async throws -> (server: MCPClient.ServerInfo, tools: [JSON]) {
-        let client = makeClient(spec)
+        do {
+            return try await probeOnce(spec, bearer: try await tokenProvider?(spec, false))
+        } catch let error as MCPError where spec.oauth && error.status == 401 {
+            return try await probeOnce(spec, bearer: try await tokenProvider?(spec, true))
+        }
+    }
+
+    private func probeOnce(_ spec: MCPConnectorSpec, bearer: String?) async throws -> (server: MCPClient.ServerInfo, tools: [JSON]) {
+        let client = makeClient(spec, bearer: bearer)
         defer { client.close() }
         let server = try await client.connect(timeout: spec.transport == .stdio ? 60 : 30)
         let tools = try await client.listTools(timeout: 30)
@@ -463,7 +573,7 @@ public final class MCPConnectorPool {
         if let pendingConnect = connecting[spec.id] { return try await pendingConnect.value }
         let task = Task { @MainActor [weak self] () throws -> MCPClient in
             guard let self else { throw CancellationError() }
-            let client = self.makeClient(spec)
+            let client = self.makeClient(spec, bearer: try await self.tokenProvider?(spec, false))
             do {
                 try await client.connect(timeout: spec.transport == .stdio ? 60 : 30)
             } catch {
@@ -485,7 +595,7 @@ public final class MCPConnectorPool {
         return client
     }
 
-    func makeClient(_ spec: MCPConnectorSpec) -> MCPClient {
+    func makeClient(_ spec: MCPConnectorSpec, bearer: String? = nil) -> MCPClient {
         switch spec.transport {
         case .stdio:
             var env = baseEnvironment
@@ -493,7 +603,9 @@ public final class MCPConnectorPool {
             let log = logger(spec)
             return MCPClient.stdio(command: spec.command, args: spec.args, cwd: spec.cwd ?? NSHomeDirectory(), environment: env, log: log)
         case .http:
-            return MCPClient.http(url: spec.url ?? URL(string: "https://invalid.invalid")!, headers: spec.headers)
+            var headers = spec.headers
+            if let bearer { headers["Authorization"] = "Bearer \(bearer)" }
+            return MCPClient.http(url: spec.url ?? URL(string: "https://invalid.invalid")!, headers: headers)
         }
     }
 

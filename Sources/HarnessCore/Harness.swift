@@ -45,7 +45,12 @@ public final class Harness {
     private(set) lazy var localVM = LocalVM(paths: paths)
     // connectors: MCP servers the user hands to bots (MCPConnectors.swift)
     public private(set) lazy var mcpConnectors = MCPConnectors(paths: paths)
-    public private(set) lazy var mcpPool = MCPConnectorPool(paths: paths, environment: environment)
+    public private(set) lazy var mcpPool: MCPConnectorPool = {
+        let pool = MCPConnectorPool(paths: paths, environment: environment)
+        pool.tokenProvider = { [weak self] spec, force in try await self?.mcpOAuth.token(spec, force: force) }
+        return pool
+    }()
+    public private(set) lazy var mcpOAuth = MCPOAuth(registry: mcpConnectors) { [weak self] in self?.harnessURL ?? "http://127.0.0.1:8799" }
     /// Turn grant token → what its connector proxies may reach (ConnectorTurns.swift).
     var connectorGrants: [String: ConnectorGrant] = [:]
     public private(set) lazy var box = BoxComputer(environment: environment) { [weak self] in self?.config.secret("box", "token") }

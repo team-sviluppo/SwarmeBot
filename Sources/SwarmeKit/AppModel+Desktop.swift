@@ -372,6 +372,21 @@ extension AppModel {
         await perform { client in self.upsert(try await client.testMCPConnector(connector.id)) }
     }
 
+    /// The URL to open in the browser for an OAuth connector's login.
+    public func oauthLogin(_ connector: MCPConnector) async -> Result<(url: URL, redirect: String), Error> {
+        guard let client else { return .failure(CancellationError()) }
+        do {
+            let started = try await client.startMCPOAuth(connector.id)
+            return .success((started.authorizationURL, started.redirectURI))
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    public func oauthLogout(_ connector: MCPConnector) async {
+        await perform { client in self.upsert(try await client.logoutMCPOAuth(connector.id)) }
+    }
+
     /// Paste of a Claude Desktop / `.mcp.json` config.
     public func importConnectors(_ text: String) async -> Result<MCPConnectorImport, Error> {
         guard let client else { return .failure(CancellationError()) }

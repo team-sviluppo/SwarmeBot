@@ -60,6 +60,7 @@ private struct ConnectorRow: View {
 
     private var dot: Color {
         guard connector.isEnabled else { return Theme.tertiary }
+        if connector.usesOAuth, connector.oauthState?.status != "connected" { return Theme.warning }
         guard let check = connector.lastCheck else { return Theme.warning }
         return check.ok ? Theme.success : Theme.danger
     }
@@ -77,6 +78,7 @@ private struct ConnectorRow: View {
     private var subtitle: String {
         var parts = [connector.transport == "http" ? "HTTP" : "stdio", connector.id]
         if let count = connector.lastCheck?.tools?.count, connector.lastCheck?.ok == true { parts.append("\(count) strumenti") }
+        if connector.usesOAuth, connector.oauthState?.status != "connected" { parts.append("da collegare") }
         if !connector.isEnabled { parts.append("disattivato") }
         return parts.joined(separator: " · ")
     }
@@ -146,8 +148,16 @@ private struct ConnectorEditor: View {
                 Section("Server") {
                     TextField("URL", text: $input.url, prompt: Text("https://example.com/mcp"))
                         .font(.system(size: 12, design: .monospaced))
+                    Picker("Autenticazione", selection: $input.auth) {
+                        Text("Nessuna o header").tag("none")
+                        Text("OAuth").tag("oauth")
+                    }
+                    .pickerStyle(.segmented)
                 }
-                EntriesSection(title: "Header", namePrompt: "Authorization", entries: $input.headers)
+                if input.auth == "oauth" {
+                    OAuthSection(connector: connector, input: $input) { await saveForLogin() }
+                }
+                EntriesSection(title: "Header", namePrompt: input.auth == "oauth" ? "X-Api-Version" : "Authorization", entries: $input.headers)
             }
 
             if let connector { ToolsSection(connector: connector, input: $input) }
@@ -201,14 +211,30 @@ private struct ConnectorEditor: View {
         body.args = parsedArgs
         switch await model.save(connector: body, existing: existing) {
         case let .success(saved):
+            // an OAuth connector has nothing to test before the login
             if !existing {
                 onCreated(saved)
-                await model.test(connector: saved)
+                if !saved.usesOAuth { await model.test(connector: saved) }
             }
         case let .failure(failure):
             error = failure.localizedDescription
         }
         busy = false
+    }
+
+    /// The login uses what is saved: save the edits first.
+    private func saveForLogin() async -> MCPConnector? {
+        error = nil
+        var body = input
+        body.args = parsedArgs
+        switch await model.save(connector: body, existing: existing) {
+        case let .success(saved):
+            if !existing { onCreated(saved) }
+            return saved
+        case let .failure(failure):
+            error = failure.localizedDescription
+            return nil
+        }
     }
 
     static func slug(_ name: String) -> String {
@@ -322,6 +348,75 @@ private struct ToolsSection: View {
             if !tools.isEmpty {
                 Text("Gli strumenti spenti non arrivano a nessun bot. Ricordati di salvare.").font(.system(size: 11)).foregroundStyle(.tertiary)
             }
+        }
+    }
+}
+
+/// OAuth: the login happens in the browser and comes back to the engine,
+/// which keeps the tokens; Settings only shows whether it holds one.
+private struct OAuthSection: View {
+    let connector: MCPConnector?
+    @Binding var input: MCPConnectorInput
+    let saveFirst: () async -> MCPConnector?
+    @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
+    @State private var busy = false
+    @State private var note: String?
+    @State private var redirect: String?
+    @State private var manual = false
+
+    private var status: String { connector?.oauthState?.status ?? "disconnected" }
+
+    var body: some View {
+        Section {
+            HStack(spacing: 8) {
+                Circle().fill(status == "connected" ? Theme.success : status == "expired" ? Theme.warning : Theme.tertiary)
+                    .frame(width: 8, height: 8)
+                Text(status == "connected" ? "Connesso" : status == "expired" ? "Accesso scaduto" : "Non connesso")
+                    .font(.system(size: 12.5))
+                Spacer()
+                if busy { ProgressView().controlSize(.small) }
+                if status == "connected", let connector {
+                    Button("Esci") { Task { await model.oauthLogout(connector) } }
+                }
+                Button(status == "connected" ? "Accedi di nuovo…" : "Accedi…") { Task { await login() } }
+                    .disabled(busy || input.url.isEmpty || input.id.isEmpty)
+            }
+            if let note {
+                Text(note).font(.system(size: 11.5)).foregroundStyle(.secondary).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            DisclosureGroup("Client registrato a mano", isExpanded: $manual) {
+                TextField("Client ID", text: $input.oauthClientId, prompt: Text("vuoto = registrazione automatica"))
+                    .font(.system(size: 12, design: .monospaced))
+                SecureField("Client secret", text: $input.oauthClientSecret,
+                            prompt: Text(input.oauthClientSecretStored ? "salvato — vuoto per non cambiarlo" : "facoltativo"))
+                TextField("Scope", text: $input.oauthScope, prompt: Text("vuoto = quelli che chiede il server"))
+                    .font(.system(size: 12, design: .monospaced))
+                if let redirect {
+                    LabeledContent("Redirect URI") { Text(redirect).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled) }
+                }
+            }
+        } header: {
+            Text("OAuth")
+        } footer: {
+            Text("SwarmeBot tiene i token: i bot non li vedono e, se cambi harness, non devi accedere di nuovo.")
+                .font(.system(size: 11)).foregroundStyle(.tertiary)
+        }
+        .onAppear { manual = !input.oauthClientId.isEmpty }
+    }
+
+    private func login() async {
+        busy = true
+        defer { busy = false }
+        guard let saved = await saveFirst() else { return }
+        switch await model.oauthLogin(saved) {
+        case let .success(started):
+            redirect = started.redirect
+            note = "Completa l'accesso nel browser: lo stato qui si aggiorna da solo."
+            openURL(started.url)
+        case let .failure(error):
+            note = error.localizedDescription
         }
     }
 }
