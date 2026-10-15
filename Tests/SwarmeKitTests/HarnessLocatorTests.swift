@@ -8,6 +8,16 @@ final class HarnessLocatorTests: XCTestCase {
         XCTAssertEqual(HarnessLocator.ports, [8799, 18799, 28799])
     }
 
+    func testMissingDataDirectoryIsCreatedBeforeLaunch() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("swarme-ensure-\(UUID().uuidString)", isDirectory: true)
+        let data = root.appendingPathComponent(".swarmebot", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try HarnessEngine.ensureDirectories([data])
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: data.path, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+    }
+
     func testBotPatchSendsOnlySetFields() {
         let body = BotPatch(pinned: true, section: "").bodyForTesting
         XCTAssertEqual(body.keys.sorted(), ["pinned", "section"])

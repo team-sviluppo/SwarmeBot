@@ -62,6 +62,21 @@ public enum HarnessEngine: String, CaseIterable, Sendable {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".swarmebot", isDirectory: true)
     }
 
+    /// `Process` will not start if its working directory is missing, and it
+    /// reports that as a failed launch rather than letting the engine create
+    /// the folder. A new Mac has no `~/.swarmebot` yet, so the first open
+    /// died on every port before the server existed.
+    public static func ensureRuntimeDirectories() throws {
+        try ensureDirectories([realDataDir, HarnessLocator.userData, HarnessLocator.logDirectory])
+    }
+
+    static func ensureDirectories(_ urls: [URL]) throws {
+        let fm = FileManager.default
+        for url in urls {
+            try fm.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        }
+    }
+
     /// Written once, before the Swift engine is allowed to open the real data.
     public static var backupDir: URL {
         HarnessLocator.userData.appendingPathComponent("backup-before-swift-engine", isDirectory: true)
@@ -210,6 +225,8 @@ public final class HarnessLauncher {
     private var stopping = false
     private var restarts = 0
     private var logHandle: FileHandle?
+    /// Why the last spawn did not come up. The port list is only a guess.
+    private var launchError: String?
 
     public init() {}
 
@@ -241,6 +258,12 @@ public final class HarnessLauncher {
             state = .failed("Backup di ~/.swarmebot non riuscito, il motore non parte: \(error)")
             return
         }
+        do {
+            try HarnessEngine.ensureRuntimeDirectories()
+        } catch {
+            state = .failed("Impossibile preparare ~/.swarmebot: \(error.localizedDescription)")
+            return
+        }
         let engine = HarnessEngine.selected
         for port in HarnessLocator.ports where await Self.identify(port: port, pid: nil, engine: engine) {
             // our own binary, rebuilt since that process started: attaching
@@ -256,6 +279,7 @@ public final class HarnessLauncher {
         }
 
         let shellPath = await Task.detached { LoginShell.path() }.value
+        launchError = nil
 
         // two passes, like Electron: a quit-and-reopen can race the dying
         // instance's server during teardown
@@ -277,13 +301,23 @@ public final class HarnessLauncher {
             }
             if attempt == 0 { try? await Task.sleep(for: .milliseconds(2500)) }
         }
-        state = .failed("Impossibile avviare il motore: le porte 8799/18799/28799 sono occupate o il processo esce subito. Vedi ~/Library/Logs/SwarmeBot/server.log.")
+        var message = "Impossibile avviare il motore: le porte 8799/18799/28799 sono occupate o il processo esce subito."
+        if let launchError { message += " \(launchError)" }
+        message += " Vedi ~/Library/Logs/SwarmeBot/server.log."
+        state = .failed(message)
     }
 
     private func spawn(_ command: HarnessCommand, port: Int, shellPath: String?) async -> Bool {
         let process = Process()
         process.executableURL = command.executable
         process.arguments = command.arguments
+        do {
+            try HarnessEngine.ensureDirectories([command.workingDirectory])
+        } catch {
+            launchError = error.localizedDescription
+            writeLog("data dir: \(error.localizedDescription)")
+            return false
+        }
         process.currentDirectoryURL = command.workingDirectory
         var environment = ProcessInfo.processInfo.environment
         if let shellPath { environment["PATH"] = shellPath }
@@ -311,6 +345,7 @@ public final class HarnessLauncher {
         do {
             try process.run()
         } catch {
+            launchError = error.localizedDescription
             writeLog("spawn failed: \(error.localizedDescription)")
             return false
         }
@@ -319,7 +354,13 @@ public final class HarnessLauncher {
 
         // fresh machine: first boot writes data dirs, so give it 20s
         for _ in 0..<40 {
-            if !process.isRunning { self.process = nil; return false }
+            if !process.isRunning {
+                let code = process.terminationStatus
+                let how = process.terminationReason == .uncaughtSignal ? "segnale \(code)" : "codice \(code)"
+                launchError = "Il processo è uscito subito (\(how))."
+                self.process = nil
+                return false
+            }
             if await Self.identify(port: port, pid: pid) { return true }
             if await Self.identify(port: port, pid: nil) {
                 // someone else answered — our child lost the bind race
