@@ -19,18 +19,18 @@
 #
 # Other environment: VERSION, BUILD_NUMBER (default: the git commit count),
 # MAC_ARCHES (default arm64,x64), SWARMEBOT_REPO (default ../SwarmeBot),
-# RELEASES_REPO (default team-sviluppo/swarmebot-releases).
+# RELEASES_REPO (default team-sviluppo/SwarmeBot).
 #
 # Output: release/SwarmeBot-<version>-arm64.dmg and -x64.dmg, plus the stable
 # names release/SwarmeBot.dmg (Apple silicon) and release/SwarmeBot-intel.dmg.
-# Unless --no-publish, also a zip per arch and appcast.xml, uploaded as a
-# GitHub release so Sparkle can install the update.
+# Unless --no-publish, also a git tag vX.Y.Z pushed to origin, then a zip per
+# arch and appcast.xml uploaded as the GitHub release for that tag.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="${SWARMEBOT_REPO:-$ROOT/../SwarmeBot}"
 OUT="$ROOT/release"
-RELEASES_REPO="${RELEASES_REPO:-team-sviluppo/swarmebot-releases}"
+RELEASES_REPO="${RELEASES_REPO:-team-sviluppo/SwarmeBot}"
 SKIP_NOTARIZE=0
 PUBLISH=1
 
@@ -242,12 +242,35 @@ EOF
   grep -q 'sparkle:edSignature="[^"]\+"' "$appcast" || die "sign_update did not produce an EdDSA signature"
 
   tag="v${VERSION}"
+  # GitHub rejects the Release ("tag name can't be blank / not well-formed")
+  # unless the git tag already exists. Create it on HEAD and push it first.
+  sha="$(git -C "$ROOT" rev-parse HEAD)"
+  echo "→ tag $tag ($sha)"
+  if git -C "$ROOT" rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+    have="$(git -C "$ROOT" rev-parse "refs/tags/${tag}^{}")"
+    [[ "$have" == "$sha" ]] || die "tag $tag already points at ${have:0:12}, not HEAD ${sha:0:12}"
+  else
+    git -C "$ROOT" tag -a "$tag" -m "SwarmeBot ${VERSION}"
+  fi
+  remote_sha=""
+  while read -r ref_sha ref_name; do
+    [[ -n "$ref_sha" ]] || continue
+    if [[ "$ref_name" == *"^{}" ]]; then remote_sha="$ref_sha"
+    elif [[ -z "$remote_sha" ]]; then remote_sha="$ref_sha"; fi
+  done < <(git -C "$ROOT" ls-remote origin "refs/tags/${tag}" "refs/tags/${tag}^{}")
+  if [[ -z "$remote_sha" ]]; then
+    echo "→ pushing $tag to origin"
+    git -C "$ROOT" push origin "refs/tags/$tag"
+  elif [[ "$remote_sha" != "$sha" ]]; then
+    die "origin tag $tag points at ${remote_sha:0:12}, not HEAD ${sha:0:12}"
+  fi
+
   echo "→ publishing $tag on $RELEASES_REPO"
   if gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
     gh release upload "$tag" --repo "$RELEASES_REPO" --clobber \
       "${BUILT[@]}" "${ZIPS[@]}" "$appcast"
   else
-    gh release create "$tag" --repo "$RELEASES_REPO" \
+    gh release create "$tag" --repo "$RELEASES_REPO" --target "$sha" \
       --title "SwarmeBot ${VERSION}" \
       --notes "SwarmeBot ${VERSION} (${BUILD_NUMBER}) per macOS. Apple silicon: SwarmeBot-${VERSION}-arm64.dmg. Intel: SwarmeBot-${VERSION}-x64.dmg." \
       "${BUILT[@]}" "${ZIPS[@]}" "$appcast"
