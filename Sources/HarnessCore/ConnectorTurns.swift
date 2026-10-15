@@ -5,7 +5,9 @@
 // - a grant per turn: a random token the proxies carry back, naming the bot,
 //   the thread and exactly those connectors. A bot cannot reach a connector
 //   it was not given by guessing an id;
-// - `/api/internal/mcp-connectors/<id>/tools|call`, where the proxies land.
+// - `/api/internal/mcp-connectors/<id>/tools|call`, where the proxies land;
+// - for an engine that runs the tool loop itself, a `ConnectorGateway`
+//   instead of proxies: the same connectors, called in-process.
 import Foundation
 
 struct ConnectorGrant {
@@ -54,6 +56,20 @@ extension Harness {
         return specs.map { MountedConnector(name: $0.id, server: MCPServer(command: HelperCommand.executable, args: ["mcp-connector", $0.id], env: env)) }
     }
 
+    /// The in-process side for `.inline` engines. Nil when the engine runs
+    /// no tool loop, no connector is on, or the chosen model ignores
+    /// client-side tools (a Hermes profile: §5.3).
+    func connectorGateway(bot: JSONObject, task: JSONObject?, instance: ProviderInstance, model: String?) -> ConnectorGateway? {
+        guard instance.adapter.capabilities.connectors == .inline else { return nil }
+        if let model, instance.models.options.first(where: { $0.id == model })?.clientTools == false { return nil }
+        let specs = Self.activeConnectors(bot: bot, task: task, registry: mcpConnectors)
+        guard !specs.isEmpty else { return nil }
+        for spec in specs {
+            Task { @MainActor [weak self] in _ = try? await self?.mcpPool.tools(spec) }
+        }
+        return ConnectorGateway(specs: specs, pool: mcpPool)
+    }
+
     /// A settled turn's proxies have nothing left to ask.
     func revokeConnectorGrants(threadId: String) {
         guard connectorGrants.values.contains(where: { $0.threadId == threadId }) else { return }
@@ -98,5 +114,104 @@ extension Harness {
         var out = Redact.text(text)
         for secret in spec.secretValues where secret.count >= 4 { out = out.replacingOccurrences(of: secret, with: "«redacted»") }
         return String(out.prefix(500))
+    }
+}
+
+/// One turn's connectors, called in-process by an engine that runs its own
+/// tool loop (docs/plans/2026-10-15-connettori-mcp.md §5).
+@MainActor
+public final class ConnectorGateway {
+    public struct Tool: Sendable {
+        public var connectorId: String
+        public var connectorName: String
+        public var name: String
+        public var description: String
+        public var inputSchema: JSON
+
+        public init(connectorId: String, connectorName: String, name: String, description: String, inputSchema: JSON) {
+            self.connectorId = connectorId
+            self.connectorName = connectorName
+            self.name = name
+            self.description = description
+            self.inputSchema = inputSchema
+        }
+    }
+
+    public struct Result: Sendable {
+        public var text: String
+        public var ok: Bool
+
+        public init(text: String, ok: Bool) {
+            self.text = text
+            self.ok = ok
+        }
+    }
+
+    /// What one result may put in the model's context (§5.2).
+    public static let maxResultCharacters = 40_000
+
+    let specs: [MCPConnectorSpec]
+    private let pool: MCPConnectorPool
+
+    init(specs: [MCPConnectorSpec], pool: MCPConnectorPool) {
+        self.specs = specs
+        self.pool = pool
+    }
+
+    public var connectorNames: [String] { specs.map(\.name) }
+
+    /// Every tool of every connector; a connector that cannot be reached
+    /// is left out and named in `failures`, the turn goes on without it.
+    public func tools() async -> (tools: [Tool], failures: [String]) {
+        var tools: [Tool] = []
+        var failures: [String] = []
+        for spec in specs {
+            do {
+                for tool in try await pool.tools(spec) {
+                    guard let name = tool["name"]?.string else { continue }
+                    tools.append(Tool(connectorId: spec.id, connectorName: spec.name, name: name,
+                                      description: tool["description"]?.string ?? "",
+                                      inputSchema: tool["inputSchema"] ?? ["type": "object", "properties": .object(JSONObject())]))
+                }
+            } catch {
+                failures.append("\(spec.name): \(Harness.scrub(error.localizedDescription, spec))")
+            }
+        }
+        return (tools, failures)
+    }
+
+    public func call(connectorId: String, tool: String, arguments: JSON) async -> Result {
+        guard let spec = specs.first(where: { $0.id == connectorId }) else {
+            return Result(text: "connector \(connectorId) is not available in this turn", ok: false)
+        }
+        do {
+            let result = try await pool.call(spec, tool: tool, arguments: arguments)
+            return Result(text: Self.text(of: result), ok: result["isError"]?.bool != true)
+        } catch is CancellationError {
+            return Result(text: "interrupted", ok: false)
+        } catch {
+            return Result(text: "\(spec.name) · \(tool): \(Harness.scrub(error.localizedDescription, spec))", ok: false)
+        }
+    }
+
+    /// An MCP result as the text a chat model reads: the text parts, else
+    /// the structured content; pictures and binaries become a note.
+    static func text(of result: JSON) -> String {
+        var parts: [String] = []
+        for item in result["content"]?.array ?? [] {
+            switch item["type"]?.string {
+            case "text": if let text = item["text"]?.string { parts.append(text) }
+            case "image": parts.append("[immagine dal connettore omessa]")
+            case "audio": parts.append("[audio dal connettore omesso]")
+            case "resource":
+                if let text = item["resource"]?["text"]?.string { parts.append(text) } else { parts.append("[risorsa \(item["resource"]?["uri"]?.string ?? "") omessa]") }
+            case "resource_link": parts.append("[link: \(item["uri"]?.string ?? "")]")
+            default: break
+            }
+        }
+        if parts.isEmpty, let structured = result["structuredContent"], !structured.isNull { parts.append(structured.serialized()) }
+        let text = parts.joined(separator: "\n")
+        guard text.count > maxResultCharacters else { return text.isEmpty ? "(nessun risultato)" : text }
+        return String(text.prefix(maxResultCharacters)) + "\n…troncato (\(text.count) caratteri in tutto)"
     }
 }

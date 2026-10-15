@@ -155,6 +155,7 @@ extension Harness {
             )
             // a room has no per-chat switches: each member brings its own defaults
             input.connectors = mountConnectors(bot: bot, task: nil, threadId: threadId, mount: instance.adapter.capabilities.connectors)
+            input.connectorGateway = connectorGateway(bot: bot, task: nil, instance: instance, model: selection.model)
             Task { @MainActor in
                 do {
                     _ = try await instance.adapter.sendTurn(input)

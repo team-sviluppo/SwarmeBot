@@ -357,4 +357,44 @@ final class MCPConnectorsTests: XCTestCase {
         XCTAssertFalse(check("mcp__github__create_issue", []))
         XCTAssertFalse(check("mcp__agents__ask_bot"))
     }
+    // MARK: Phase 3: the Local Endpoint's tool loop
+
+    func testOpenAIToolNamesStayValidAndRoutable() {
+        func tool(_ connector: String, _ name: String) -> ConnectorGateway.Tool {
+            ConnectorGateway.Tool(connectorId: connector, connectorName: connector.uppercased(), name: name, description: "d", inputSchema: .null)
+        }
+        let long = String(repeating: "x", count: 80)
+        let (tools, routes) = LocalEndpointInstance.openAITools([tool("git", "create.issue"), tool("git", "create_issue"), tool("git", long)])
+        let names = tools.compactMap { $0["function"]?["name"]?.string }
+        XCTAssertEqual(names.count, 3)
+        XCTAssertEqual(names[0], "git__create_issue")
+        XCTAssertNotEqual(names[1], names[0], "a clash gets a hash")
+        for name in names { XCTAssertNotNil(name.range(of: #"^[a-zA-Z0-9_-]{1,64}$"#, options: .regularExpression), name) }
+        XCTAssertEqual(routes[names[1]]?.name, "create_issue")
+        XCTAssertEqual(routes[names[2]]?.name, long)
+        XCTAssertEqual(tools[0]["function"]?["parameters"]?["type"], "object", "a missing schema becomes an empty object")
+        XCTAssertEqual(tools[0]["function"]?["description"], "[GIT] d")
+    }
+
+    func testMCPResultsBecomeText() {
+        XCTAssertEqual(ConnectorGateway.text(of: ["content": [["type": "text", "text": "a"], ["type": "image", "data": "x"], ["type": "text", "text": "b"]]]),
+                       "a\n[immagine dal connettore omessa]\nb")
+        XCTAssertEqual(ConnectorGateway.text(of: ["content": [], "structuredContent": ["n": 1]]), #"{"n":1}"#)
+        XCTAssertEqual(ConnectorGateway.text(of: ["content": [["type": "resource", "resource": ["uri": "f://x", "text": "body"]]]]), "body")
+        XCTAssertEqual(ConnectorGateway.text(of: [:]), "(nessun risultato)")
+        let big = ConnectorGateway.text(of: ["content": [["type": "text", "text": .string(String(repeating: "y", count: 50_000))]]])
+        XCTAssertTrue(big.hasSuffix("…troncato (50000 caratteri in tutto)"))
+        XCTAssertLessThan(big.count, 40_100)
+    }
+
+    func testStreamedToolCallsAreReassembledByIndex() {
+        XCTAssertEqual(LocalEndpointInstance.toolCalls([["id": "a", "function": ["name": "x", "arguments": "{}"]], ["function": ["name": "y"]]]).map(\.name), ["x", "y"])
+        XCTAssertEqual(LocalEndpointInstance.toolCalls(nil).count, 0)
+        XCTAssertTrue(LocalEndpointInstance.toolCalls([["function": ["name": "y"]]])[0].id.hasPrefix("call_0_"), "a missing id is made up")
+    }
+
+    func testHermesModelsAreReadFromOwnedBy() throws {
+        let payload = try JSON.parse(#"{"data":[{"id":"default/x","owned_by":"hermes"},{"id":"gpt-4o","owned_by":"openai"},{"id":"plain"}]}"#)
+        XCTAssertEqual(LocalHosts.hermesModels(fromModelsPayload: payload), ["default/x"])
+    }
 }

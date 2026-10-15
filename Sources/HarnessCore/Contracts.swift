@@ -52,8 +52,13 @@ public struct ModelOption: Equatable, Sendable {
     public var loaded: Bool?
     public var contextWindow: Int?
     public var effortLevels: [String]?
+    /// false: the model runs its own tools server-side and ignores `tools`
+    /// in a request (a Hermes Agent profile). Absent: it may take them.
+    public var clientTools: Bool?
 
-    public init(id: String, label: String, custom: Bool? = nil, loaded: Bool? = nil, contextWindow: Int? = nil, effortLevels: [String]? = nil) {
+    public init(id: String, label: String, custom: Bool? = nil, loaded: Bool? = nil, contextWindow: Int? = nil, effortLevels: [String]? = nil,
+                clientTools: Bool? = nil) {
+        self.clientTools = clientTools
         self.id = id
         self.label = label
         self.custom = custom
@@ -68,6 +73,7 @@ public struct ModelOption: Equatable, Sendable {
         if let loaded { object["loaded"] = .bool(loaded) }
         if let contextWindow { object["contextWindow"] = .number(Double(contextWindow)) }
         if let effortLevels { object["effortLevels"] = .strings(effortLevels) }
+        if let clientTools { object["clientTools"] = .bool(clientTools) }
         return .object(object)
     }
 }
@@ -303,6 +309,9 @@ public struct SendTurnInput: Sendable {
     /// The bot's connectors for this turn, only for engines whose
     /// capabilities say `connectors == .mcp`. Empty changes nothing.
     public var connectors: [MountedConnector] = []
+    /// The same connectors for an engine that runs the tool loop itself
+    /// (`connectors == .inline`, the Local Endpoint). Nil changes nothing.
+    public var connectorGateway: ConnectorGateway?
 
     public init(threadId: ThreadID, text: String, model: String? = nil, effort: String? = nil, resumeCursor: JSON? = nil,
                 transcript: [(role: String, text: String)] = [], system: String? = nil, cwd: String? = nil,

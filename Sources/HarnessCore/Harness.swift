@@ -647,6 +647,8 @@ public final class Harness {
                 input.computer = computer.server
                 input.computerScope = computer.scope
                 input.connectors = connectors
+                input.connectorGateway = self.connectorGateway(bot: bot, task: self.store.taskByThread(botId, threadId),
+                                                               instance: instance, model: model)
                 self.watchdog.watch(threadId, botId: botId)
                 _ = try await instance.adapter.sendTurn(input)
                 if rewound { self.store.patchBot(botId, ["rewound": false, "resumeCursors": [:]]) }

@@ -412,11 +412,18 @@ extension AppModel {
         await perform { try await $0.setTaskConnectors(botId: bot.id, threadId: bot.threadId, [:]) }
     }
 
-    /// What the bot's engine can do with connectors: "none", "mcp" or "inline";
-    /// nil while the engines are not known yet, so nothing is claimed early.
-    public func connectorMount(_ bot: Bot) -> String? {
+    /// Why the bot's engine and model cannot use connectors, or nil when
+    /// they can — or when the engines are not known yet, so nothing is
+    /// claimed early.
+    public func connectorBlock(_ bot: Bot) -> String? {
         guard let instance = instances.first(where: { $0.instanceId == bot.modelSelection.instanceId }) else { return nil }
-        return instance.capabilities?.connectors ?? "none"
+        guard (instance.capabilities?.connectors ?? "none") != "none" else {
+            return "Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex, gli agenti ACP e il Local Endpoint."
+        }
+        if instance.models.options.first(where: { $0.id == bot.modelSelection.model })?.clientTools == false {
+            return "Questo modello è un profilo Hermes: usa i suoi strumenti e ignora i connettori di SwarmeBot."
+        }
+        return nil
     }
 
     private func upsert(_ connector: MCPConnector) {

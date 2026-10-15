@@ -1,6 +1,6 @@
 # Connettori (server MCP) — piano di implementazione
 
-Stato: fasi 1 e 2 fatte (branch `feat/mcp-connectors`), vedi §12. Data: 2026-10-15.
+Stato: fasi 1, 2 e 3 fatte (branch `feat/mcp-connectors`), vedi §12. Data: 2026-10-15.
 Motore: solo Swift (`HarnessCore` / `HarnessDrivers`); il motore Node non riceve la funzione.
 
 ## 0. Obiettivo e decisioni prese
@@ -477,3 +477,43 @@ cambiano. Per il resto si verifica con:
   `connectors`, quindi un team importato parte senza connettori, che è il comportamento sicuro.
 - **Da verificare con gli agenti ACP reali**: il titolo con cui ciascun agente chiede il permesso per
   un tool MCP (§11.2). Se non viene riconosciuto, compare la normale card di approvazione.
+
+### Fase 3 — fatta (2026-10-15)
+
+- Motore:
+  - `ModelOption.clientTools` (`false` solo per i modelli `owned_by: "hermes"` in `/v1/models`; assente
+    altrimenti, così i cataloghi degli altri motori non cambiano);
+  - `ConnectorGateway` (in `ConnectorTurns.swift`): elenca gli strumenti dei connettori del turno
+    (un connettore irraggiungibile diventa una riga nella chat e il turno continua) e li chiama tramite
+    il pool. Il risultato MCP diventa testo per il modello: testo, altrimenti `structuredContent`;
+    immagini e audio sono segnaposto; massimo 40.000 caratteri;
+  - `Harness.connectorGateway` lo crea solo per i motori `.inline`, solo se il modello scelto non è
+    `clientTools: false`, e avvia i server in anticipo; vale anche nei canali.
+- Local Endpoint (`connectors = .inline`):
+  - `complete` manda `tools` solo se presenti, e ricompone le `tool_calls` dallo stream per `index`
+    (id e nome nel primo frammento, argomenti a pezzi; nome ripetuto tollerato);
+  - `sendTurn` fa i giri: messaggio `assistant` con le `tool_calls`, poi un messaggio `tool` per
+    chiamata (al massimo 4 in parallelo, risposte nell'ordine del modello), con una chip per chiamata
+    («Connettore · strumento») sugli stessi eventi `item.*` di Claude e Codex;
+  - limite di 20 giri, poi un ultimo giro senza `tools` e una riga nella chat; gli argomenti non JSON
+    tornano al modello come errore, senza chiamare il server; testo dei giri unito, token sommati;
+  - **un 400** alla prima richiesta con `tools` ripete il giro senza; il modello resta senza
+    connettori fino al prossimo `refreshModels` e la chat lo dice;
+  - una sessione Hermes provata (`.session`) non riceve mai `tools`; il verdetto di continuità resta
+    quello del primo giro; il 403 di Hermes si recupera come prima;
+  - senza connettori la richiesta e gli eventi sono identici a prima.
+- App: `ModelOption.clientTools`; la card del bot e la chip dicono perché i connettori non valgono
+  (motore che non li usa, oppure «profilo Hermes: usa i suoi strumenti»).
+- Verifica:
+  - `MCPConnectorsTests` sale a 16: nomi degli strumenti validi e instradabili, risultati MCP in testo,
+    `tool_calls` senza id, `owned_by: hermes`;
+  - `fake_openai.py` risponde con `tool_calls` solo alle richieste che portano `tools`, quindi gli
+    scenari esistenti non cambiano: `STRUMENTO`, `DOPPIO`, `CICLO`, `fake/no-tools` (400) e, con
+    `FAKE_OPENAI_HERMES=1`, `fake/hermes-1`;
+  - `parity/connectors_e2e.py localEndpoint`: una chiamata con il segreto che arriva al server, due
+    in parallelo, 21 richieste con l'ultima senza `tools`, chat con il connettore spento senza `tools`,
+    400 poi senza `tools` e ricordato, modello Hermes senza `tools`;
+  - dal vivo sull'endpoint Hermes reale (solo catalogo, nessun turno): i 10 modelli risultano
+    `clientTools: false`.
+- **Non verificato dal vivo**: un turno con strumenti su un endpoint OpenAI-compatible reale non Hermes
+  (nessuno disponibile).

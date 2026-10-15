@@ -20,8 +20,8 @@ struct BotConnectorsCard: View {
                     SettingsLink { Text("Apri") }
                 }
             } else {
-                if model.connectorMount(bot) == "none" {
-                    Text("Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex e gli agenti ACP.")
+                if let block = model.connectorBlock(bot) {
+                    Text(block)
                         .font(.system(size: 11.5)).foregroundStyle(Theme.warning)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 12).padding(.top, 9)
@@ -79,7 +79,8 @@ struct ConnectorsChip: View {
         return ids.compactMap { id in model.mcpConnectors.first { $0.id == id } }
     }
 
-    private var supported: Bool { model.connectorMount(bot) != "none" }
+    private var block: String? { model.connectorBlock(bot) }
+    private var supported: Bool { block == nil }
     private var active: [MCPConnector] { connectors.filter { $0.isEnabled && model.connectorIsOn(bot, $0.id) } }
     private var hasOverrides: Bool { !(bot.tasks?.first { $0.threadId == bot.threadId }?.connectors ?? [:]).isEmpty }
 
@@ -96,7 +97,7 @@ struct ConnectorsChip: View {
                 .foregroundStyle(!supported || active.isEmpty ? Theme.tertiary : Theme.secondary)
             }
             .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
-            .help(supported ? "Connettori in questa chat" : "Il motore di questo bot non usa i connettori")
+            .help(block ?? "Connettori in questa chat")
             .popover(isPresented: $open, arrowEdge: .top) { popover }
         }
     }
@@ -104,8 +105,8 @@ struct ConnectorsChip: View {
     private var popover: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Connettori in questa chat").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary)
-            if !supported {
-                Text("Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex e gli agenti ACP.")
+            if let block {
+                Text(block)
                     .font(.system(size: 11)).foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
             }
             ForEach(connectors) { connector in

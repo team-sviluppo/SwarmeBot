@@ -374,6 +374,8 @@ public struct ModelOption: Codable, Hashable, Identifiable, Sendable {
     public var label: String
     /// Effort levels this model accepts, when it narrows the engine's list.
     public var effortLevels: [String]?
+    /// false: the model runs its own tools and ignores ours (a Hermes profile).
+    public var clientTools: Bool?
 }
 
 public struct ModelCatalog: Codable, Hashable, Sendable {

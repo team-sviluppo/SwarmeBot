@@ -1,11 +1,14 @@
 """Connectors end to end on the Swift engine (docs/plans/2026-10-15-connettori-mcp.md §10).
 
-  python3 -I connectors_e2e.py <swift-binary> [claude|codex|acp:<driverKind> ...]
+  python3 -I connectors_e2e.py <swift-binary> [claude|codex|acp:<driverKind>|localEndpoint ...]
 
 For each engine: a bot gets two connectors (both `fake_mcp.py stdio`), one on
 by default and one off; a turn calls `echo` through the real proxy and pool;
 the conversation's switches flip which one is mounted; deleting a connector
-clears it from the bot and the task. Assertions, not a trace: the Node engine
+clears it from the bot and the task. The Local Endpoint runs the tool loop
+itself against `fake_openai.py` (phase 3): one call, two in parallel, the
+round limit, a model that refuses tools and a Hermes model that never gets
+them. Assertions, not a trace: the Node engine
 never had connectors, so there is nothing to compare against.
 """
 import json
@@ -19,7 +22,7 @@ import time
 import urllib.request
 
 BIN = sys.argv[1]
-DRIVERS = sys.argv[2:] or ["claude", "codex", "acp:geminiAgent", "acp:kimiAgent"]
+DRIVERS = sys.argv[2:] or ["claude", "codex", "acp:geminiAgent", "acp:kimiAgent", "localEndpoint"]
 HERE = os.path.dirname(os.path.abspath(__file__))
 FAKE_MCP = os.path.join(HERE, "fake_mcp.py")
 
@@ -138,10 +141,127 @@ def run(driver):
         shutil.rmtree(data_dir, ignore_errors=True)
 
 
+def run_local():
+    data_dir = tempfile.mkdtemp(prefix="conn-e2e-le-")
+    port, fake_port = free_port(), free_port()
+    record = os.path.join(data_dir, "endpoint.ndjson")
+    fake = subprocess.Popen([sys.executable, "-I", os.path.join(HERE, "fake_openai.py"), str(fake_port), record],
+                            env={**os.environ, "FAKE_OPENAI_HERMES": "1"})
+    with open(os.path.join(data_dir, "config.json"), "w") as f:
+        json.dump({"localEndpoint": {"baseUrl": f"http://127.0.0.1:{fake_port}/v1", "apiKey": "test-key"},
+                   "instances": {"localEndpoint": {"driver": "localEndpoint"}}}, f)
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_ENDPOINT", "OMB_", "XAI_", "BOX_", "OPENCODE_", "ANTHROPIC_", "CLAUDE"))}
+    env.update(OMB_DATA_DIR=data_dir, OMB_PORT=str(port), OMB_WEBHOOK_PORT=str(free_port()))
+    engine = subprocess.Popen([BIN], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(160):
+            try:
+                if request(port, "GET", "/api/health")[0] == 200:
+                    break
+            except OSError:
+                time.sleep(0.25)
+        status, body = request(port, "POST", "/api/mcp-connectors", {
+            "id": "fake", "name": "Fake", "transport": "stdio", "command": sys.executable,
+            "args": ["-I", FAKE_MCP, "stdio"], "env": {"FAKE_MCP_SECRET": {"secret": True, "value": "abcdef"}}})
+        assert status == 201, (status, body)
+        _, instances = request(port, "GET", "/api/instances")
+        local = next(i for i in instances["instances"] if i["instanceId"] == "localEndpoint")
+        assert local["capabilities"]["connectors"] == "inline", local["capabilities"]
+        options = {o["id"]: o for o in local["models"]["options"]}
+        hermes_id = next(i for i in options if i.endswith("fake/hermes-1"))
+        assert options[hermes_id].get("clientTools") is False, options[hermes_id]
+        echo_id = next(i for i in options if i.endswith("fake/echo-1"))
+        assert "clientTools" not in options[echo_id], options[echo_id]
+        no_tools_id = next(i for i in options if i.endswith("fake/no-tools"))
+        _, fleet = request(port, "GET", "/api/bots")
+        bot = fleet["bots"][0]
+        bot_id, thread_id = bot["id"], bot["threadId"]
+
+        def use(model):
+            status, body = request(port, "PATCH", f"/api/bots/{bot_id}", {
+                "modelSelection": {"instanceId": "localEndpoint", "model": model}, "connectors": [{"id": "fake", "defaultOn": True}]})
+            assert status == 200, (status, body)
+
+        def requests_since(mark):
+            with open(record) as f:
+                return [json.loads(line) for line in f.readlines()[mark:]]
+
+        def mark():
+            try:
+                with open(record) as f:
+                    return len(f.readlines())
+            except FileNotFoundError:
+                return 0
+
+        def turn(text):
+            before = len(request(port, "GET", "/api/bots")[1]["bots"][0].get("messages", []))
+            status, body = request(port, "POST", f"/api/bots/{bot_id}/messages", {"text": text})
+            assert status == 202, (status, body)
+            deadline = time.time() + 60
+            while time.time() < deadline:
+                current = request(port, "GET", "/api/bots")[1]["bots"][0]
+                fresh = current.get("messages", [])[before:]
+                replies = [m for m in fresh if m.get("role") == "bot" and m.get("kind") == "text"]
+                if replies and not current.get("busy"):
+                    chips = [m["tool"] for m in fresh if m.get("kind") == "activity" and m.get("tool")]
+                    return replies[-1]["text"], chips
+                time.sleep(0.2)
+            raise SystemExit(f"localEndpoint: turn did not settle: {text}")
+
+        use(echo_id)
+        at = mark()
+        reply, chips = turn("STRUMENTO echo ciao")
+        assert reply == "Risultato: ciao (secret len 6)", reply
+        assert chips == [{"name": "Fake · echo", "ok": True}], chips
+        sent = requests_since(at)
+        assert len(sent) == 2 and sent[0]["tools"][0] == "fake__echo" and sent[1]["roles"][-2:] == ["assistant", "tool"], sent
+        first = reply
+
+        reply, chips = turn("DOPPIO echo uno due")
+        assert reply == "Ne chiamo due.\n\nRisultato: uno (secret len 6) / due (secret len 6)", reply
+        assert [c["name"] for c in chips] == ["Fake · echo", "Fake · echo"] and all(c["ok"] for c in chips), chips
+
+        at = mark()
+        reply, chips = turn("CICLO echo")
+        sent = requests_since(at)
+        assert len(sent) == 21 and "tools" not in sent[-1], [len(sent), sent[-1]]
+        assert any("Limite di 20" in c["name"] for c in chips), chips
+
+        # this chat switches the connector off: no tools go out
+        assert request(port, "PATCH", f"/api/bots/{bot_id}/tasks/{thread_id}", {"connectors": {"fake": False}})[0] == 200
+        at = mark()
+        reply, _ = turn("STRUMENTO echo spento")
+        assert all("tools" not in r for r in requests_since(at)), requests_since(at)
+        assert request(port, "PATCH", f"/api/bots/{bot_id}/tasks/{thread_id}", {"connectors": {}})[0] == 200
+
+        # a model without function calling: 400, then the same turn without tools
+        use(no_tools_id)
+        at = mark()
+        reply, chips = turn("STRUMENTO echo niente")
+        sent = requests_since(at)
+        assert [("tools" in r) for r in sent] == [True, False], sent
+        assert any("non accetta strumenti" in c["name"] for c in chips), chips
+        at = mark()
+        turn("STRUMENTO echo ancora")
+        assert all("tools" not in r for r in requests_since(at)), "remembered until the catalog is read again"
+
+        # a Hermes profile runs its own tools: ours never go out
+        use(hermes_id)
+        at = mark()
+        reply, _ = turn("STRUMENTO echo hermes")
+        assert all("tools" not in r for r in requests_since(at)), requests_since(at)
+        return {"default": first}
+    finally:
+        engine.terminate()
+        engine.wait(10)
+        fake.terminate()
+        shutil.rmtree(data_dir, ignore_errors=True)
+
+
 failed = False
 for driver in DRIVERS:
     try:
-        results = run(driver)
+        results = run_local() if driver == "localEndpoint" else run(driver)
         print(f"OK   {driver}: {results['default']}")
     except (AssertionError, SystemExit, Exception) as error:  # noqa: BLE001 — report and go on
         failed = True
