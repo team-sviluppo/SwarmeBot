@@ -250,8 +250,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
     // MARK: Catalog and health
 
     func refreshModels() async {
-        let base = ClaudeCatalog.withCliModels(ClaudeCatalog.fromSettings(environment), ClaudeCatalog.fromInstalledCli(config.cli))
-        let resolved = await LocalHosts.merge(base, env: environment)
+        let resolved = ClaudeCatalog.withCliModels(ClaudeCatalog.fromSettings(environment), ClaudeCatalog.fromInstalledCli(config.cli))
         if !resolved.options.isEmpty { models = resolved }
     }
 
