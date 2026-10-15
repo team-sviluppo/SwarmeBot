@@ -43,6 +43,9 @@ public final class Harness {
         return library
     }()
     private(set) lazy var localVM = LocalVM(paths: paths)
+    // connectors: MCP servers the user hands to bots (MCPConnectors.swift)
+    public private(set) lazy var mcpConnectors = MCPConnectors(paths: paths)
+    public private(set) lazy var mcpPool = MCPConnectorPool(paths: paths, environment: environment)
     public private(set) lazy var box = BoxComputer(environment: environment) { [weak self] in self?.config.secret("box", "token") }
     var screenPollers: [String: ScreenPoller] = [:]
 
@@ -749,6 +752,7 @@ public final class Harness {
     }
 
     public func shutdown() async {
+        mcpPool.stopAll()
         await fleet.stopAll()
     }
 }

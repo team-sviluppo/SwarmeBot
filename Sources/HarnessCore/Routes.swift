@@ -54,6 +54,7 @@ public final class Routes {
         if let settings = await DeepSeekSettingsRoutes.handle(r, harness: harness) { return settings }
         if let team = await TeamRoutes.handle(r, harness: harness) { return team }
         if let avatar = AvatarRoutes.handle(r, harness: harness) { return avatar }
+        if let connectors = try await MCPConnectorRoutes.handle(r, harness: harness) { return connectors }
 
         // dangerous mutations must declare JSON (no CSRF via HTML forms)
         let jsonOnly = [#"^/api/local-computer/"#, #"^/api/cli-test$"#, #"^/api/instances/[\w.-]+"#, #"^/api/bots/[\w-]+/computer"#, #"^/api/bots/[\w-]+/library"#]

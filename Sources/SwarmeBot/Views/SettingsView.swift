@@ -2,12 +2,13 @@ import CompanionCore
 import SwarmeKit
 import SwiftUI
 
-/// ⌘, — profile, engines, control of this Mac, keys and services, DeepSeek Harness, updates.
+/// ⌘, — profile, engines, connectors, control of this Mac, keys and services, DeepSeek Harness, updates.
 struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralPane().tabItem { Label("Generale", systemImage: "person.crop.circle") }
             EnginesPane().tabItem { Label("Motori", systemImage: "cpu") }
+            ConnectorsPane().tabItem { Label("Connettori", systemImage: "puzzlepiece.extension") }
             MacControlPane().tabItem { Label("Controllo Mac", systemImage: "macbook.and.iphone") }
             KeysPane().tabItem { Label("Chiavi e servizi", systemImage: "key") }
             DeepSeekPane().tabItem { Label("DeepSeek", systemImage: "network") }

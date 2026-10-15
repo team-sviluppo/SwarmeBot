@@ -299,8 +299,8 @@ public struct CompanionState: Sendable {
         case let .library(botId):
             libraryRevision[botId, default: 0] += 1
 
-        // Config is refetched by whoever shows it; nothing to fold here.
-        case .config, .unknown:
+        // Config and connectors are refetched by whoever shows them; nothing to fold here.
+        case .config, .mcpConnectors, .unknown:
             break
         }
     }

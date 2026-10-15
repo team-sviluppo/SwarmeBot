@@ -338,3 +338,60 @@ public struct ComposerAttachment: Identifiable, Sendable {
         self.kind = kind
     }
 }
+
+// MARK: - Connectors
+
+extension AppModel {
+    public func refreshMCPConnectors() async {
+        guard let client else { return }
+        if let list = try? await client.mcpConnectors() { mcpConnectors = list }
+    }
+
+    /// Create or replace. Returns the saved connector, or the harness's
+    /// message when it refused the definition.
+    public func save(connector input: MCPConnectorInput, existing: Bool) async -> Result<MCPConnector, Error> {
+        guard let client else { return .failure(CancellationError()) }
+        do {
+            let saved = existing ? try await client.updateMCPConnector(input.id, input) : try await client.createMCPConnector(input)
+            upsert(saved)
+            return .success(saved)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    public func delete(connector: MCPConnector) async {
+        await perform { client in
+            try await client.deleteMCPConnector(connector.id)
+            self.mcpConnectors.removeAll { $0.id == connector.id }
+        }
+    }
+
+    /// "Prova connessione": the result lands in the connector's `lastCheck`.
+    public func test(connector: MCPConnector) async {
+        await perform { client in self.upsert(try await client.testMCPConnector(connector.id)) }
+    }
+
+    /// Paste of a Claude Desktop / `.mcp.json` config.
+    public func importConnectors(_ text: String) async -> Result<MCPConnectorImport, Error> {
+        guard let client else { return .failure(CancellationError()) }
+        do {
+            guard let object = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] else {
+                return .failure(APIError.status(code: 400, message: "Non è un JSON valido: incolla un oggetto come {\"mcpServers\": {…}}"))
+            }
+            let result = try await client.importMCPConnectors(object)
+            await refreshMCPConnectors()
+            return .success(result)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func upsert(_ connector: MCPConnector) {
+        if let index = mcpConnectors.firstIndex(where: { $0.id == connector.id }) {
+            mcpConnectors[index] = connector
+        } else {
+            mcpConnectors.append(connector)
+        }
+    }
+}
