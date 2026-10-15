@@ -31,6 +31,9 @@ public final class Harness {
     private var streamedReply: [String: String] = [:]
     private var lastReply: [String: String] = [:]
     private var turnUsage: [String: RuntimeEvent.TokenUsage] = [:]
+    /// When the turn began, and when the first reply token arrived.
+    private var turnStartedAt: [String: Date] = [:]
+    private var firstTokenAt: [String: Date] = [:]
     /// Messages sent while the bot was busy: threadId → (botId, [(messageId, text)]).
     private var queues: [String: (botId: String, items: [(String, String)])] = [:]
 
@@ -349,7 +352,10 @@ public final class Harness {
 
         switch event.body {
         case let .contentDelta(streamKind, delta):
-            if streamKind == "assistant_text", !delta.isEmpty { streamedReply[threadId, default: ""] += delta }
+            if streamKind == "assistant_text", !delta.isEmpty {
+                streamedReply[threadId, default: ""] += delta
+                if firstTokenAt[threadId] == nil { firstTokenAt[threadId] = Date() }
+            }
 
         case let .sessionStarted(sessionId, _, resumeCursor):
             guard let sessionId, let instanceId = event.providerInstanceId else { break }
@@ -425,10 +431,18 @@ public final class Harness {
             }
             let reply = lastReply.removeValue(forKey: threadId) ?? ""
             let lastReported = turnUsage.removeValue(forKey: threadId)
+            let finished = Date()
+            let started = firstTokenAt.removeValue(forKey: threadId) ?? turnStartedAt.removeValue(forKey: threadId)
+            turnStartedAt[threadId] = nil
+            let generationSeconds = started.map { finished.timeIntervalSince($0) }
             // a room's spend is not the speaking bot's task tally
             if let bot, let botId {
                 let tokens = usage ?? lastReported
-                store.addTaskUsage(botId, threadId, input: tokens?.input, output: tokens?.output, costUsd: cost)
+                let reportedOutput = tokens?.output ?? 0
+                // Providers that omit usage still get a speed: about 3.5
+                // characters a token, same ratio as the connector estimate.
+                let timedTokens = reportedOutput > 0 ? reportedOutput : Self.estimatedTokens(reply)
+                store.addTaskUsage(botId, threadId, input: tokens?.input, output: tokens?.output, costUsd: cost, generationSeconds: generationSeconds, timedTokens: timedTokens)
                 if store.bot(botId)?["activity"]?.string != "dead" { store.setActivity(botId, "idle") }
                 store.patchBot(botId, ["unread": true])
                 notify("done", bot: bot, threadId: threadId, detail: reply)
@@ -453,9 +467,19 @@ public final class Harness {
             // a delegated turn's terminal state belongs in its A⇄B channel
             finalizeDelegationWatch(threadId, ok: ok, reply: reply)
 
-        case .turnStarted, .sessionExited, .itemUpdated:
+        case .turnStarted:
+            turnStartedAt[threadId] = Date()
+            firstTokenAt[threadId] = nil
+        case .sessionExited, .itemUpdated:
             break
         }
+    }
+
+    /// About 3.5 characters a token. Used only when the provider sends no output count.
+    private static func estimatedTokens(_ text: String) -> Double? {
+        let chars = text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        guard chars >= 8 else { return nil }
+        return Double(chars) / 3.5
     }
 
     private func openRequest(_ event: RuntimeEvent, asker: JSONObject?, push: @escaping (JSONObject) -> JSONObject, requestType: String, tool: String,

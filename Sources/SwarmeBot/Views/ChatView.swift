@@ -191,25 +191,23 @@ struct HoverActions<Content: View>: View {
 
     @State private var hideToken = 0
 
-    /// The actions hang outside the bubble in an overlay, so a row costs no
-    /// extra layout; they are built only while hovered.
+    /// The meta row is in the layout, under the bubble. An overlay aligned to
+    /// the bubble's bottom draws on top of the last line.
     var body: some View {
         HStack(spacing: 0) {
             if isUser { Spacer(minLength: 0) }
-            content
-                .overlay(alignment: isUser ? .bottomTrailing : .bottomLeading) {
-                    if hovering {
-                        HStack(alignment: .center, spacing: 4) {
-                            if isUser { time; actions } else { actions; time }
-                        }
-                        .fixedSize()
-                        .padding(.horizontal, 4)
-                        .alignmentGuide(.bottom) { d in d[.top] - 2 }
-                        .onHover(perform: hover)
-                        .zIndex(1)
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                content
+                if hovering {
+                    HStack(alignment: .center, spacing: 4) {
+                        if isUser { time; actions } else { actions; time }
                     }
+                    .padding(.horizontal, 2)
+                    .transition(.opacity.animation(Theme.quick))
                 }
-                .onHover(perform: hover)
+            }
+            .animation(Theme.quick, value: hovering)
+            .onHover(perform: hover)
             if !isUser { Spacer(minLength: 0) }
         }
     }

@@ -436,17 +436,28 @@ public final class Store {
         saveBots()
     }
 
-    public func addTaskUsage(_ botId: String, _ threadId: String, input: Double?, output: Double?, costUsd: Double?) {
+    /// `timedTokens` is the output used for tok/s. It matches `output` when the
+    /// provider reported a count; otherwise it is a text estimate and is not
+    /// added to the token total.
+    public func addTaskUsage(_ botId: String, _ threadId: String, input: Double?, output: Double?, costUsd: Double?, generationSeconds: Double? = nil, timedTokens: Double? = nil) {
         _ = updateTask(botId, threadId) { task in
             let previous = task["usage"]?.object ?? JSONObject()
             func clean(_ value: Double?) -> Double { value.map { $0.isFinite ? max(0, $0.rounded(.towardZero)) : 0 } ?? 0 }
             let prevCost = previous["costUsd"]?.double
             let cost = costUsd.flatMap { $0.isFinite ? $0 : nil }
+            let addedOutput = clean(output)
+            let seconds = generationSeconds.flatMap { $0.isFinite && $0 >= 0.2 ? $0 : nil }
+            let counted = timedTokens.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            let timed = counted != nil && seconds != nil
+            let fromText = timed && addedOutput <= 0
             task["usage"] = [
                 "input": .number((previous["input"]?.double ?? 0) + clean(input)),
-                "output": .number((previous["output"]?.double ?? 0) + clean(output)),
+                "output": .number((previous["output"]?.double ?? 0) + addedOutput),
                 "costUsd": cost == nil ? JSON.from(prevCost) : .number((prevCost ?? 0) + cost!),
                 "turns": .number((previous["turns"]?.double ?? 0) + 1),
+                "timedOutput": .number((previous["timedOutput"]?.double ?? 0) + (timed ? counted ?? 0 : 0)),
+                "estimatedOutput": .number((previous["estimatedOutput"]?.double ?? 0) + (fromText ? counted ?? 0 : 0)),
+                "generationSeconds": .number((previous["generationSeconds"]?.double ?? 0) + (timed ? seconds ?? 0 : 0)),
             ]
         }
     }

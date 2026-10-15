@@ -154,6 +154,20 @@ public struct TaskUsage: Codable, Hashable, Sendable {
     public var output: Double?
     public var costUsd: Double?
     public var turns: Int?
+    /// Output tokens whose reply time was measured, and that time in seconds.
+    /// Older turns have tokens and no clock, so the speed uses only these.
+    /// `estimatedOutput` is the part of `timedOutput` guessed from the text
+    /// when the provider sent no token count.
+    public var timedOutput: Double?
+    public var estimatedOutput: Double?
+    public var generationSeconds: Double?
+
+    /// Average reply speed: measured output tokens over the time spent writing them.
+    public var tokensPerSecond: Double? {
+        guard let timedOutput, let generationSeconds, generationSeconds >= 0.2, timedOutput > 0 else { return nil }
+        let rate = timedOutput / generationSeconds
+        return rate.isFinite && rate > 0 ? rate : nil
+    }
 }
 
 public struct BotTask: Codable, Hashable, Sendable {
