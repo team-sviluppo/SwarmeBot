@@ -56,9 +56,10 @@ public final class Routes {
         if let avatar = AvatarRoutes.handle(r, harness: harness) { return avatar }
         if let connectors = try await MCPConnectorRoutes.handle(r, harness: harness) { return connectors }
 
-        // dangerous mutations must declare JSON (no CSRF via HTML forms)
+        // Mutations that carry a body must declare JSON (no CSRF via HTML forms).
+        // DELETE has no body and is not a form method, so a library delete is allowed without the header.
         let jsonOnly = [#"^/api/local-computer/"#, #"^/api/cli-test$"#, #"^/api/instances/[\w.-]+"#, #"^/api/bots/[\w-]+/computer"#, #"^/api/bots/[\w-]+/library"#]
-        if method != "GET", jsonOnly.contains(where: { match($0, path) != nil }), !r.isJSON {
+        if method != "GET", method != "DELETE", jsonOnly.contains(where: { match($0, path) != nil }), !r.isJSON {
             return fail(415, "content-type must be application/json")
         }
 
