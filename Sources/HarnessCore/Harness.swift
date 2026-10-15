@@ -244,6 +244,15 @@ public final class Harness {
 
     // MARK: - Wire shapes
 
+    /// A tool's input or result as the transcript keeps it: secrets
+    /// scrubbed, and short enough not to bloat the message store.
+    static func toolDetail(_ text: String?, limit: Int) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        let clean = Redact.text(text)
+        guard clean.count > limit else { return clean }
+        return String(clean.prefix(limit)) + "\n…troncato (\(clean.count) caratteri in tutto)"
+    }
+
     static func wireTask(_ task: JSONObject) -> JSON { .object(task.removing("resumeCursors", "lastInstanceId")) }
 
     public func wireBot(_ bot: JSONObject) -> JSONObject {
@@ -361,6 +370,8 @@ public final class Harness {
             let existing = store.messages(threadId).first { $0["id"]?.string == messageId }?["tool"]
             var tool: JSONObject = ["name": existing?["name"] ?? "tool", "ok": .bool(ok)]
             if let spoken = existing?["spoken"] { tool["spoken"] = spoken }
+            if let input = existing?["input"] { tool["input"] = input }
+            if let output = Self.toolDetail(event.toolOutput, limit: 16_000) { tool["output"] = .string(output) }
             store.patchMessage(threadId, messageId, ["tool": .object(tool)])
             toolMessageByItem[key(event.itemId)] = nil
             // the bot just acted ON ITS SCREEN: refresh the preview now (only
@@ -373,7 +384,9 @@ public final class Harness {
         case let .itemStarted(itemType, title):
             // ask_bot's raw chip is redundant: the endpoint adds "Messaged @X"
             guard itemType == "tool", !(title ?? "").hasSuffix("__ask_bot") else { break }
-            let message = push(["role": "bot", "kind": "activity", "tool": ["name": .string(title ?? "tool")]])
+            var tool: JSONObject = ["name": .string(title ?? "tool")]
+            if let input = Self.toolDetail(event.toolInput, limit: 4_000) { tool["input"] = .string(input) }
+            let message = push(["role": "bot", "kind": "activity", "tool": .object(tool)])
             if event.itemId != nil { toolMessageByItem[key(event.itemId)] = message["id"]?.string }
 
         case let .requestOpened(requestType, tool, summary, choices, multiSelect, approvalScope):

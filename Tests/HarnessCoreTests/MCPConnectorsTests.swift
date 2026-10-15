@@ -447,4 +447,18 @@ final class MCPConnectorsTests: XCTestCase {
         XCTAssertNil(registry.connector("web")?["oauthClient"])
         XCTAssertEqual(registry.oauthSecrets("web")["clientSecret"], "cs-123456", "the user's own client secret stays")
     }
+
+    // MARK: Tool details in the transcript
+
+    func testToolTextKeepsWhatAPersonReads() {
+        XCTAssertEqual(ToolText.from("plain"), "plain")
+        XCTAssertNil(ToolText.from(""))
+        XCTAssertNil(ToolText.from(.null))
+        XCTAssertEqual(ToolText.from([["type": "text", "text": "a"], ["type": "image", "data": "x"], "b"]), "a\n[immagine]\nb")
+        XCTAssertEqual(ToolText.from([["type": "content", "content": ["type": "text", "text": "acp"]]]), "acp")
+        XCTAssertEqual(ToolText.from(["content": [["type": "text", "text": "wrapped"]]]), "wrapped")
+        XCTAssertEqual(ToolText.from(["query": "ec2"]), "{\n  \"query\" : \"ec2\"\n}".replacingOccurrences(of: " : ", with: ": "))
+        XCTAssertEqual(Harness.toolDetail("token=sk-ant-abcdefghijklmnopqrstuvwxyz", limit: 100)?.contains("sk-ant-abcdef"), false, "secrets are scrubbed")
+        XCTAssertTrue(Harness.toolDetail(String(repeating: "z", count: 50), limit: 10)!.hasSuffix("…troncato (50 caratteri in tutto)"))
+    }
 }

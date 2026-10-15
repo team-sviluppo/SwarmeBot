@@ -49,6 +49,10 @@ public struct ToolActivity: Codable, Hashable, Sendable {
     public var spoken: String?
     /// Marks an error fixed by installing something, not by retrying.
     public var setup: Bool?
+    /// What the tool was called with and what it answered, shortened and
+    /// scrubbed by the harness. Absent on calls older than these fields.
+    public var input: String?
+    public var output: String?
 }
 
 public struct Sender: Codable, Hashable, Sendable {

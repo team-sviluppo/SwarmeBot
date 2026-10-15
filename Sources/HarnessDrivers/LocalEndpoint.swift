@@ -290,8 +290,10 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
         let itemId = newId()
         let route = routes[call.name]
         let title = route.map { "\($0.connectorName) · \($0.name)" } ?? call.name
-        events.emit(RuntimeEvent(provider: provider, providerInstanceId: instanceId, threadId: threadId, turnId: turnId, itemId: itemId,
-                                 .itemStarted(itemType: "tool", title: title)))
+        var started = RuntimeEvent(provider: provider, providerInstanceId: instanceId, threadId: threadId, turnId: turnId, itemId: itemId,
+                                   .itemStarted(itemType: "tool", title: title))
+        started.toolInput = call.arguments
+        events.emit(started)
         let result: ConnectorGateway.Result
         let trimmed = call.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
         if let route {
@@ -303,8 +305,10 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
         } else {
             result = .init(text: "Unknown tool \(call.name).", ok: false)
         }
-        events.emit(RuntimeEvent(provider: provider, providerInstanceId: instanceId, threadId: threadId, turnId: turnId, itemId: itemId,
-                                 .toolCompleted(ok: result.ok)))
+        var completed = RuntimeEvent(provider: provider, providerInstanceId: instanceId, threadId: threadId, turnId: turnId, itemId: itemId,
+                                     .toolCompleted(ok: result.ok))
+        completed.toolOutput = result.text
+        events.emit(completed)
         NativeLog.append(threadId: threadId, dir: "in", source: "localEndpoint.tool",
                          msg: ["name": .string(call.name), "ok": .bool(result.ok), "result": .string(String(result.text.prefix(2000)))])
         return ["role": "tool", "tool_call_id": .string(call.id), "content": .string(result.text)]

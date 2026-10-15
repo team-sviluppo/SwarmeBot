@@ -252,9 +252,11 @@ final class ACPTurn {
         self.model = model
     }
 
-    private func emit(itemId: String? = nil, requestId: String? = nil, _ body: RuntimeEvent.Body) {
-        instance.emit(RuntimeEvent(provider: support.driverKind, threadId: threadId, turnId: turnId,
-                                   itemId: itemId, requestId: requestId, body))
+    private func emit(itemId: String? = nil, requestId: String? = nil, input: String? = nil, output: String? = nil, _ body: RuntimeEvent.Body) {
+        var event = RuntimeEvent(provider: support.driverKind, threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body)
+        event.toolInput = input
+        event.toolOutput = output
+        instance.emit(event)
     }
 
     // MARK: Wire
@@ -408,11 +410,13 @@ final class ACPTurn {
             }
         case "tool_call":
             let title = update["rawInput"]?["command"].flatMap(Self.text) ?? update["title"].flatMap(Self.text) ?? "tool"
-            emit(itemId: update["toolCallId"].flatMap(Self.text), .itemStarted(itemType: "tool", title: String(title.prefix(80))))
+            emit(itemId: update["toolCallId"].flatMap(Self.text), input: ToolText.from(update["rawInput"]),
+                 .itemStarted(itemType: "tool", title: String(title.prefix(80))))
         case "tool_call_update":
             let status = update["status"]?.string
             if status == "completed" || status == "failed" {
-                emit(itemId: update["toolCallId"].flatMap(Self.text), .toolCompleted(ok: status != "failed"))
+                emit(itemId: update["toolCallId"].flatMap(Self.text), output: ToolText.from(update["rawOutput"]) ?? ToolText.from(update["content"]),
+                     .toolCompleted(ok: status != "failed"))
             }
         default:
             break

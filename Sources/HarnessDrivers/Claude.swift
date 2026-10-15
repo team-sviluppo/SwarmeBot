@@ -282,8 +282,12 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
 
     // MARK: Turns
 
-    private func emit(_ threadId: String, _ turnId: String, itemId: String? = nil, requestId: String? = nil, _ body: RuntimeEvent.Body) {
-        events.emit(RuntimeEvent(provider: provider, threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body))
+    private func emit(_ threadId: String, _ turnId: String, itemId: String? = nil, requestId: String? = nil,
+                      input: String? = nil, output: String? = nil, _ body: RuntimeEvent.Body) {
+        var event = RuntimeEvent(provider: provider, threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body)
+        event.toolInput = input
+        event.toolOutput = output
+        events.emit(event)
     }
 
     struct TurnError: LocalizedError {
@@ -424,7 +428,8 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
                     self.emit(threadId, turnId, .textCompleted(text: text))
                 }
                 for block in message["content"]?.array ?? [] where block["type"]?.string == "tool_use" {
-                    self.emit(threadId, turnId, itemId: block["id"]?.string, .itemStarted(itemType: "tool", title: block["name"]?.string))
+                    self.emit(threadId, turnId, itemId: block["id"]?.string, input: ToolText.from(block["input"]),
+                              .itemStarted(itemType: "tool", title: block["name"]?.string))
                 }
                 if let usage = message["usage"], usage.object != nil {
                     self.emit(threadId, turnId, .tokenUsage(
@@ -434,7 +439,8 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
                 }
             case "user":
                 for block in o["message"]?["content"]?.array ?? [] where block["type"]?.string == "tool_result" {
-                    self.emit(threadId, turnId, itemId: block["tool_use_id"]?.string, .toolCompleted(ok: block["is_error"]?.truthy != true))
+                    self.emit(threadId, turnId, itemId: block["tool_use_id"]?.string, output: ToolText.from(block["content"]),
+                              .toolCompleted(ok: block["is_error"]?.truthy != true))
                 }
             case "result":
                 // one process per turn: result.usage is the turn's total; cache

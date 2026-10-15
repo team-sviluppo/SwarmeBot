@@ -215,7 +215,9 @@ def run_local():
         at = mark()
         reply, chips = turn("STRUMENTO echo ciao")
         assert reply == "Risultato: ciao (secret len 6)", reply
-        assert chips == [{"name": "Fake · echo", "ok": True}], chips
+        assert [(c["name"], c["ok"]) for c in chips] == [("Fake · echo", True)], chips
+        # what the call was asked and answered, for the transcript's details
+        assert json.loads(chips[0]["input"]) == {"text": "ciao"} and chips[0]["output"] == "ciao (secret len 6)", chips
         sent = requests_since(at)
         assert len(sent) == 2 and sent[0]["tools"][0] == "fake__echo" and sent[1]["roles"][-2:] == ["assistant", "tool"], sent
         first = reply

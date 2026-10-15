@@ -141,6 +141,10 @@ public struct RuntimeEvent: Sendable {
     public var body: Body
     /// turn.completed without a `cost` key at all (pi); everyone else sends null.
     public var costAbsent = false
+    /// What a tool was called with (on `item.started`) and what it gave back
+    /// (on `item.completed`), for the transcript's tool details. Not on the wire.
+    public var toolInput: String?
+    public var toolOutput: String?
 
     public init(
         provider: String, providerInstanceId: InstanceID? = nil, threadId: ThreadID, turnId: String? = nil,
@@ -278,6 +282,35 @@ public struct MountedConnector: Sendable, Equatable {
     public init(name: String, server: MCPServer) {
         self.name = name
         self.server = server
+    }
+}
+
+/// A tool's input or result as text for the transcript: plain strings stay,
+/// MCP-style content arrays keep their text parts, anything else is JSON.
+public enum ToolText {
+    public static func from(_ value: JSON?) -> String? {
+        guard let value, !value.isNull else { return nil }
+        switch value {
+        case let .string(text):
+            return text.isEmpty ? nil : text
+        case let .array(items):
+            let parts = items.compactMap { item -> String? in
+                if let text = item.string { return text }
+                switch item["type"]?.string {
+                case "text": return item["text"]?.string
+                case "image": return "[immagine]"
+                case "content": return from(item["content"])
+                default: return item["text"]?.string ?? from(item["content"]) ?? item.serialized()
+                }
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: "\n")
+        case .object:
+            if value["type"]?.string == "text", let text = value["text"]?.string { return text }
+            if let content = value["content"], let text = from(content) { return text }
+            return value.pretty()
+        default:
+            return value.serialized()
+        }
     }
 }
 
