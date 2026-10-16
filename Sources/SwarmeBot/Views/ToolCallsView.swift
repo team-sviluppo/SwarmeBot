@@ -35,20 +35,7 @@ struct ToolCallsGroup: View {
     @Binding var expanded: Bool
 
     private var tools: [ToolActivity] { messages.compactMap(\.tool) }
-    private var failures: Int { tools.filter { $0.ok == false }.count }
     private var running: Bool { tools.contains { $0.ok == nil } }
-
-    /// "aws_documentation, ToolSearch": who did the work, in order of first use.
-    private var summary: String {
-        var seen: [String] = []
-        for tool in tools {
-            let parts = ToolName.parts(tool.name)
-            let label = parts.server ?? parts.tool
-            if !seen.contains(label) { seen.append(label) }
-        }
-        let shown = seen.prefix(3).joined(separator: ", ")
-        return seen.count > 3 ? "\(shown) e altri \(seen.count - 3)" : shown
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -63,23 +50,16 @@ struct ToolCallsGroup: View {
                     if running {
                         ProgressView().controlSize(.mini)
                     } else {
-                        Image(systemName: failures > 0 ? "exclamationmark.triangle" : "wrench.and.screwdriver")
+                        Image(systemName: "wrench.and.screwdriver")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(failures > 0 ? Theme.warning : Theme.success)
+                            .foregroundStyle(Theme.tertiary)
                     }
+                    // Just the count: failed attempts are normal while the bot
+                    // explores, so the closed line never flags them; opening it
+                    // shows each call.
                     Text(tools.count == 1 ? "1 strumento" : "\(tools.count) strumenti")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.secondary)
-                    Text(summary)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Theme.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    if failures > 0 {
-                        Text(failures == 1 ? "· 1 errore" : "· \(failures) errori")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Theme.danger)
-                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
