@@ -17,7 +17,7 @@
 #   NOTARY_PROFILE=name  a `xcrun notarytool store-credentials` profile
 #   SPARKLE_PUBLIC_KEY=… EdDSA public key from Sparkle's generate_keys; without
 #                      it the updater stays off
-#   SPARKLE_FEED_URL=…  default: the appcast on team-sviluppo/swarmebot-releases
+#   SPARKLE_FEED_URL=…  default: the appcast on team-sviluppo/SwarmeBot
 #   VERSION=0.1.0 BUILD_NUMBER=1
 #   SWARMEBOT_REPO      the SwarmeBot checkout (default ../SwarmeBot)
 #   NODE_MAJOR=24 / NODE_VERSION=v24.x.y
@@ -65,7 +65,7 @@ cp "$BIN_DIR/swarme-harness" "$APP/Contents/Helpers/swarme-harness"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION:-0.1.0}" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER:-1}" "$APP/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${SPARKLE_FEED_URL:-https://github.com/team-sviluppo/swarmebot-releases/releases/latest/download/appcast.xml}" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${SPARKLE_FEED_URL:-https://github.com/team-sviluppo/SwarmeBot/releases/latest/download/appcast.xml}" "$APP/Contents/Info.plist"
 if [[ -n "${SPARKLE_PUBLIC_KEY:-}" ]]; then
   /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_KEY" "$APP/Contents/Info.plist"
 fi

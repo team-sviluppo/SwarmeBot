@@ -300,6 +300,7 @@ final class CodexInstance: ProviderInstance, ProviderAdapter {
         capabilities.agentsMcp = true
         capabilities.computerMcp = true
         capabilities.localComputerMcp = !fullAuto
+        capabilities.connectors = .mcp
         capabilities.images = true
         return capabilities
     }
@@ -408,8 +409,11 @@ final class CodexTurn {
         self.turn = turn
     }
 
-    private func emit(itemId: String? = nil, requestId: String? = nil, _ body: RuntimeEvent.Body) {
-        instance.emit(RuntimeEvent(provider: "codex", threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body))
+    private func emit(itemId: String? = nil, requestId: String? = nil, input: String? = nil, output: String? = nil, _ body: RuntimeEvent.Body) {
+        var event = RuntimeEvent(provider: "codex", threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body)
+        event.toolInput = input
+        event.toolOutput = output
+        instance.emit(event)
     }
 
     private func send(_ message: JSON) {
@@ -535,7 +539,10 @@ final class CodexTurn {
             case "webSearch": title = "web_search"
             default: title = nil
             }
-            if let title { emit(itemId: item["id"].flatMap(ACPTurn.text), .itemStarted(itemType: "tool", title: title)) }
+            if let title {
+                let input = item["type"]?.string == "mcpToolCall" ? ToolText.from(item["arguments"]) : nil
+                emit(itemId: item["id"].flatMap(ACPTurn.text), input: input, .itemStarted(itemType: "tool", title: title))
+            }
         case "item/completed":
             let item = p["item"] ?? .null
             switch item["type"]?.string {
@@ -547,7 +554,8 @@ final class CodexTurn {
                 }
             case "commandExecution", "fileChange", "mcpToolCall":
                 let status = item["status"]?.string
-                emit(itemId: item["id"].flatMap(ACPTurn.text), .toolCompleted(ok: status != "failed" && status != "declined"))
+                let output = ToolText.from(item["aggregatedOutput"]) ?? ToolText.from(item["result"]) ?? ToolText.from(item["error"]?["message"])
+                emit(itemId: item["id"].flatMap(ACPTurn.text), output: output, .toolCompleted(ok: status != "failed" && status != "declined"))
             case "reasoning":
                 emit(.itemUpdated(itemType: "reasoning", tokens: .null))
             default:
@@ -580,6 +588,7 @@ final class CodexTurn {
         var args = ["app-server"] + CodexCatalog.localProviderArgs(&env, model: turn.model)
         if let agents = turn.agents { args += Self.mount(&env, name: "agents", agents) }
         if let computer = turn.computer { args += Self.mount(&env, name: "computer", computer) }
+        for connector in turn.connectors { args += Self.mount(&env, name: connector.name, connector.server) }
         let cwd = turn.cwd ?? NSHomeDirectory()
         do {
             process = try CLIProcess(cli: instance.cli, args: args, cwd: cwd, environment: env)

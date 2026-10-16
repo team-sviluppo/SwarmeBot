@@ -31,6 +31,9 @@ public final class Harness {
     private var streamedReply: [String: String] = [:]
     private var lastReply: [String: String] = [:]
     private var turnUsage: [String: RuntimeEvent.TokenUsage] = [:]
+    /// When the turn began, and when the first reply token arrived.
+    private var turnStartedAt: [String: Date] = [:]
+    private var firstTokenAt: [String: Date] = [:]
     /// Messages sent while the bot was busy: threadId → (botId, [(messageId, text)]).
     private var queues: [String: (botId: String, items: [(String, String)])] = [:]
 
@@ -43,6 +46,16 @@ public final class Harness {
         return library
     }()
     private(set) lazy var localVM = LocalVM(paths: paths)
+    // connectors: MCP servers the user hands to bots (MCPConnectors.swift)
+    public private(set) lazy var mcpConnectors = MCPConnectors(paths: paths)
+    public private(set) lazy var mcpPool: MCPConnectorPool = {
+        let pool = MCPConnectorPool(paths: paths, environment: environment)
+        pool.tokenProvider = { [weak self] spec, force in try await self?.mcpOAuth.token(spec, force: force) }
+        return pool
+    }()
+    public private(set) lazy var mcpOAuth = MCPOAuth(registry: mcpConnectors) { [weak self] in self?.harnessURL ?? "http://127.0.0.1:8799" }
+    /// Turn grant token → what its connector proxies may reach (ConnectorTurns.swift).
+    var connectorGrants: [String: ConnectorGrant] = [:]
     public private(set) lazy var box = BoxComputer(environment: environment) { [weak self] in self?.config.secret("box", "token") }
     var screenPollers: [String: ScreenPoller] = [:]
 
@@ -132,6 +145,7 @@ public final class Harness {
             case .requestResolved: self.watchdog.setWaitingOnHuman(event.threadId, false)
             case .turnCompleted:
                 self.watchdog.settle(event.threadId)
+                self.revokeConnectorGrants(threadId: event.threadId)
                 self.localVM.lease.release(threadId: event.threadId)
                 if self.localVM.activeThread == event.threadId { self.localVM.activeThread = nil }
             default:
@@ -233,6 +247,15 @@ public final class Harness {
 
     // MARK: - Wire shapes
 
+    /// A tool's input or result as the transcript keeps it: secrets
+    /// scrubbed, and short enough not to bloat the message store.
+    static func toolDetail(_ text: String?, limit: Int) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        let clean = Redact.text(text)
+        guard clean.count > limit else { return clean }
+        return String(clean.prefix(limit)) + "\n…troncato (\(clean.count) caratteri in tutto)"
+    }
+
     static func wireTask(_ task: JSONObject) -> JSON { .object(task.removing("resumeCursors", "lastInstanceId")) }
 
     public func wireBot(_ bot: JSONObject) -> JSONObject {
@@ -329,7 +352,10 @@ public final class Harness {
 
         switch event.body {
         case let .contentDelta(streamKind, delta):
-            if streamKind == "assistant_text", !delta.isEmpty { streamedReply[threadId, default: ""] += delta }
+            if streamKind == "assistant_text", !delta.isEmpty {
+                streamedReply[threadId, default: ""] += delta
+                if firstTokenAt[threadId] == nil { firstTokenAt[threadId] = Date() }
+            }
 
         case let .sessionStarted(sessionId, _, resumeCursor):
             guard let sessionId, let instanceId = event.providerInstanceId else { break }
@@ -350,6 +376,8 @@ public final class Harness {
             let existing = store.messages(threadId).first { $0["id"]?.string == messageId }?["tool"]
             var tool: JSONObject = ["name": existing?["name"] ?? "tool", "ok": .bool(ok)]
             if let spoken = existing?["spoken"] { tool["spoken"] = spoken }
+            if let input = existing?["input"] { tool["input"] = input }
+            if let output = Self.toolDetail(event.toolOutput, limit: 16_000) { tool["output"] = .string(output) }
             store.patchMessage(threadId, messageId, ["tool": .object(tool)])
             toolMessageByItem[key(event.itemId)] = nil
             // the bot just acted ON ITS SCREEN: refresh the preview now (only
@@ -362,7 +390,9 @@ public final class Harness {
         case let .itemStarted(itemType, title):
             // ask_bot's raw chip is redundant: the endpoint adds "Messaged @X"
             guard itemType == "tool", !(title ?? "").hasSuffix("__ask_bot") else { break }
-            let message = push(["role": "bot", "kind": "activity", "tool": ["name": .string(title ?? "tool")]])
+            var tool: JSONObject = ["name": .string(title ?? "tool")]
+            if let input = Self.toolDetail(event.toolInput, limit: 4_000) { tool["input"] = .string(input) }
+            let message = push(["role": "bot", "kind": "activity", "tool": .object(tool)])
             if event.itemId != nil { toolMessageByItem[key(event.itemId)] = message["id"]?.string }
 
         case let .requestOpened(requestType, tool, summary, choices, multiSelect, approvalScope):
@@ -401,10 +431,18 @@ public final class Harness {
             }
             let reply = lastReply.removeValue(forKey: threadId) ?? ""
             let lastReported = turnUsage.removeValue(forKey: threadId)
+            let finished = Date()
+            let started = firstTokenAt.removeValue(forKey: threadId) ?? turnStartedAt.removeValue(forKey: threadId)
+            turnStartedAt[threadId] = nil
+            let generationSeconds = started.map { finished.timeIntervalSince($0) }
             // a room's spend is not the speaking bot's task tally
             if let bot, let botId {
                 let tokens = usage ?? lastReported
-                store.addTaskUsage(botId, threadId, input: tokens?.input, output: tokens?.output, costUsd: cost)
+                let reportedOutput = tokens?.output ?? 0
+                // Providers that omit usage still get a speed: about 3.5
+                // characters a token, same ratio as the connector estimate.
+                let timedTokens = reportedOutput > 0 ? reportedOutput : Self.estimatedTokens(reply)
+                store.addTaskUsage(botId, threadId, input: tokens?.input, output: tokens?.output, costUsd: cost, generationSeconds: generationSeconds, timedTokens: timedTokens)
                 if store.bot(botId)?["activity"]?.string != "dead" { store.setActivity(botId, "idle") }
                 store.patchBot(botId, ["unread": true])
                 notify("done", bot: bot, threadId: threadId, detail: reply)
@@ -429,9 +467,19 @@ public final class Harness {
             // a delegated turn's terminal state belongs in its A⇄B channel
             finalizeDelegationWatch(threadId, ok: ok, reply: reply)
 
-        case .turnStarted, .sessionExited, .itemUpdated:
+        case .turnStarted:
+            turnStartedAt[threadId] = Date()
+            firstTokenAt[threadId] = nil
+        case .sessionExited, .itemUpdated:
             break
         }
+    }
+
+    /// About 3.5 characters a token. Used only when the provider sends no output count.
+    private static func estimatedTokens(_ text: String) -> Double? {
+        let chars = text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        guard chars >= 8 else { return nil }
+        return Double(chars) / 3.5
     }
 
     private func openRequest(_ event: RuntimeEvent, asker: JSONObject?, push: @escaping (JSONObject) -> JSONObject, requestType: String, tool: String,
@@ -627,6 +675,8 @@ public final class Harness {
                     : agents != nil ? "You can work with the user's other bots through the agents tools — list_bots shows who's available, ask_bot sends one of them a message and returns their reply." : ""
                 let tags = tagged.isEmpty ? "" : " The user tagged \(tagged.map { "@\($0["name"]?.string ?? "") (ask_bot bot_id \($0["id"]?.string ?? ""))" }.joined(separator: " and ")) in their message — bring them in with ask_bot and fold their reply into your answer."
                 let computer = try await self.prepareComputer(bot: bot, instance: instance, threadId: threadId, runOn: options.runOn)
+                let connectors = self.mountConnectors(bot: bot, task: self.store.taskByThread(botId, threadId), threadId: threadId,
+                                                      mount: instance.adapter.capabilities.connectors)
                 let webhook = options.automationSource == "webhook" ? Self.webhookBoundary : ""
                 // the library goes before the per-turn tags, so the text a server caches stays put
                 let system = (persona + computer.prompt + (coordination.isEmpty ? "" : " \(coordination)") + (library.isEmpty ? "" : "\n\n\(library)\n\n") + webhook + tags).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -638,6 +688,9 @@ public final class Harness {
                 input.cloudBoxId = computer.boxId
                 input.computer = computer.server
                 input.computerScope = computer.scope
+                input.connectors = connectors
+                input.connectorGateway = self.connectorGateway(bot: bot, task: self.store.taskByThread(botId, threadId),
+                                                               instance: instance, model: model)
                 self.watchdog.watch(threadId, botId: botId)
                 _ = try await instance.adapter.sendTurn(input)
                 if rewound { self.store.patchBot(botId, ["rewound": false, "resumeCursors": [:]]) }
@@ -749,6 +802,7 @@ public final class Harness {
     }
 
     public func shutdown() async {
+        mcpPool.stopAll()
         await fleet.stopAll()
     }
 }

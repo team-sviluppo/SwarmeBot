@@ -103,6 +103,7 @@ struct ComposerView: View {
                     .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
                     .help(missing ? "La cartella \(folder) non esiste più: clicca per sceglierne un'altra" : "Cartella di lavoro: \(folder)")
                     LibraryChip(bot: bot)
+                    ConnectorsChip(bot: bot)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 6)
@@ -556,8 +557,6 @@ struct ComposerTextView: NSViewRepresentable {
         guard let textView = scroll.documentView as? NSTextView else { return scroll }
         let field = PlaceholderTextView(frame: textView.frame, textContainer: textView.textContainer)
         field.placeholder = placeholder
-        field.onPasteImage = onPasteImage
-        field.onLongPaste = onLongPaste
         field.delegate = context.coordinator
         field.drawsBackground = false
         field.isRichText = false
@@ -585,6 +584,10 @@ struct ComposerTextView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let field = scroll.documentView as? PlaceholderTextView else { return }
         context.coordinator.parent = self
+        // Closures capture the current thread. Setting them only in
+        // makeNSView left every later chat pasting into the first bot.
+        field.onPasteImage = onPasteImage
+        field.onLongPaste = onLongPaste
         if field.string != text {
             field.string = text
             context.coordinator.measure(field)

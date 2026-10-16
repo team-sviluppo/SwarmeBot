@@ -49,6 +49,10 @@ public struct ToolActivity: Codable, Hashable, Sendable {
     public var spoken: String?
     /// Marks an error fixed by installing something, not by retrying.
     public var setup: Bool?
+    /// What the tool was called with and what it answered, shortened and
+    /// scrubbed by the harness. Absent on calls older than these fields.
+    public var input: String?
+    public var output: String?
 }
 
 public struct Sender: Codable, Hashable, Sendable {
@@ -150,6 +154,20 @@ public struct TaskUsage: Codable, Hashable, Sendable {
     public var output: Double?
     public var costUsd: Double?
     public var turns: Int?
+    /// Output tokens whose reply time was measured, and that time in seconds.
+    /// Older turns have tokens and no clock, so the speed uses only these.
+    /// `estimatedOutput` is the part of `timedOutput` guessed from the text
+    /// when the provider sent no token count.
+    public var timedOutput: Double?
+    public var estimatedOutput: Double?
+    public var generationSeconds: Double?
+
+    /// Average reply speed: measured output tokens over the time spent writing them.
+    public var tokensPerSecond: Double? {
+        guard let timedOutput, let generationSeconds, generationSeconds >= 0.2, timedOutput > 0 else { return nil }
+        let rate = timedOutput / generationSeconds
+        return rate.isFinite && rate > 0 ? rate : nil
+    }
 }
 
 public struct BotTask: Codable, Hashable, Sendable {
@@ -162,6 +180,19 @@ public struct BotTask: Codable, Hashable, Sendable {
     public var cwd: String?
     /// Library documents switched off in this chat.
     public var libraryOff: [String]?
+    /// Connector switches that differ from the bot's defaults, id → on.
+    public var connectors: [String: Bool]?
+}
+
+/// A connector handed to a bot, and whether new chats start with it on.
+public struct BotConnector: Codable, Hashable, Sendable {
+    public var id: String
+    public var defaultOn: Bool
+
+    public init(id: String, defaultOn: Bool) {
+        self.id = id
+        self.defaultOn = defaultOn
+    }
 }
 
 public struct Bot: Codable, Hashable, Identifiable, Sendable {
@@ -181,6 +212,8 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     public var chiefOfStaff: Bool?
     public var autoApprove: Bool?
     public var alwaysAllow: [String]?
+    /// Desktop: the connectors this bot may use.
+    public var connectors: [BotConnector]?
     public var computer: String?
     /// Which cloud computer backs `computer == "cloud"`. Absent (older
     /// harnesses included) means the hosted Box; "vps" means the user's own
@@ -359,6 +392,8 @@ public struct ModelOption: Codable, Hashable, Identifiable, Sendable {
     public var label: String
     /// Effort levels this model accepts, when it narrows the engine's list.
     public var effortLevels: [String]?
+    /// false: the model runs its own tools and ignores ours (a Hermes profile).
+    public var clientTools: Bool?
 }
 
 public struct ModelCatalog: Codable, Hashable, Sendable {
@@ -382,6 +417,8 @@ public struct InstanceCapabilities: Codable, Hashable, Sendable {
     public var computerMcp: Bool?
     public var agentsMcp: Bool?
     public var localComputerMcp: Bool?
+    /// "none", "mcp" or "inline": whether the engine can take connectors.
+    public var connectors: String?
     /// Ascending. Absent means the driver cannot set effort at all.
     public var effortLevels: [String]?
 }

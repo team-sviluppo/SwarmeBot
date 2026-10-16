@@ -199,6 +199,18 @@ extension CompanionClient {
         return try await send(try makeRequest("GET", "/api/bots/\(botId)/library/\(docId)/text"), as: Text.self).text
     }
 
+    /// The connector switches of one chat: only those that differ from the bot's defaults.
+    public func setTaskConnectors(botId: String, threadId: String, _ overrides: [String: Bool]) async throws {
+        try await send(try makeRequest("PATCH", "/api/bots/\(botId)/tasks/\(threadId)", body: ["connectors": overrides]))
+    }
+
+    /// Which connectors a bot may use.
+    @discardableResult
+    public func setBotConnectors(botId: String, _ connectors: [BotConnector]) async throws -> Bot {
+        let list = connectors.map { ["id": $0.id, "defaultOn": $0.defaultOn] as [String: Any] }
+        return try await send(try makeRequest("PATCH", "/api/bots/\(botId)", body: ["connectors": list]), as: BotResponse.self).bot
+    }
+
     /// The documents this chat leaves out.
     public func setTaskLibraryOff(botId: String, threadId: String, off: [String]) async throws {
         try await send(try makeRequest("PATCH", "/api/bots/\(botId)/tasks/\(threadId)", body: ["libraryOff": off]))

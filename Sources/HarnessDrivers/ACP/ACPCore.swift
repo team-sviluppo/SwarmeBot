@@ -145,6 +145,7 @@ final class ACPInstance: ProviderInstance, ProviderAdapter {
         capabilities.agentsMcp = true
         capabilities.computerMcp = true
         capabilities.localComputerMcp = !config.fullAuto
+        capabilities.connectors = .mcp
         capabilities.images = support.images
         self.capabilities = capabilities
     }
@@ -251,9 +252,11 @@ final class ACPTurn {
         self.model = model
     }
 
-    private func emit(itemId: String? = nil, requestId: String? = nil, _ body: RuntimeEvent.Body) {
-        instance.emit(RuntimeEvent(provider: support.driverKind, threadId: threadId, turnId: turnId,
-                                   itemId: itemId, requestId: requestId, body))
+    private func emit(itemId: String? = nil, requestId: String? = nil, input: String? = nil, output: String? = nil, _ body: RuntimeEvent.Body) {
+        var event = RuntimeEvent(provider: support.driverKind, threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body)
+        event.toolInput = input
+        event.toolOutput = output
+        instance.emit(event)
     }
 
     // MARK: Wire
@@ -317,7 +320,8 @@ final class ACPTurn {
         }
         let selected: (String) -> JSON = { ["outcome": ["outcome": "selected", "optionId": .string($0)]] }
 
-        if config.fullAuto {
+        // a connector's tools run without asking, like on Claude and Codex (plan D7)
+        if config.fullAuto || Self.isConnectorTool(params["toolCall"] ?? .null, names: turn.connectors.map(\.name)) {
             let allow = optionFor("allow")
             if allow == nil { missing("allow") }
             send(["jsonrpc": "2.0", "id": id, "result": allow.map(selected) ?? cancelled])
@@ -350,6 +354,23 @@ final class ACPTurn {
         asks[requestId] = finish
         emit(requestId: requestId, .requestOpened(requestType: "permission", tool: tool, summary: summary,
                                                   choices: nil, multiSelect: nil, approvalScope: nil))
+    }
+
+    /// Whether a permission ask is for one of this turn's connectors. ACP
+    /// has no field for "which MCP server": agents put the tool's name in the
+    /// title, as `mcp__<server>__<tool>`, `<server>__<tool>`, `<server>/<tool>`
+    /// or "… (<server> MCP Server)". Only names this turn mounted count.
+    static func isConnectorTool(_ toolCall: JSON, names: [String]) -> Bool {
+        guard !names.isEmpty else { return false }
+        let title = (toolCall["title"]?.string ?? "").lowercased()
+        let tool = (toolCall["_meta"]?["toolName"]?.string ?? toolCall["toolName"]?.string ?? "").lowercased()
+        for name in names {
+            for text in [title, tool] where !text.isEmpty {
+                if text.hasPrefix("mcp__\(name)__") || text.hasPrefix("\(name)__") || text.hasPrefix("\(name)/")
+                    || text.contains("(\(name) mcp server)") { return true }
+            }
+        }
+        return false
     }
 
     /// `String(x)` on a JSON scalar, as the Node engine stringifies it.
@@ -389,11 +410,13 @@ final class ACPTurn {
             }
         case "tool_call":
             let title = update["rawInput"]?["command"].flatMap(Self.text) ?? update["title"].flatMap(Self.text) ?? "tool"
-            emit(itemId: update["toolCallId"].flatMap(Self.text), .itemStarted(itemType: "tool", title: String(title.prefix(80))))
+            emit(itemId: update["toolCallId"].flatMap(Self.text), input: ToolText.from(update["rawInput"]),
+                 .itemStarted(itemType: "tool", title: String(title.prefix(80))))
         case "tool_call_update":
             let status = update["status"]?.string
             if status == "completed" || status == "failed" {
-                emit(itemId: update["toolCallId"].flatMap(Self.text), .toolCompleted(ok: status != "failed"))
+                emit(itemId: update["toolCallId"].flatMap(Self.text), output: ToolText.from(update["rawOutput"]) ?? ToolText.from(update["content"]),
+                     .toolCompleted(ok: status != "failed"))
             }
         default:
             break
@@ -497,6 +520,7 @@ final class ACPTurn {
         var servers: [JSON] = []
         if let agents = turn.agents { servers.append(agents.acp(name: "agents")) }
         if let computer = turn.computer { servers.append(computer.acp(name: "computer")) }
+        for connector in turn.connectors { servers.append(connector.server.acp(name: connector.name)) }
         let mcpServers: JSON = .array(servers)
         var sessionResult: JSON = .null
         if let cursor = turn.resumeCursor?.string, !cursor.isEmpty {

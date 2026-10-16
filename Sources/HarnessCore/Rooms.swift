@@ -145,7 +145,7 @@ extension Harness {
             }
             roomStallHandlers[threadId] = { finish(.stalled) }
             watchdog.watch(threadId, botId: botId)
-            let input = SendTurnInput(
+            var input = SendTurnInput(
                 threadId: threadId, text: text,
                 // a room copies the picker selection: without `model` Hermes hits
                 // OpenRouter and Grok silently runs its cloud default
@@ -153,6 +153,9 @@ extension Harness {
                 resumeCursor: store.groupResumeCursor(groupId, botId: botId, instanceId: instance.instanceId),
                 system: roomSystem, cwd: cwd, sessionKey: "\(threadId):\(botId)"
             )
+            // a room has no per-chat switches: each member brings its own defaults
+            input.connectors = mountConnectors(bot: bot, task: nil, threadId: threadId, mount: instance.adapter.capabilities.connectors)
+            input.connectorGateway = connectorGateway(bot: bot, task: nil, instance: instance, model: selection.model)
             Task { @MainActor in
                 do {
                     _ = try await instance.adapter.sendTurn(input)

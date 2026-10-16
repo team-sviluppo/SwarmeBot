@@ -436,17 +436,28 @@ public final class Store {
         saveBots()
     }
 
-    public func addTaskUsage(_ botId: String, _ threadId: String, input: Double?, output: Double?, costUsd: Double?) {
+    /// `timedTokens` is the output used for tok/s. It matches `output` when the
+    /// provider reported a count; otherwise it is a text estimate and is not
+    /// added to the token total.
+    public func addTaskUsage(_ botId: String, _ threadId: String, input: Double?, output: Double?, costUsd: Double?, generationSeconds: Double? = nil, timedTokens: Double? = nil) {
         _ = updateTask(botId, threadId) { task in
             let previous = task["usage"]?.object ?? JSONObject()
             func clean(_ value: Double?) -> Double { value.map { $0.isFinite ? max(0, $0.rounded(.towardZero)) : 0 } ?? 0 }
             let prevCost = previous["costUsd"]?.double
             let cost = costUsd.flatMap { $0.isFinite ? $0 : nil }
+            let addedOutput = clean(output)
+            let seconds = generationSeconds.flatMap { $0.isFinite && $0 >= 0.2 ? $0 : nil }
+            let counted = timedTokens.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            let timed = counted != nil && seconds != nil
+            let fromText = timed && addedOutput <= 0
             task["usage"] = [
                 "input": .number((previous["input"]?.double ?? 0) + clean(input)),
-                "output": .number((previous["output"]?.double ?? 0) + clean(output)),
+                "output": .number((previous["output"]?.double ?? 0) + addedOutput),
                 "costUsd": cost == nil ? JSON.from(prevCost) : .number((prevCost ?? 0) + cost!),
                 "turns": .number((previous["turns"]?.double ?? 0) + 1),
+                "timedOutput": .number((previous["timedOutput"]?.double ?? 0) + (timed ? counted ?? 0 : 0)),
+                "estimatedOutput": .number((previous["estimatedOutput"]?.double ?? 0) + (fromText ? counted ?? 0 : 0)),
+                "generationSeconds": .number((previous["generationSeconds"]?.double ?? 0) + (timed ? seconds ?? 0 : 0)),
             ]
         }
     }
@@ -526,6 +537,44 @@ public final class Store {
     /// Library documents this chat leaves out; every other ready one goes.
     public func setTaskLibraryOff(_ botId: String, _ threadId: String, _ off: [String]) -> JSONObject? {
         updateTask(botId, threadId) { $0["libraryOff"] = off.isEmpty ? nil : .strings(off) }
+    }
+
+    /// Per-conversation connector switches: only the choices that differ
+    /// from the bot's defaults (docs/plans/2026-10-15-connettori-mcp.md §2.3).
+    @discardableResult
+    public func setTaskConnectors(_ botId: String, _ threadId: String, _ overrides: [String: Bool]) -> JSONObject? {
+        updateTask(botId, threadId) { task in
+            var map = JSONObject()
+            for (id, on) in overrides.sorted(by: { $0.key < $1.key }) { map[id] = .bool(on) }
+            // explicit Optional: a bare nil here would be JSON null, not a removal
+            task["connectors"] = map.isEmpty ? Optional<JSON>.none : .object(map)
+        }
+    }
+
+    /// A deleted connector leaves no trace on bots or their conversations.
+    public func forgetConnector(_ id: String) {
+        var changed: [String] = []
+        for index in bots.indices {
+            var touched = false
+            if let list = bots[index]["connectors"]?.array, list.contains(where: { $0["id"]?.string == id }) {
+                bots[index]["connectors"] = .array(list.filter { $0["id"]?.string != id })
+                touched = true
+            }
+            if var tasks = bots[index]["tasks"]?.array {
+                for at in tasks.indices {
+                    guard var task = tasks[at].object, var map = task["connectors"]?.object, map[id] != nil else { continue }
+                    map = map.removing(id)
+                    task["connectors"] = map.isEmpty ? Optional<JSON>.none : .object(map)
+                    tasks[at] = .object(task)
+                    touched = true
+                }
+                if touched { bots[index]["tasks"] = .array(tasks) }
+            }
+            if touched, let botId = bots[index]["id"]?.string { changed.append(botId) }
+        }
+        guard !changed.isEmpty else { return }
+        saveBots()
+        for botId in changed { emit(.bot(botId: botId)) }
     }
 
     public func titleTaskFromFirstMessage(_ botId: String, text: String, threadId: String) {

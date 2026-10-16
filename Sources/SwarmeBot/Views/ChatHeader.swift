@@ -56,14 +56,14 @@ struct ChatHeader: View {
                     .buttonStyle(IconButtonStyle(size: 28, iconSize: 14, active: bot.pinned == true))
                     .help(bot.pinned == true ? "Rimuovi dai fissati" : "Fissa in alto")
                 exportButton(bot.threadId)
-                if let cost = currentTask(bot)?.usage?.costUsd, cost > 0 {
-                    Text(String(format: "$%.2f", cost))
+                if let chip = usageChip(currentTask(bot)?.usage) {
+                    Text(chip.text)
                         .font(.system(size: 12).monospacedDigit())
                         .foregroundStyle(Theme.secondary)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Capsule().fill(Theme.raised.opacity(0.6)))
                         .overlay(Capsule().stroke(Theme.hairline.opacity(0.4)))
-                        .help("Costo del task")
+                        .help(chip.help)
                 }
                 Button { toggle(.computer) } label: { Image(systemName: "display") }
                     .buttonStyle(IconButtonStyle(size: 30, iconSize: 16, active: ui.showInspector && ui.inspectorTab == .computer))
@@ -107,6 +107,37 @@ struct ChatHeader: View {
 
     private func currentTask(_ bot: Bot) -> BotTask? {
         bot.tasks?.first { $0.threadId == bot.threadId }
+    }
+
+    /// Cost of the chat, and the average reply speed when output tokens and
+    /// the time spent writing them are both known.
+    private func usageChip(_ usage: TaskUsage?) -> (text: String, help: String)? {
+        guard let usage else { return nil }
+        var parts: [String] = []
+        var notes: [String] = []
+        if let cost = usage.costUsd, cost > 0 {
+            parts.append(String(format: "$%.2f", cost))
+            notes.append("Costo del task")
+        }
+        if let rate = usage.tokensPerSecond {
+            parts.append(Self.formatRate(rate))
+            let estimated = usage.estimatedOutput ?? 0
+            let timed = usage.timedOutput ?? 0
+            if estimated <= 0 {
+                notes.append("Velocità media di risposta")
+            } else if timed > 0, estimated >= timed - 0.01 {
+                notes.append("Velocità stimata dal testo")
+            } else {
+                notes.append("Velocità media di risposta, in parte stimata")
+            }
+        }
+        guard !parts.isEmpty else { return nil }
+        return (parts.joined(separator: " · "), notes.joined(separator: " · "))
+    }
+
+    private static func formatRate(_ rate: Double) -> String {
+        if rate >= 10 { return String(format: "%.0f tok/s", rate.rounded()) }
+        return String(format: "%.1f tok/s", rate)
     }
 
     private func exportButton(_ threadId: String) -> some View {

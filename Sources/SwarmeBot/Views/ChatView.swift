@@ -34,6 +34,8 @@ struct TranscriptView: View {
     /// The web transcript windows for the same reason.
     @State private var window = TranscriptView.page
     static let page = 300
+    /// Tool groups the user opened, by their first call's id.
+    @State private var openToolGroups: Set<String> = []
 
     var body: some View {
         let all = model.visibleTranscript(threadId)
@@ -62,14 +64,23 @@ struct TranscriptView: View {
                     .padding(.vertical, 8)
                     .disabled(loadingOlder)
                 }
-                ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                    if let stamp = TimeStamp.label(for: message, after: index > 0 ? messages[index - 1] : nil) {
+                ForEach(TranscriptRow.rows(messages)) { row in
+                    if let stamp = TimeStamp.label(for: row.first, after: row.index > 0 ? messages[row.index - 1] : nil) {
                         Text(stamp)
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.secondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                     }
+                    if row.messages.count > 1 || ToolName.folds(row.first) {
+                        ToolCallsGroup(messages: row.messages, expanded: Binding(
+                            get: { openToolGroups.contains(row.id) },
+                            set: { if $0 { openToolGroups.insert(row.id) } else { openToolGroups.remove(row.id) } }
+                        ))
+                        .id(row.id)
+                        .transition(.opacity.combined(with: .offset(y: 4)))
+                    } else {
+                    let message = row.first
                     MessageRow(message: message, threadId: threadId, isRoom: model.selectedRoom != nil)
                         .id(message.id)
                         .background(
@@ -78,6 +89,7 @@ struct TranscriptView: View {
                                 .padding(-4)
                         )
                         .transition(.opacity.combined(with: .offset(y: 4)))
+                    }
                 }
                 LiveTail(threadId: threadId, working: isWorking)
             }
@@ -114,6 +126,29 @@ struct TranscriptView: View {
     private var isWorking: Bool {
         if let bot = model.selectedBot { return model.isBusy(bot) }
         return model.selectedRoom?.busyBotId != nil
+    }
+}
+
+/// One line of the transcript: a message, or a run of tool calls folded
+/// together. Its id is the first message's, so it stays put as calls are added.
+struct TranscriptRow: Identifiable {
+    let index: Int
+    let messages: [Message]
+    var first: Message { messages[0] }
+    var id: String { first.id }
+
+    static func rows(_ messages: [Message]) -> [TranscriptRow] {
+        var rows: [TranscriptRow] = []
+        var index = 0
+        while index < messages.count {
+            var end = index + 1
+            if ToolName.folds(messages[index]) {
+                while end < messages.count, ToolName.folds(messages[end]) { end += 1 }
+            }
+            rows.append(TranscriptRow(index: index, messages: Array(messages[index..<end])))
+            index = end
+        }
+        return rows
     }
 }
 
@@ -156,25 +191,23 @@ struct HoverActions<Content: View>: View {
 
     @State private var hideToken = 0
 
-    /// The actions hang outside the bubble in an overlay, so a row costs no
-    /// extra layout; they are built only while hovered.
+    /// The meta row is in the layout, under the bubble. An overlay aligned to
+    /// the bubble's bottom draws on top of the last line.
     var body: some View {
         HStack(spacing: 0) {
             if isUser { Spacer(minLength: 0) }
-            content
-                .overlay(alignment: isUser ? .bottomTrailing : .bottomLeading) {
-                    if hovering {
-                        HStack(alignment: .center, spacing: 4) {
-                            if isUser { time; actions } else { actions; time }
-                        }
-                        .fixedSize()
-                        .padding(.horizontal, 4)
-                        .alignmentGuide(.bottom) { d in d[.top] - 2 }
-                        .onHover(perform: hover)
-                        .zIndex(1)
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                content
+                if hovering {
+                    HStack(alignment: .center, spacing: 4) {
+                        if isUser { time; actions } else { actions; time }
                     }
+                    .padding(.horizontal, 2)
+                    .transition(.opacity.animation(Theme.quick))
                 }
-                .onHover(perform: hover)
+            }
+            .animation(Theme.quick, value: hovering)
+            .onHover(perform: hover)
             if !isUser { Spacer(minLength: 0) }
         }
     }

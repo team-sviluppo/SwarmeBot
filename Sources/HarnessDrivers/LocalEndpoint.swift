@@ -67,6 +67,8 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
     let capabilities: AdapterCapabilities = {
         var capabilities = AdapterCapabilities()
         capabilities.images = true
+        // the tool loop is ours: connectors are called in-process (plan §5)
+        capabilities.connectors = .inline
         return capabilities
     }()
 
@@ -75,6 +77,9 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
     private let apiKey: String
     private let hasKey: Bool
     var hermes: Continuity = .unknown
+    /// Models that answered 400 to a request carrying `tools`: no connectors
+    /// for them until the catalog is read again.
+    var toolsUnsupported = Set<String>()
     private var active: [ThreadID: (task: Task<Void, Never>, turnId: String)] = [:]
     private let events = EventEmitter()
     let session: URLSession
@@ -94,6 +99,7 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
 
     func refreshModels() async {
         guard let host else { return }
+        toolsUnsupported = []
         async let resolved = LocalHosts.probe(hostIds: [Self.hostId], env: env, session: session)
         async let probed = probeHermes(host)
         let (options, verdict) = await (resolved, probed)
@@ -133,10 +139,18 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
 
     static func apiModel(_ id: String?) -> String { LocalHosts.decode(id)?.model ?? id ?? "" }
 
+    struct ToolCall: Equatable {
+        var id: String
+        var name: String
+        var arguments: String
+    }
+
     struct Completion {
         var text: String
         var usage: RuntimeEvent.TokenUsage?
         var sessionId: String?
+        /// What the model asked to run, in the order it listed them.
+        var toolCalls: [ToolCall] = []
     }
 
     /// The session Hermes says served the turn — directly or renamed by a proxy.
@@ -145,7 +159,16 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
         return value?.isEmpty == false ? value : nil
     }
 
-    func complete(_ messages: [JSON], model: String, stream: Bool, sessionId: String?,
+    /// `tool_calls` of a whole (non-streamed) message.
+    static func toolCalls(_ value: JSON?) -> [ToolCall] {
+        (value?.array ?? []).enumerated().map { index, call in
+            ToolCall(id: call["id"]?.string.flatMap { $0.isEmpty ? nil : $0 } ?? "call_\(index)_\(newId().prefix(6))",
+                     name: call["function"]?["name"]?.string ?? "",
+                     arguments: call["function"]?["arguments"]?.string ?? "")
+        }
+    }
+
+    func complete(_ messages: [JSON], model: String, stream: Bool, sessionId: String?, tools: [JSON]? = nil,
                   onDelta: ((String) -> Void)? = nil) async throws -> Completion {
         guard let host, let url = URL(string: host.baseUrl + "/chat/completions") else { throw EndpointError(status: 0, message: Self.noEndpoint) }
         let headerName: String
@@ -156,7 +179,9 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let sessionId { request.setValue(sessionId, forHTTPHeaderField: headerName) }
-        request.httpBody = JSON.object(["model": .string(model), "messages": .array(messages), "stream": .bool(stream)]).data
+        var body: JSONObject = ["model": .string(model), "messages": .array(messages), "stream": .bool(stream)]
+        if let tools { body["tools"] = .array(tools) }
+        request.httpBody = JSON.object(body).data
 
         if !stream {
             let (data, response) = try await session.data(for: request)
@@ -168,7 +193,8 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
             }
             let json = try? JSON.parse(data)
             let usage = json?["usage"].map { RuntimeEvent.TokenUsage(input: $0["prompt_tokens"]?.double ?? 0, output: $0["completion_tokens"]?.double ?? 0) }
-            return Completion(text: json?["choices"]?.array?.first?["message"]?["content"]?.string ?? "", usage: usage, sessionId: echo)
+            let message = json?["choices"]?.array?.first?["message"]
+            return Completion(text: message?["content"]?.string ?? "", usage: usage, sessionId: echo, toolCalls: Self.toolCalls(message?["tool_calls"]))
         }
 
         let (bytes, response) = try await session.bytes(for: request)
@@ -185,21 +211,128 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
         }
         var text = ""
         var usage: RuntimeEvent.TokenUsage?
+        // tool calls arrive in pieces, keyed by index: id and name first, the arguments in fragments
+        var calls: [Int: ToolCall] = [:]
         for try await raw in bytes.lines {
             let line = raw.trimmingCharacters(in: .whitespaces)
             guard line.hasPrefix("data:") else { continue }
             let data = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
             if data == "[DONE]" { continue }
             guard let chunk = try? JSON.parse(data) else { continue }
-            if let delta = chunk["choices"]?.array?.first?["delta"]?["content"]?.string, !delta.isEmpty {
-                text += delta
-                onDelta?(delta)
+            let delta = chunk["choices"]?.array?.first?["delta"]
+            if let piece = delta?["content"]?.string, !piece.isEmpty {
+                text += piece
+                onDelta?(piece)
+            }
+            for (position, call) in (delta?["tool_calls"]?.array ?? []).enumerated() {
+                let index = call["index"]?.int ?? position
+                var entry = calls[index] ?? ToolCall(id: "", name: "", arguments: "")
+                if let id = call["id"]?.string, !id.isEmpty { entry.id = id }
+                // some servers repeat the whole name on every fragment
+                if let name = call["function"]?["name"]?.string, !name.isEmpty, name != entry.name { entry.name += name }
+                if let arguments = call["function"]?["arguments"]?.string { entry.arguments += arguments }
+                calls[index] = entry
             }
             if let reported = chunk["usage"], !reported.isNull {
                 usage = .init(input: reported["prompt_tokens"]?.double ?? 0, output: reported["completion_tokens"]?.double ?? 0)
             }
         }
-        return Completion(text: text, usage: usage, sessionId: echo)
+        let toolCalls = calls.sorted { $0.key < $1.key }.map { index, call in
+            var call = call
+            if call.id.isEmpty { call.id = "call_\(index)_\(newId().prefix(6))" }
+            return call
+        }
+        return Completion(text: text, usage: usage, sessionId: echo, toolCalls: toolCalls)
+    }
+
+    // MARK: Tools
+
+    /// How many times one turn may go back to the model with tool results (§5.2).
+    static let maxToolRounds = 20
+    static let parallelToolCalls = 4
+
+    /// Connector tools as OpenAI `tools`, and the way back from the name the
+    /// model calls to the connector and tool. Names become `<id>__<tool>`,
+    /// within `^[a-zA-Z0-9_-]{1,64}$`; a long or clashing one gets a hash.
+    static func openAITools(_ tools: [ConnectorGateway.Tool]) -> (tools: [JSON], routes: [String: ConnectorGateway.Tool]) {
+        var out: [JSON] = []
+        var routes: [String: ConnectorGateway.Tool] = [:]
+        for tool in tools {
+            let raw = "\(tool.connectorId)__\(tool.name)"
+            var name = String(raw.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) && $0.isASCII || $0 == "_" || $0 == "-" ? Character($0) : "_" })
+            if name.count > 64 || routes[name] != nil {
+                let hash = String(format: "%06x", raw.utf8.reduce(UInt32(2_166_136_261)) { ($0 ^ UInt32($1)) &* 16_777_619 } & 0xFFFFFF)
+                name = String(name.prefix(57)) + "_" + hash
+            }
+            routes[name] = tool
+            out.append(["type": "function", "function": [
+                "name": .string(name),
+                "description": .string(String("[\(tool.connectorName)] \(tool.description)".prefix(1024))),
+                "parameters": tool.inputSchema.object != nil ? tool.inputSchema : ["type": "object", "properties": .object(JSONObject())],
+            ]])
+        }
+        return (out, routes)
+    }
+
+    /// A line in the transcript, failed: what happened to the connectors.
+    private func note(_ threadId: String, _ turnId: String, _ text: String) {
+        let itemId = newId()
+        events.emit(RuntimeEvent(provider: provider, providerInstanceId: instanceId, threadId: threadId, turnId: turnId, itemId: itemId,
+                                 .itemStarted(itemType: "tool", title: text)))
+        events.emit(RuntimeEvent(provider: provider, providerInstanceId: instanceId, threadId: threadId, turnId: turnId, itemId: itemId,
+                                 .toolCompleted(ok: false)))
+    }
+
+    /// One call the model asked for, as a chip in the transcript; the
+    /// answer is the `tool` message that goes back to the model.
+    private func runTool(_ call: ToolCall, routes: [String: ConnectorGateway.Tool], gateway: ConnectorGateway,
+                         threadId: String, turnId: String) async -> JSON {
+        let itemId = newId()
+        let route = routes[call.name]
+        let title = route.map { "\($0.connectorName) · \($0.name)" } ?? call.name
+        var started = RuntimeEvent(provider: provider, providerInstanceId: instanceId, threadId: threadId, turnId: turnId, itemId: itemId,
+                                   .itemStarted(itemType: "tool", title: title))
+        started.toolInput = call.arguments
+        events.emit(started)
+        let result: ConnectorGateway.Result
+        let trimmed = call.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let route {
+            if let arguments = trimmed.isEmpty ? .object(JSONObject()) : try? JSON.parse(trimmed), arguments.object != nil {
+                result = await gateway.call(connectorId: route.connectorId, tool: route.name, arguments: arguments)
+            } else {
+                result = .init(text: "The arguments are not a valid JSON object: \(trimmed.prefix(200))", ok: false)
+            }
+        } else {
+            result = .init(text: "Unknown tool \(call.name).", ok: false)
+        }
+        var completed = RuntimeEvent(provider: provider, providerInstanceId: instanceId, threadId: threadId, turnId: turnId, itemId: itemId,
+                                     .toolCompleted(ok: result.ok))
+        completed.toolOutput = result.text
+        events.emit(completed)
+        NativeLog.append(threadId: threadId, dir: "in", source: "localEndpoint.tool",
+                         msg: ["name": .string(call.name), "ok": .bool(result.ok), "result": .string(String(result.text.prefix(2000)))])
+        return ["role": "tool", "tool_call_id": .string(call.id), "content": .string(result.text)]
+    }
+
+    /// The calls of one answer, at most four at a time, answers in the model's order.
+    private func runTools(_ calls: [ToolCall], routes: [String: ConnectorGateway.Tool], gateway: ConnectorGateway,
+                          threadId: String, turnId: String) async -> [JSON] {
+        var answers: [JSON] = []
+        for start in stride(from: 0, to: calls.count, by: Self.parallelToolCalls) {
+            let batch = Array(calls[start..<min(start + Self.parallelToolCalls, calls.count)])
+            let results = await withTaskGroup(of: (Int, JSON).self) { group -> [Int: JSON] in
+                for (index, call) in batch.enumerated() {
+                    group.addTask { @MainActor in
+                        (index, await self.runTool(call, routes: routes, gateway: gateway, threadId: threadId, turnId: turnId))
+                    }
+                }
+                var collected: [Int: JSON] = [:]
+                for await (index, answer) in group { collected[index] = answer }
+                return collected
+            }
+            answers += batch.indices.compactMap { results[$0] }
+        }
+        return answers
     }
 
     // MARK: Turns
@@ -235,34 +368,90 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
 
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            // the stream is read on the main actor, so deltas go out in order
+            // the stream is read on the main actor, so deltas go out in order;
+            // a later round's text starts on a new paragraph
+            var replied = false
+            var roundStarted = false
             let onDelta: (String) -> Void = { [weak self] delta in
+                if replied, !roundStarted { self?.emit(threadId, turnId, .contentDelta(streamKind: "assistant_text", delta: "\n\n")) }
+                roundStarted = true
                 self?.emit(threadId, turnId, .contentDelta(streamKind: "assistant_text", delta: delta))
             }
             do {
-                var result: Completion
-                do {
-                    result = try await self.complete(messages, model: model, stream: true, sessionId: session, onDelta: onDelta)
-                } catch let error as EndpointError where session != nil && error.status == 403 {
-                    // Hermes refused continuation: replay the whole branch, no header
-                    self.hermes = .none
-                    result = try await self.complete(full, model: model, stream: true, sessionId: nil, onDelta: onDelta)
+                // connectors, when this turn has them and the endpoint takes client tools (§5.3):
+                // a proven Hermes session never does, nor a model that refused them once
+                var offered: [JSON]?
+                var routes: [String: ConnectorGateway.Tool] = [:]
+                let gateway = turn.connectorGateway
+                if let gateway, !isSession, !self.toolsUnsupported.contains(model) {
+                    let listed = await gateway.tools()
+                    for failure in listed.failures { self.note(threadId, turnId, "Connettore non raggiungibile — \(failure)") }
+                    let converted = Self.openAITools(listed.tools)
+                    if !converted.tools.isEmpty { (offered, routes) = converted }
                 }
-                try Task.checkCancellation()
+
+                var conversation = messages
+                var requestSession = session
+                var texts: [String] = []
+                var usage: RuntimeEvent.TokenUsage?
+                var firstEcho: String?
+                var round = 0
+                while true {
+                    let tools = round < Self.maxToolRounds ? offered : nil
+                    roundStarted = false
+                    var result: Completion
+                    do {
+                        result = try await self.complete(conversation, model: model, stream: true, sessionId: requestSession, tools: tools, onDelta: onDelta)
+                    } catch let error as EndpointError where requestSession != nil && error.status == 403 && round == 0 {
+                        // Hermes refused continuation: replay the whole branch, no header
+                        self.hermes = .none
+                        requestSession = nil
+                        conversation = full
+                        result = try await self.complete(conversation, model: model, stream: true, sessionId: nil, tools: tools, onDelta: onDelta)
+                    } catch let error as EndpointError where tools != nil && error.status == 400 && round == 0 {
+                        // a model without function calling: the turn goes on without connectors
+                        self.toolsUnsupported.insert(model)
+                        offered = nil
+                        self.note(threadId, turnId, "Questo modello non accetta strumenti: connettori non usati")
+                        result = try await self.complete(conversation, model: model, stream: true, sessionId: requestSession, onDelta: onDelta)
+                    }
+                    try Task.checkCancellation()
+                    if round == 0 { firstEcho = result.sessionId }
+                    if !result.text.isEmpty {
+                        texts.append(result.text)
+                        replied = true
+                    }
+                    if let reported = result.usage {
+                        usage = .init(input: (usage?.input ?? 0) + reported.input, output: (usage?.output ?? 0) + reported.output)
+                    }
+                    guard tools != nil, let gateway, !result.toolCalls.isEmpty else { break }
+                    var assistant: JSONObject = ["role": "assistant", "content": result.text.isEmpty ? .null : .string(result.text)]
+                    assistant["tool_calls"] = .array(result.toolCalls.map {
+                        ["id": .string($0.id), "type": "function", "function": ["name": .string($0.name), "arguments": .string($0.arguments)]]
+                    })
+                    conversation.append(.object(assistant))
+                    conversation += await self.runTools(result.toolCalls, routes: routes, gateway: gateway, threadId: threadId, turnId: turnId)
+                    try Task.checkCancellation()
+                    round += 1
+                    if round == Self.maxToolRounds {
+                        self.note(threadId, turnId, "Limite di \(Self.maxToolRounds) giri di strumenti raggiunto: il modello conclude senza")
+                    }
+                }
+                let text = texts.joined(separator: "\n\n")
                 // only OUR id coming back is proof; a silent stream proves nothing
-                let honoured = result.sessionId != nil && result.sessionId == session
+                let honoured = firstEcho != nil && firstEcho == session
                 if honoured {
                     if case .session = self.hermes {} else { self.hermes = .session(header: Self.hermesHeader) }
                 } else if case .session = self.hermes {
                     self.hermes = .unknown
                 }
-                var nativeIn: JSONObject = ["text": .string(result.text)]
-                nativeIn["usage"] = result.usage.map { ["input": .number($0.input), "output": .number($0.output)] } ?? .null
+                var nativeIn: JSONObject = ["text": .string(text)]
+                nativeIn["usage"] = usage.map { ["input": .number($0.input), "output": .number($0.output)] } ?? .null
                 NativeLog.append(threadId: threadId, dir: "in", source: "localEndpoint.chat.completions", msg: .object(nativeIn))
-                if !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    self.emit(threadId, turnId, .textCompleted(text: result.text))
+                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.emit(threadId, turnId, .textCompleted(text: text))
                 }
-                if let usage = result.usage {
+                if let usage {
                     self.emit(threadId, turnId, .tokenUsage(input: usage.input, output: usage.output))
                 }
                 self.active[threadId] = nil

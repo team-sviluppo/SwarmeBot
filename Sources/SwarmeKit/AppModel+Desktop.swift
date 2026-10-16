@@ -338,3 +338,114 @@ public struct ComposerAttachment: Identifiable, Sendable {
         self.kind = kind
     }
 }
+
+// MARK: - Connectors
+
+extension AppModel {
+    public func refreshMCPConnectors() async {
+        guard let client else { return }
+        if let list = try? await client.mcpConnectors() { mcpConnectors = list }
+    }
+
+    /// Create or replace. Returns the saved connector, or the harness's
+    /// message when it refused the definition.
+    public func save(connector input: MCPConnectorInput, existing: Bool) async -> Result<MCPConnector, Error> {
+        guard let client else { return .failure(CancellationError()) }
+        do {
+            let saved = existing ? try await client.updateMCPConnector(input.id, input) : try await client.createMCPConnector(input)
+            upsert(saved)
+            return .success(saved)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    public func delete(connector: MCPConnector) async {
+        await perform { client in
+            try await client.deleteMCPConnector(connector.id)
+            self.mcpConnectors.removeAll { $0.id == connector.id }
+        }
+    }
+
+    /// "Prova connessione": the result lands in the connector's `lastCheck`.
+    public func test(connector: MCPConnector) async {
+        await perform { client in self.upsert(try await client.testMCPConnector(connector.id)) }
+    }
+
+    /// The URL to open in the browser for an OAuth connector's login.
+    public func oauthLogin(_ connector: MCPConnector) async -> Result<(url: URL, redirect: String), Error> {
+        guard let client else { return .failure(CancellationError()) }
+        do {
+            let started = try await client.startMCPOAuth(connector.id)
+            return .success((started.authorizationURL, started.redirectURI))
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    public func oauthLogout(_ connector: MCPConnector) async {
+        await perform { client in self.upsert(try await client.logoutMCPOAuth(connector.id)) }
+    }
+
+    /// Paste of a Claude Desktop / `.mcp.json` config.
+    public func importConnectors(_ text: String) async -> Result<MCPConnectorImport, Error> {
+        guard let client else { return .failure(CancellationError()) }
+        do {
+            guard let object = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] else {
+                return .failure(APIError.status(code: 400, message: "Non è un JSON valido: incolla un oggetto come {\"mcpServers\": {…}}"))
+            }
+            let result = try await client.importMCPConnectors(object)
+            await refreshMCPConnectors()
+            return .success(result)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    public func setConnectors(_ bot: Bot, _ connectors: [BotConnector]) async {
+        await perform { try await $0.setBotConnectors(botId: bot.id, connectors) }
+    }
+
+    /// Whether a connector is on in the chat that is open: the chat's own
+    /// switch, else the bot's default.
+    public func connectorIsOn(_ bot: Bot, _ id: String) -> Bool {
+        let task = bot.tasks?.first { $0.threadId == bot.threadId }
+        return task?.connectors?[id] ?? bot.connectors?.first { $0.id == id }?.defaultOn ?? false
+    }
+
+    /// Flip a connector for the chat that is open; a switch back to the
+    /// default is dropped, so the chat follows the bot again.
+    public func setConnector(_ bot: Bot, _ id: String, on: Bool) async {
+        var overrides = bot.tasks?.first { $0.threadId == bot.threadId }?.connectors ?? [:]
+        let fallback = bot.connectors?.first { $0.id == id }?.defaultOn ?? false
+        overrides[id] = on == fallback ? nil : on
+        await perform { try await $0.setTaskConnectors(botId: bot.id, threadId: bot.threadId, overrides) }
+    }
+
+    /// Back to the bot's defaults for the chat that is open.
+    public func resetConnectors(_ bot: Bot) async {
+        await perform { try await $0.setTaskConnectors(botId: bot.id, threadId: bot.threadId, [:]) }
+    }
+
+    /// Why the bot's engine and model cannot use connectors, or nil when
+    /// they can — or when the engines are not known yet, so nothing is
+    /// claimed early.
+    public func connectorBlock(_ bot: Bot) -> String? {
+        guard let instance = instances.first(where: { $0.instanceId == bot.modelSelection.instanceId }) else { return nil }
+        guard (instance.capabilities?.connectors ?? "none") != "none" else {
+            return "Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex, gli agenti ACP e il Local Endpoint."
+        }
+        if instance.models.options.first(where: { $0.id == bot.modelSelection.model })?.clientTools == false {
+            return "Questo modello è un profilo Hermes: usa i suoi strumenti e ignora i connettori di SwarmeBot."
+        }
+        return nil
+    }
+
+    private func upsert(_ connector: MCPConnector) {
+        if let index = mcpConnectors.firstIndex(where: { $0.id == connector.id }) {
+            mcpConnectors[index] = connector
+        } else {
+            mcpConnectors.append(connector)
+        }
+    }
+}

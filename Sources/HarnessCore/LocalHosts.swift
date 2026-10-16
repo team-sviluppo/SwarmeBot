@@ -101,6 +101,16 @@ public enum LocalHosts {
         }
     }
 
+    /// Models a Hermes Agent gateway serves (`owned_by: "hermes"`): agents
+    /// with their own tools, which ignore client-side `tools` (verified
+    /// 2026-10-15, docs/plans/2026-10-15-connettori-mcp.md §0).
+    static func hermesModels(fromModelsPayload payload: JSON?) -> Set<String> {
+        let records = payload?.array ?? payload?["data"]?.array ?? payload?["models"]?.array ?? []
+        return Set(records.compactMap { record in
+            record["owned_by"]?.string?.lowercased() == "hermes" ? record["id"]?.string : nil
+        })
+    }
+
     /// One GET with the 1.2 s budget the Node engine gives loopback probes.
     static func timedJSON(_ url: String, host: LocalHost, env: [String: String], session: URLSession) async -> JSON? {
         guard let target = URL(string: url) else { return nil }
@@ -124,8 +134,10 @@ public enum LocalHosts {
             let base = host.baseUrl.hasSuffix("/") ? String(host.baseUrl.dropLast()) : host.baseUrl
             let catalog = await timedJSON("\(base)/models", host: host, env: env, session: session)
             var unique = Set<String>()
+            let hermes = hermesModels(fromModelsPayload: catalog)
             for model in ids(fromModelsPayload: catalog) where unique.insert(model).inserted {
-                options.append(ModelOption(id: encode(host: host.id, model: model), label: label(host, model: model), custom: true))
+                options.append(ModelOption(id: encode(host: host.id, model: model), label: label(host, model: model), custom: true,
+                                           clientTools: hermes.contains(model) ? false : nil))
             }
         }
         return options

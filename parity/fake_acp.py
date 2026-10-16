@@ -8,12 +8,15 @@ prompt that the double gate must drop), set_model / set_mode /
 set_config_option, an unknown server→client request that must be answered,
 session/request_permission, and session/cancel.
 
-The prompt picks the script: PERMESSO, LENTO, or the default reply.
+The prompt picks the script: PERMESSO, LENTO, CONNETTORE <server> <text> (asks
+permission for `mcp__<server>__echo`, then calls it through the mounted
+server), or the default reply.
 FAKE_ACP_RECORD appends one JSON line per prompt (argv + methods seen).
 FAKE_ACP_STATE is a directory remembering sessions across processes.
 """
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -76,6 +79,41 @@ def prompt(message):
     # an unknown server request: the client must answer, not leave us hanging
     unknown = ask("fs/read_text_file", {"sessionId": sid, "path": "/etc/hosts"})
     assert unknown.get("error", {}).get("code") == -32601, unknown
+    if "CONNETTORE " in text:
+        name, _, said = text.split("CONNETTORE ", 1)[1].strip().partition(" ")
+        servers = {server["name"]: server for server in session.get("mcp", [])}
+        if name not in servers:
+            chunk(sid, f"nessun server {name} | server: {','.join(sorted(servers))}")
+            return {"stopReason": "end_turn"}
+        reply = ask("session/request_permission", {
+            "sessionId": sid,
+            "toolCall": {"toolCallId": "tc-c", "title": f"mcp__{name}__echo", "kind": "other", "rawInput": {"text": said}},
+            "options": [{"optionId": "no", "name": "Rifiuta", "kind": "reject_once"},
+                        {"optionId": "si", "name": "Consenti", "kind": "allow_once"}],
+        })
+        verdict = reply["result"]["outcome"].get("optionId", "cancelled")
+        if verdict != "si":
+            chunk(sid, f"permesso {verdict}, server {sorted(servers)}")
+            return {"stopReason": "end_turn"}
+        server = servers[name]
+        env = {**os.environ, **{e["name"]: e["value"] for e in server.get("env", [])}}
+        proc = subprocess.Popen([server["command"], *server["args"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env)
+
+        def rpc(message):
+            proc.stdin.write(json.dumps(message) + "\n")
+            proc.stdin.flush()
+            while True:
+                answer = json.loads(proc.stdout.readline())
+                if answer.get("id") == message["id"]:
+                    return answer
+
+        rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}})
+        rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        result = rpc({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "echo", "arguments": {"text": said}}})
+        proc.stdin.close()
+        proc.wait(5)
+        chunk(sid, f"{result['result']['content'][0]['text']} | server: {','.join(sorted(servers))}")
+        return {"stopReason": "end_turn"}
     if "PERMESSO" in text:
         reply = ask("session/request_permission", {
             "sessionId": sid,
@@ -121,10 +159,12 @@ def handle(message):
         result = {"protocolVersion": 1, "authMethods": [{"id": "cached_token"}, {"id": "login"}],
                   "agentCapabilities": {"loadSession": True}, "_meta": {"modelState": {"currentModelId": "fake-default"}}}
     elif method == "session/new":
+        session["mcp"] = message["params"].get("mcpServers", [])
         sid = f"sess-{uuid.uuid4().hex[:8]}"
         open(os.path.join(state_dir, sid), "w").close()
         result = {"sessionId": sid, "configOptions": [{"id": "model", "currentValue": session["model"]}]}
     elif method == "session/load":
+        session["mcp"] = message["params"].get("mcpServers", [])
         sid = message["params"]["sessionId"]
         if not os.path.exists(os.path.join(state_dir, sid)):
             out({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32002, "message": "session not found"}})

@@ -39,7 +39,7 @@ SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=… SPARKLE_PUBLIC_
 
 ## Release e aggiornamenti
 
-`scripts/release-mac.sh` firma, notarizza e, salvo `--no-publish`, carica DMG, zip e `appcast.xml` sulla GitHub Release `vX.Y.Z` di `team-sviluppo/swarmebot-releases`. L'app pacchettizzata (con `SUPublicEDKey`) controlla quell'appcast con Sparkle e installa lo zip firmato EdDSA.
+`scripts/release-mac.sh` firma, notarizza e, salvo `--no-publish`, carica DMG, zip e `appcast.xml` sulla GitHub Release `vX.Y.Z` di `team-sviluppo/SwarmeBot`. L'app pacchettizzata (con `SUPublicEDKey`) controlla quell'appcast con Sparkle e installa lo zip firmato EdDSA.
 
 Le chiavi si generano una volta sola, sul Mac che pubblica. La pubblica finisce in `.env.mac-release.local` (già in `.gitignore`); la privata resta nel Portachiavi.
 

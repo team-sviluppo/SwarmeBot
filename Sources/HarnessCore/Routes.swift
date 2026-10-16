@@ -54,10 +54,12 @@ public final class Routes {
         if let settings = await DeepSeekSettingsRoutes.handle(r, harness: harness) { return settings }
         if let team = await TeamRoutes.handle(r, harness: harness) { return team }
         if let avatar = AvatarRoutes.handle(r, harness: harness) { return avatar }
+        if let connectors = try await MCPConnectorRoutes.handle(r, harness: harness) { return connectors }
 
-        // dangerous mutations must declare JSON (no CSRF via HTML forms)
+        // Mutations that carry a body must declare JSON (no CSRF via HTML forms).
+        // DELETE has no body and is not a form method, so a library delete is allowed without the header.
         let jsonOnly = [#"^/api/local-computer/"#, #"^/api/cli-test$"#, #"^/api/instances/[\w.-]+"#, #"^/api/bots/[\w-]+/computer"#, #"^/api/bots/[\w-]+/library"#]
-        if method != "GET", jsonOnly.contains(where: { match($0, path) != nil }), !r.isJSON {
+        if method != "GET", method != "DELETE", jsonOnly.contains(where: { match($0, path) != nil }), !r.isJSON {
             return fail(415, "content-type must be application/json")
         }
 
@@ -248,6 +250,15 @@ public final class Routes {
                 guard var task = store.taskByThread(m[0], m[1]) else { return fail(404, "no such task") }
                 if let pinned = body["pinned"]?.bool { task = store.setTaskPinned(m[0], m[1], pinned: pinned) ?? task }
                 if let title = body["title"] { task = store.renameTask(m[0], m[1], title: title.string ?? "") ?? task }
+                if let overrides = body["connectors"] {
+                    // {id: on}: only the switches that differ from the bot's defaults
+                    guard let map = overrides.object, map.count <= 20, map.allSatisfy({ $0.value.bool != nil }) else {
+                        return fail(400, "connectors must be an object of connector id → true/false")
+                    }
+                    var clean: [String: Bool] = [:]
+                    for (id, value) in map where harness.mcpConnectors.connector(id) != nil { clean[id] = value.bool }
+                    task = store.setTaskConnectors(m[0], m[1], clean) ?? task
+                }
                 if let off = body["libraryOff"] {
                     guard let list = off.array, list.allSatisfy({ $0.string != nil }) else { return fail(400, "libraryOff must be a list of document ids") }
                     task = store.setTaskLibraryOff(m[0], m[1], Array(Set(list.compactMap(\.string))).sorted()) ?? task
@@ -538,6 +549,21 @@ public final class Routes {
         }
         if body["hidden"]?.bool == true, bot["chiefOfStaff"]?.truthy == true, body["chiefOfStaff"]?.bool != false {
             return fail(400, "choose another Chief of Staff before hiding this bot")
+        }
+        if let list = body["connectors"] {
+            // [{id, defaultOn}]: connectors that exist, each once (plan §2.2)
+            guard let entries = list.array, entries.count <= 20 else { return fail(400, "connectors must be a list of at most 20 {id, defaultOn}") }
+            var seen = Set<String>()
+            var clean: [JSON] = []
+            for entry in entries {
+                guard let id = entry["id"]?.string, harness.mcpConnectors.connector(id) != nil else {
+                    return fail(400, "connectors: unknown connector \(entry["id"]?.string ?? "")")
+                }
+                guard seen.insert(id).inserted else { return fail(400, "connectors: \(id) is listed twice") }
+                if let on = entry["defaultOn"], on.bool == nil { return fail(400, "connectors: defaultOn must be true or false") }
+                clean.append(["id": .string(id), "defaultOn": .bool(entry["defaultOn"]?.bool ?? true)])
+            }
+            patch["connectors"] = .array(clean)
         }
         if let allowed = body["alwaysAllow"] {
             guard let list = allowed.array, list.allSatisfy({ $0.string != nil }) else { return fail(400, "alwaysAllow must be a list of tool keys") }

@@ -17,6 +17,10 @@ if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "mcp-permission
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mcp-agents" {
     AgentsProxy.run()
 }
+// `swarme-harness mcp-connector <id>`: a connector for a bot's CLI (ConnectorProxy.swift)
+if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "mcp-connector" {
+    ConnectorProxy.run(connector: CommandLine.arguments[2])
+}
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mcp-container" {
     McpBridge.runContainer(Array(CommandLine.arguments.dropFirst(2)))
 }

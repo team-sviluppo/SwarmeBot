@@ -5,12 +5,14 @@ initialize / initialized, model/list (two pages, one hidden row), thread/start
 and thread/resume (threads remembered across processes in FAKE_CODEX_STATE),
 turn/start followed by notifications, and the server→client requests:
 item/commandExecution/requestApproval (PERMESSO), the legacy
-execCommandApproval (VECCHIO), item/tool/requestUserInput (DOMANDA). LENTO
+execCommandApproval (VECCHIO), item/tool/requestUserInput (DOMANDA),
+CONNETTORE <server> <text> (`echo` through a `-c mcp_servers.*` server). LENTO
 streams slowly; an interrupt kills the process. FAKE_CODEX_RECORD gets one
 line per turn with argv, thread/start params and turn/start params.
 """
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -56,6 +58,38 @@ def message(text, deltas):
     note("item/completed", {"item": {"type": "agentMessage", "id": "m1", "text": text}})
 
 
+def mcp_servers():
+    """The servers mounted with `-c mcp_servers.<name>.<field>=<toml/json value>`."""
+    servers = {}
+    for i, arg in enumerate(argv[:-1]):
+        if arg == "-c" and argv[i + 1].startswith("mcp_servers."):
+            key, value = argv[i + 1].split("=", 1)
+            _, name, field = key.split(".", 2)
+            servers.setdefault(name, {})[field] = json.loads(value)
+    return servers
+
+
+def mcp_echo(server, text):
+    # env_vars name variables codex passes through from its own env
+    proc = subprocess.Popen([server["command"], *server["args"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                            env={k: v for k, v in os.environ.items()})
+
+    def rpc(message):
+        proc.stdin.write(json.dumps(message) + "\n")
+        proc.stdin.flush()
+        while True:
+            reply = json.loads(proc.stdout.readline())
+            if reply.get("id") == message["id"]:
+                return reply
+
+    rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}})
+    rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    reply = rpc({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "echo", "arguments": {"text": text}}})
+    proc.stdin.close()
+    proc.wait(5)
+    return reply["result"]["content"][0]["text"]
+
+
 def run_turn(params):
     text = params["input"][0]["text"]
     record["turn"] = {k: v for k, v in params.items() if k != "input"}
@@ -63,7 +97,13 @@ def run_turn(params):
     if os.environ.get("FAKE_CODEX_RECORD"):
         with open(os.environ["FAKE_CODEX_RECORD"], "a") as f:
             f.write(json.dumps(record) + "\n")
-    if "PERMESSO" in text:
+    if "CONNETTORE " in text:
+        name, _, said = text.split("CONNETTORE ", 1)[1].strip().partition(" ")
+        servers = mcp_servers()
+        answer = mcp_echo(servers[name], said) if name in servers else f"nessun server {name}"
+        modes = sorted({s.get("default_tools_approval_mode", "") for s in servers.values()})
+        message(f"{answer} | server: {','.join(sorted(servers))} | approval: {','.join(modes)}", [])
+    elif "PERMESSO" in text:
         decision = ask("item/commandExecution/requestApproval", {"command": "rm -rf /tmp/swarme-codex-x", "reason": "pulizia"})["decision"]
         message(f"permesso: {decision}", [])
     elif "VECCHIO" in text:

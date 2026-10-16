@@ -52,8 +52,13 @@ public struct ModelOption: Equatable, Sendable {
     public var loaded: Bool?
     public var contextWindow: Int?
     public var effortLevels: [String]?
+    /// false: the model runs its own tools server-side and ignores `tools`
+    /// in a request (a Hermes Agent profile). Absent: it may take them.
+    public var clientTools: Bool?
 
-    public init(id: String, label: String, custom: Bool? = nil, loaded: Bool? = nil, contextWindow: Int? = nil, effortLevels: [String]? = nil) {
+    public init(id: String, label: String, custom: Bool? = nil, loaded: Bool? = nil, contextWindow: Int? = nil, effortLevels: [String]? = nil,
+                clientTools: Bool? = nil) {
+        self.clientTools = clientTools
         self.id = id
         self.label = label
         self.custom = custom
@@ -68,6 +73,7 @@ public struct ModelOption: Equatable, Sendable {
         if let loaded { object["loaded"] = .bool(loaded) }
         if let contextWindow { object["contextWindow"] = .number(Double(contextWindow)) }
         if let effortLevels { object["effortLevels"] = .strings(effortLevels) }
+        if let clientTools { object["clientTools"] = .bool(clientTools) }
         return .object(object)
     }
 }
@@ -135,6 +141,10 @@ public struct RuntimeEvent: Sendable {
     public var body: Body
     /// turn.completed without a `cost` key at all (pi); everyone else sends null.
     public var costAbsent = false
+    /// What a tool was called with (on `item.started`) and what it gave back
+    /// (on `item.completed`), for the transcript's tool details. Not on the wire.
+    public var toolInput: String?
+    public var toolOutput: String?
 
     public init(
         provider: String, providerInstanceId: InstanceID? = nil, threadId: ThreadID, turnId: String? = nil,
@@ -262,6 +272,54 @@ public struct MCPServer: Sendable, Equatable {
     }
 }
 
+/// A connector as one turn mounts it: the proxy that stands in for the
+/// server (`swarme-harness mcp-connector <id>`) and the name the CLI shows
+/// its tools under (`mcp__<name>__tool`).
+public struct MountedConnector: Sendable, Equatable {
+    public var name: String
+    public var server: MCPServer
+
+    public init(name: String, server: MCPServer) {
+        self.name = name
+        self.server = server
+    }
+}
+
+/// A tool's input or result as text for the transcript: plain strings stay,
+/// MCP-style content arrays keep their text parts, anything else is JSON.
+public enum ToolText {
+    public static func from(_ value: JSON?) -> String? {
+        guard let value, !value.isNull else { return nil }
+        switch value {
+        case let .string(text):
+            return text.isEmpty ? nil : text
+        case let .array(items):
+            let parts = items.compactMap { item -> String? in
+                if let text = item.string { return text }
+                switch item["type"]?.string {
+                case "text": return item["text"]?.string
+                case "image": return "[immagine]"
+                case "content": return from(item["content"])
+                default: return item["text"]?.string ?? from(item["content"]) ?? item.serialized()
+                }
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: "\n")
+        case .object:
+            if value["type"]?.string == "text", let text = value["text"]?.string { return text }
+            if let content = value["content"], let text = from(content) { return text }
+            return value.pretty()
+        default:
+            return value.serialized()
+        }
+    }
+}
+
+/// How an engine takes connectors: not at all, as MCP servers it spawns
+/// itself, or through the engine's own tool loop (Local Endpoint, phase 3).
+public enum ConnectorMount: String, Sendable {
+    case none, mcp, inline
+}
+
 public struct SendTurnInput: Sendable {
     public var threadId: ThreadID
     public var sessionKey: String?
@@ -281,6 +339,12 @@ public struct SendTurnInput: Sendable {
     public var computer: MCPServer?
     /// `local-computer` routes every tool through the approval broker.
     public var computerScope: String?
+    /// The bot's connectors for this turn, only for engines whose
+    /// capabilities say `connectors == .mcp`. Empty changes nothing.
+    public var connectors: [MountedConnector] = []
+    /// The same connectors for an engine that runs the tool loop itself
+    /// (`connectors == .inline`, the Local Endpoint). Nil changes nothing.
+    public var connectorGateway: ConnectorGateway?
 
     public init(threadId: ThreadID, text: String, model: String? = nil, effort: String? = nil, resumeCursor: JSON? = nil,
                 transcript: [(role: String, text: String)] = [], system: String? = nil, cwd: String? = nil,
@@ -332,6 +396,7 @@ public struct AdapterCapabilities: Sendable {
     public var effortLevels: [String]?
     public var queueing = false
     public var localComputerMcp = false
+    public var connectors = ConnectorMount.none
 
     public init() {}
 
@@ -345,6 +410,7 @@ public struct AdapterCapabilities: Sendable {
         o["images"] = .bool(images)
         if let effortLevels { o["effortLevels"] = .strings(effortLevels) }
         o["localComputerMcp"] = .bool(localComputerMcp)
+        o["connectors"] = .string(connectors.rawValue)
         return .object(o)
     }
 }

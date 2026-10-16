@@ -62,6 +62,8 @@ public enum Frame: Sendable {
     case computerControl(botId: String, control: ComputerControl)
     /// A bot's library changed: a document was added, converted or removed.
     case library(botId: String)
+    /// Connectors were added, edited, tested or removed: refetch the list.
+    case mcpConnectors
     case unknown(kind: String)
 }
 
@@ -140,6 +142,8 @@ extension Frame: Decodable {
             self = (try? container.decode(WebhookAttempt.self, forKey: .attempt)).map(Frame.webhookAttempt) ?? .unknown(kind: kind)
         case "library":
             self = (try? container.decode(String.self, forKey: .botId)).map { .library(botId: $0) } ?? .unknown(kind: kind)
+        case "mcpConnectors":
+            self = .mcpConnectors
         case "computer-control":
             if let botId = try? container.decode(String.self, forKey: .botId) {
                 self = .computerControl(
