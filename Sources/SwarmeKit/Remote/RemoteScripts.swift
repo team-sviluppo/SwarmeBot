@@ -339,20 +339,28 @@ public enum RemoteScripts {
     exit 4
     """#
 
-    // MARK: CLI logins (as the user)
+    // MARK: Engine restart (as the user)
 
-    /// Store Claude's long-lived token (stdin) for the engine, then restart the
-    /// engine so the CLIs get it: systemd restarts the unit; on a Mac, launchd
-    /// (KeepAlive) starts again the process this ends.
-    public static let setClaudeToken = #"""
+    /// Restart the engine so a new binary or new secrets take effect: systemd
+    /// restarts the unit; on a Mac, launchd (KeepAlive) starts again the
+    /// process this ends. Ends only the engine, never the user's other processes.
+    public static let restartEngine = #"""
     set -eu
-    "$HOME/.swarmebot/bin/swarme-harness" secret set CLAUDE_CODE_OAUTH_TOKEN >/dev/null
     if command -v systemctl >/dev/null 2>&1; then
       export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
       systemctl --user restart swarmebot.service
     else
       pkill -TERM -u "$(id -u)" -f "swarme-harness serve --remote" || true
     fi
+    echo "restart=ok"
+    """#
+
+    // MARK: CLI logins (as the user)
+
+    /// Store Claude's long-lived token (stdin) for the engine; `restartEngine` makes it live.
+    public static let setClaudeToken = #"""
+    set -eu
+    "$HOME/.swarmebot/bin/swarme-harness" secret set CLAUDE_CODE_OAUTH_TOKEN >/dev/null
     echo "token=set"
     """#
 

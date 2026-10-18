@@ -25,6 +25,11 @@ public struct RemoteHealth: Codable, Sendable {
     public var app: String
     public var remote: Bool?
     public var contract: Int?
+
+    /// The remote contract this client speaks (HarnessCore's RemoteContract.version).
+    public static let supportedContract = 1
+
+    public var isCompatible: Bool { remote == true && contract == Self.supportedContract }
 }
 
 public enum RemoteDevices {

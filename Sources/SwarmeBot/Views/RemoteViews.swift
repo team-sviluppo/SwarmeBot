@@ -84,6 +84,7 @@ struct RemoteServersPane: View {
                             Text(engine.chatURL).font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled)
                             if let identity = model.identity(for: engine) {
                                 Text("Amministrato da questo Mac come \(identity.label)").font(.system(size: 11)).foregroundStyle(.tertiary)
+                                EngineUpdateLine(engine: engine)
                             }
                         }
                         Spacer()
@@ -438,6 +439,60 @@ struct ClaudeTokenSheet: View {
         }
         .padding(20)
         .frame(width: 480)
+    }
+}
+
+/// "Motore aggiornato" or "Aggiorna motore", for a server this Mac administers (§5.5).
+private struct EngineUpdateLine: View {
+    let engine: RemoteEngine
+    @Environment(AppModel.self) private var model
+    @State private var status: RemoteEngineStatus?
+    @State private var error: String?
+    @State private var working = false
+    @State private var busyNames: [String]?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if working {
+                ProgressView().controlSize(.mini)
+                Text("Aggiorno il motore…").font(.system(size: 11)).foregroundStyle(.secondary)
+            } else if let error {
+                Text(error).font(.system(size: 11)).foregroundStyle(Theme.danger).lineLimit(2)
+            } else if let status {
+                if status.updateAvailable {
+                    Text(status.installed == nil ? "Motore non installato" : "Aggiornamento del motore disponibile")
+                        .font(.system(size: 11)).foregroundStyle(Theme.warning)
+                    Button("Aggiorna motore") { Task { await update(force: false) } }.controlSize(.small)
+                } else {
+                    Text("Motore aggiornato").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Controllo il motore…").font(.system(size: 11)).foregroundStyle(.tertiary)
+            }
+        }
+        .task(id: engine.id) { await load() }
+        .confirmationDialog("Aggiornare adesso?", isPresented: Binding(get: { busyNames != nil }, set: { if !$0 { busyNames = nil } })) {
+            Button("Aggiorna e interrompi", role: .destructive) { Task { await update(force: true) } }
+        } message: {
+            Text("Stanno lavorando: \((busyNames ?? []).joined(separator: ", ")). L'aggiornamento riavvia il motore e interrompe i loro turni.")
+        }
+    }
+
+    private func load() async {
+        do { status = try await model.engineStatus(engine); error = nil } catch { self.error = error.localizedDescription }
+    }
+
+    private func update(force: Bool) async {
+        working = true
+        defer { working = false }
+        do {
+            try await model.updateEngine(engine, force: force)
+            await load()
+        } catch let EngineUpdateError.busy(names) {
+            busyNames = names
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 }
 

@@ -84,7 +84,9 @@ extension AppModel {
                 status = .failed("Questo Mac non ha un token per \(engine.name): abbinalo di nuovo da Impostazioni › Server remoti")
                 return
             }
-            client = CompanionClient(connection: connection, token: token)
+            let remote = CompanionClient(connection: connection, token: token)
+            client = remote
+            checkRemoteContract(remote, engine: engine)
         }
         connect()
     }
@@ -170,5 +172,74 @@ extension AppModel {
         }
         try await RemoteAdmin(identity: identity, store: identityStore).setClaudeToken(token)
         if engineChoice == .remote(engine.id) { await refreshInstances() }
+    }
+}
+
+/// What the server's engine is, next to what this app would install (§5.5).
+public struct RemoteEngineStatus: Equatable, Sendable {
+    public var installed: String?
+    public var expected: String?
+    public var probe: RemoteProbe
+
+    public var updateAvailable: Bool { expected != nil && installed != expected }
+}
+
+public enum EngineUpdateError: LocalizedError, Equatable {
+    case busy([String])
+    case notAdministered(String)
+    case didNotComeBack
+
+    public var errorDescription: String? {
+        switch self {
+        case let .busy(names):
+            return "Stanno lavorando: \(names.joined(separator: ", ")). Aggiornare adesso interrompe i loro turni."
+        case let .notAdministered(name):
+            return "Questo Mac non amministra \(name): l'aggiornamento si fa dal Mac che lo ha configurato"
+        case .didNotComeBack:
+            return "Il motore aggiornato non risponde: controlla il server (Apri un terminale sul server)"
+        }
+    }
+}
+
+/// The update itself (§5.5), apart from AppModel so it can run against a test server.
+public enum EngineUpdater {
+    public static func update(admin: RemoteAdmin, client: CompanionClient, force: Bool, linux: LinuxEngines = .standard) async throws {
+        if !force, let fleet = try? await client.fleet(messages: 0) {
+            let working = fleet.bots.filter { $0.busy == true || ["working", "waiting-on-you"].contains($0.activity ?? "") }.map(\.name)
+            if !working.isEmpty { throw EngineUpdateError.busy(working) }
+        }
+        try await admin.updateEngine(probe: try await admin.probe(), linux: linux)
+        // back when the new engine answers on the chat URL, as every client sees it
+        for _ in 0..<60 {
+            if let health = try? await client.remoteHealth(), health.remote == true { return }
+            try await Task.sleep(nanoseconds: 500_000_000)
+        }
+        throw EngineUpdateError.didNotComeBack
+    }
+}
+
+extension AppModel {
+    /// Installed vs expected engine, over ssh. Nil when this Mac does not administer it.
+    public func engineStatus(_ engine: RemoteEngine) async throws -> RemoteEngineStatus? {
+        guard let identity = identity(for: engine) else { return nil }
+        let probe = try await RemoteAdmin(identity: identity, store: identityStore).probe()
+        return RemoteEngineStatus(installed: probe.engineHash, expected: RemoteAdmin.expectedEngine(for: probe), probe: probe)
+    }
+
+    /// Replace the server's engine with this app's. Refuses while bots work unless `force`.
+    public func updateEngine(_ engine: RemoteEngine, force: Bool = false) async throws {
+        guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
+        try await EngineUpdater.update(admin: RemoteAdmin(identity: identity, store: identityStore),
+                                       client: try remoteClient(engine), force: force)
+    }
+
+    /// A remote engine speaking another contract is named for what it is, not left to fail oddly.
+    func checkRemoteContract(_ client: CompanionClient, engine: RemoteEngine) {
+        Task { [weak self] in
+            guard let health = try? await client.remoteHealth() else { return }
+            guard let self, self.engineChoice == .remote(engine.id), !health.isCompatible else { return }
+            self.streamTask?.cancel()
+            self.status = .failed("Il motore su \(engine.name) è di un'altra versione (contratto \(health.contract.map(String.init) ?? "?"), questa app parla \(RemoteHealth.supportedContract)): aggiornalo da Impostazioni › Server remoti")
+        }
     }
 }

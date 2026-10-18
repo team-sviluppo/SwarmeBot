@@ -598,3 +598,17 @@ In `Sources/SwarmeKit/Remote/`:
   Sui due server di prova l'istanza Claude del motore risulta autenticata dopo il token.
 - **Non provato:** Caddy sulle porte 80/443 con certificato pubblico (serve un dominio che punti al Mac).
 
+### Aggiornamento del motore (§5.5) — fatto (2026-10-18)
+
+- La scheda del server mostra "Motore aggiornato" oppure "Aggiornamento del motore disponibile". Confronta
+  l'hash installato (letto via probe ssh) con quello atteso: per Linux dal manifest, senza scaricare nulla;
+  per un Mac server dal motore dell'app.
+- `EngineUpdater.update`: rifiuta se ci sono bot al lavoro (`EngineUpdateError.busy` con i nomi); l'app
+  chiede conferma ("Aggiorna e interrompi"). Poi carica il binario, riavvia il servizio
+  (`RemoteScripts.restartEngine`: systemd, oppure launchd KeepAlive) e aspetta la salute via URL di chat.
+- Contratto: `RemoteHealth.supportedContract`. Collegandosi, l'app confronta e, se il motore parla un altro
+  contratto, lo dice con il rimedio (aggiornare dal Mac che lo amministra).
+- Verificato: `EngineUpdateIntegrationTests` sul server Ubuntu di prova, con un turno lento in corso:
+  aggiornamento rifiutato e motore invariato; con `force` motore B installato, servizio attivo, contratto
+  compatibile.
+

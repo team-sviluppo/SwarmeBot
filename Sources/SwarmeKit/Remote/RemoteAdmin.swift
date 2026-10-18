@@ -215,6 +215,39 @@ public struct RemoteAdmin: Sendable {
             throw ProcessRunner.Failure(message: "Non sembra un token di claude setup-token (inizia con sk-ant-)")
         }
         try await ssh.run(RemoteScripts.command(RemoteScripts.setClaudeToken), stdin: Data((trimmed + "\n").utf8), timeout: 60)
+        try await restartEngine()
+    }
+
+    public func restartEngine() async throws {
+        try await ssh.run(RemoteScripts.command(RemoteScripts.restartEngine), timeout: 60)
+    }
+
+    // MARK: Engine updates (§5.5)
+
+    /// The binary this app would install on that server, and its digest — without downloading.
+    public static func expectedEngine(for probe: RemoteProbe, linux: LinuxEngines = .standard) -> String? {
+        guard let arch = probe.engineArch else { return nil }
+        if probe.isMac { return ServerSetupFlow.macEngine(arch)?.sha256 }
+        if let local = linux.localBuild(arch) { return local.sha256 }
+        return linux.manifest?.engines[arch]?.sha256.lowercased()
+    }
+
+    /// Replace the engine and restart it. Turns running at that moment are cut
+    /// short, so the caller checks for them first (AppModel.updateEngine).
+    public func updateEngine(probe: RemoteProbe, linux: LinuxEngines = .standard) async throws {
+        guard let arch = probe.engineArch else { throw ProcessRunner.Failure(message: "Architettura \(probe.arch) non supportata") }
+        let binary: (url: URL, sha256: String)
+        if probe.isMac {
+            guard let mac = ServerSetupFlow.macEngine(arch) else {
+                throw ProcessRunner.Failure(message: "Il motore di questa app non è per Mac \(probe.arch)")
+            }
+            binary = mac
+        } else {
+            binary = try await linux.engine(arch)
+        }
+        guard probe.engineHash != binary.sha256 else { return }
+        try await installEngine(binary: binary.url, sha256: binary.sha256, probe: probe)
+        try await restartEngine()
     }
 
     // MARK: Devices

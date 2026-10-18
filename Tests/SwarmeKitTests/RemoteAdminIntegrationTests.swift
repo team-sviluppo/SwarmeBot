@@ -223,3 +223,79 @@ final class ServerSetupFlowIntegrationTests: XCTestCase {
         XCTAssertFalse(fleet.bots.isEmpty)
     }
 }
+
+/// Updating the server's engine (§5.5): refused while a bot works, then replaced and back.
+final class EngineUpdateIntegrationTests: XCTestCase {
+    func testUpdateWaitsForWorkingBotsThenReplacesTheEngine() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let target = env["SWARMEBOT_VPS_TEST"], let http = env["SWARMEBOT_VPS_HTTP"], let engine = env["SWARMEBOT_VPS_ENGINE"],
+              let slow = env["SWARMEBOT_VPS_SLOW_CLAUDE"] else {
+            throw XCTSkip("SWARMEBOT_VPS_TEST / _HTTP / _ENGINE / _SLOW_CLAUDE not set")
+        }
+        let parts = target.split(separator: ":")
+        let root = URL(fileURLWithPath: "/tmp/sbu-\(UUID().uuidString.prefix(4))", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = SSHIdentityStore(root: root.appendingPathComponent("ssh"))
+        var identity = try store.findOrCreate(host: String(parts[0]), port: Int(parts[1]) ?? 22, user: "deploy")
+        identity = try await HostKeys.approve(try await HostKeys.scan(host: identity.host, port: identity.port)[0], for: identity, store: store)
+        identity = try await RemoteAdmin(identity: identity, store: store).installKey(password: "s3cret-pw")
+        let admin = RemoteAdmin(identity: identity, store: store)
+        let ssh = SSHCommand(identity: identity, store: store)
+
+        // engine A, as installed by the setup
+        let builds = root.appendingPathComponent("builds", isDirectory: true)
+        try FileManager.default.createDirectory(at: builds, withIntermediateDirectories: true)
+        func stage(_ data: Data) throws -> String {
+            let file = builds.appendingPathComponent("swarme-harness-aarch64")
+            try data.write(to: file)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+            let sha = try LinuxEngines.digest(of: file)
+            try sha.write(to: URL(fileURLWithPath: file.path + ".sha256"), atomically: true, encoding: .utf8)
+            return sha
+        }
+        let original = try Data(contentsOf: URL(fileURLWithPath: engine))
+        let shaA = try stage(original)
+        let linux = LinuxEngines(manifest: nil, cache: root.appendingPathComponent("cache"), localBuilds: builds)
+        try await admin.updateEngine(probe: try await admin.probe(), linux: linux)
+        let afterA = try await admin.probe()
+        XCTAssertEqual(afterA.engineHash, shaA)
+
+        // a slow claude on the server, and a bot that uses it
+        try await ssh.run("cat > ~/slow_claude.py && chmod 755 ~/slow_claude.py", stdin: try Data(contentsOf: URL(fileURLWithPath: slow)))
+        try await ssh.run(#"printf '{"instances":{"claude":{"driver":"claudeAgent","config":{"cli":"%s/slow_claude.py","permissionMode":"bypassPermissions"}}}}' "$HOME" > ~/.swarmebot/config.json"#)
+        try await admin.restartEngine()
+        let device = try await admin.addDevice(name: "update-test")
+        let connection = try XCTUnwrap(Connection.remote(chatURL: http + "/srv1/deploy"))
+        let client = CompanionClient(connection: connection, token: device.token)
+        var bot: Bot?
+        for _ in 0..<60 where bot == nil {
+            try await Task.sleep(nanoseconds: 500_000_000)
+            bot = try? await client.fleet(messages: 0).bots.first
+        }
+        let target2 = try XCTUnwrap(bot)
+        try await client.patchBot(target2.id, BotPatch(modelSelection: ModelSelection(instanceId: "claude", model: "claude-sonnet-5")))
+        try await client.send(text: "lavora a lungo", toBot: target2.id)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+
+        // engine B: the same binary with bytes after the end, so a different digest
+        let shaB = try stage(original + Data("swarmebot-update-test".utf8))
+        XCTAssertNotEqual(shaA, shaB)
+        do {
+            try await EngineUpdater.update(admin: admin, client: client, force: false, linux: linux)
+            XCTFail("the update did not wait for the working bot")
+        } catch let EngineUpdateError.busy(names) {
+            XCTAssertEqual(names, [target2.name])
+        }
+        let stillA = try await admin.probe()
+        XCTAssertEqual(stillA.engineHash, shaA, "nothing may change while refused")
+
+        try await EngineUpdater.update(admin: admin, client: client, force: true, linux: linux)
+        let afterB = try await admin.probe()
+        XCTAssertEqual(afterB.engineHash, shaB)
+        XCTAssertTrue(afterB.serviceActive)
+        let health = try await client.remoteHealth()
+        XCTAssertTrue(health.isCompatible)
+        // up to date now: a second update does nothing
+        XCTAssertEqual(RemoteAdmin.expectedEngine(for: afterB, linux: linux), afterB.engineHash)
+    }
+}
