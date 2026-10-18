@@ -8,40 +8,35 @@ import SwiftUI
 // another device with a QR, and the device list.
 
 /// "Questo Mac" or a remote engine, atop the sidebar. Shown once there is a remote engine.
+/// A native pop-up (it reads as something to click, with its arrows), the
+/// connection's state beside it, and a way to the server settings.
 struct EngineSwitcher: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         if !model.remoteEngines.isEmpty {
-            Menu {
+            HStack(spacing: 6) {
+                statusDot
                 Picker("Motore", selection: Binding(get: { model.engineChoice }, set: { model.select(engine: $0) })) {
                     Label("Questo Mac", systemImage: "laptopcomputer").tag(EngineChoice.local)
                     ForEach(model.remoteEngines) { engine in
                         Label(engine.name, systemImage: "server.rack").tag(EngineChoice.remote(engine.id))
                     }
                 }
-                .pickerStyle(.inline)
-                Divider()
-                Button("Server remoti…") { openSettings() }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: model.activeRemoteEngine == nil ? "laptopcomputer" : "server.rack")
-                        .font(.system(size: 11))
-                    Text(model.engineName).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    Spacer(minLength: 4)
-                    statusDot
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+                Spacer(minLength: 0)
+                Button { openSettings() } label: {
+                    Image(systemName: "gearshape").font(.system(size: 11))
                 }
-                .foregroundStyle(Theme.ink)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous).fill(Theme.raised.opacity(0.5)))
-                .contentShape(Rectangle())
+                .buttonStyle(.borderless)
+                .foregroundStyle(Theme.secondary)
+                .help("Server remoti…")
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .padding(.top, 6)
             .help("Il motore di cui vedi i bot: questo Mac o un server remoto")
         }
@@ -49,12 +44,13 @@ struct EngineSwitcher: View {
 
     private var statusDot: some View {
         let color: Color
+        let label: String
         switch model.status {
-        case .live: color = Theme.success
-        case .connecting, .starting: color = Theme.secondary
-        case .offline, .failed: color = Theme.danger
+        case .live: (color, label) = (Theme.success, "collegato")
+        case .connecting, .starting: (color, label) = (Theme.secondary, "collegamento in corso")
+        case .offline, .failed: (color, label) = (Theme.danger, "non raggiungibile")
         }
-        return Circle().fill(color).frame(width: 6, height: 6)
+        return Circle().fill(color).frame(width: 7, height: 7).help("Motore \(label)")
     }
 }
 
@@ -188,32 +184,84 @@ private struct SetupBody: View {
     let finished: () -> Void
     @State private var showRoot = false
 
+    /// Once connecting starts, the form gives its room to the steps: the
+    /// fingerprint, the password fields and the errors must be in view.
+    private var editing: Bool { flow.step == .hostKey && flow.scannedKeys.isEmpty && !flow.running }
+
+    private var needsAction: Bool {
+        !flow.scannedKeys.isEmpty || flow.error != nil || flow.probe != nil
+            || (flow.needsPassword && flow.step == .key)
+            || (flow.needsSudoPassword && flow.step >= .root && flow.step < .device)
+    }
+
     var body: some View {
         Form {
-            Section("Server (amministrazione via ssh)") {
-                TextField("Nome da mostrare", text: $flow.name, prompt: Text("srv1 · deploy"))
-                TextField("Server", text: $flow.host, prompt: Text("10.0.4.12 o vps1.example.it"))
-                    .onSubmit { flow.suggestPrefix() }
-                TextField("Porta ssh", value: $flow.port, format: .number.grouping(.never))
-                TextField("Utente", text: $flow.user, prompt: Text("deploy"))
-                    .onSubmit { flow.suggestPrefix() }
-            }
-            .disabled(flow.step > .hostKey)
-            Section {
-                TextField("Sito Caddy", text: $flow.site, prompt: Text("bot.example.it, oppure :8080 dietro un proxy"))
-                TextField("Prefisso", text: $flow.prefix, prompt: Text("/srv1/deploy"))
-                Picker("Certificato", selection: $flow.tls) {
-                    Text("Pubblico (Let's Encrypt)").tag(CaddySettings.TLS.public)
-                    Text("Nessuno: dietro un proxy HTTPS").tag(CaddySettings.TLS.off)
+            if editing {
+                Section("Server (amministrazione via ssh)") {
+                    TextField("Nome da mostrare", text: $flow.name, prompt: Text("srv1 · deploy"))
+                    TextField("Server", text: $flow.host, prompt: Text("10.0.4.12 o vps1.example.it"))
+                        .onSubmit { flow.suggestPrefix() }
+                    TextField("Porta ssh", value: $flow.port, format: .number.grouping(.never))
+                    TextField("Utente", text: $flow.user, prompt: Text("deploy"))
+                        .onSubmit { flow.suggestPrefix() }
                 }
-                TextField("URL di chat (se c'è un proxy davanti)", text: $flow.chatURLOverride, prompt: Text(flow.chatURL))
-            } header: {
-                Text("Chat (HTTPS)")
-            } footer: {
-                Text("I dispositivi usano solo questo URL: \(flow.chatURL)")
+                Section {
+                    TextField("Sito Caddy", text: $flow.site, prompt: Text("bot.example.it, oppure :8080 dietro un proxy"))
+                    TextField("Prefisso", text: $flow.prefix, prompt: Text("/srv1/deploy"))
+                    Picker("Certificato", selection: $flow.tls) {
+                        Text("Pubblico (Let's Encrypt)").tag(CaddySettings.TLS.public)
+                        Text("Nessuno: dietro un proxy HTTPS").tag(CaddySettings.TLS.off)
+                    }
+                    TextField("URL di chat (se c'è un proxy davanti)", text: $flow.chatURLOverride, prompt: Text(flow.chatURL))
+                } header: {
+                    Text("Chat (HTTPS)")
+                } footer: {
+                    Text("I dispositivi usano solo questo URL: \(flow.chatURL)")
+                }
+            } else {
+                Section {
+                    LabeledContent("Server", value: "\(flow.user)@\(flow.host)\(flow.port == 22 ? "" : ":\(flow.port)")")
+                    LabeledContent("Chat", value: flow.chatURL)
+                }
             }
-            .disabled(flow.step > .hostKey)
 
+            // what the person must do now goes first, above the list of steps
+            if needsAction {
+                Section {
+                    if !flow.scannedKeys.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Confronta il fingerprint con quello mostrato dalla console del server:").font(.callout)
+                            ForEach(flow.scannedKeys.prefix(1), id: \.self) { key in
+                                Text("\(key.type)  \(key.fingerprint)").font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+                                Button("È quello giusto: approva") { Task { await flow.approve(key) } }
+                            }
+                        }
+                    }
+                    if flow.needsPassword, flow.step == .key {
+                        SecureField("Password ssh di \(flow.user)", text: $flow.sshPassword)
+                    Text("Serve una volta sola, per installare la chiave dedicata di questo Mac. Non viene salvata.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if flow.needsSudoPassword, flow.step >= .root, flow.step < .device {
+                        SecureField("Password di sudo", text: $flow.sudoPassword)
+                    Text("Per i passi di root qui sotto. Non viene salvata.").font(.caption).foregroundStyle(.secondary)
+                        DisclosureGroup("Comandi eseguiti come root", isExpanded: $showRoot) {
+                            ScrollView {
+                                Text(flow.rootPreview).font(.system(size: 10, design: .monospaced)).textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(height: 160)
+                        }
+                    }
+                    if let probe = flow.probe {
+                        Text("\(probe.os) \(probe.version) · \(probe.arch) · Claude: \(probe.claude ?? "non installato") · pi: \(probe.pi ?? "non installato")")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let error = flow.error {
+                        Text(error).foregroundStyle(Theme.danger).textSelection(.enabled)
+                    }
+                }
+            }
             Section("Avanzamento") {
                 ForEach(ServerSetupFlow.Step.allCases.filter { $0 != .done }, id: \.self) { step in
                     HStack {
@@ -221,39 +269,12 @@ private struct SetupBody: View {
                         Text(step.title)
                     }
                 }
-                if !flow.scannedKeys.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Confronta il fingerprint con quello mostrato dalla console del server:").font(.callout)
-                        ForEach(flow.scannedKeys.prefix(1), id: \.self) { key in
-                            Text("\(key.type)  \(key.fingerprint)").font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-                            Button("È quello giusto: approva") { Task { await flow.approve(key) } }
-                        }
-                    }
-                }
-                if flow.needsPassword, flow.step == .key {
-                    SecureField("Password ssh di \(flow.user) (solo per installare la chiave, non viene salvata)", text: $flow.sshPassword)
-                }
-                if flow.needsSudoPassword, flow.step >= .root, flow.step < .device {
-                    SecureField("Password di sudo", text: $flow.sudoPassword)
-                    DisclosureGroup("Comandi eseguiti come root", isExpanded: $showRoot) {
-                        ScrollView {
-                            Text(flow.rootPreview).font(.system(size: 10, design: .monospaced)).textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .frame(height: 160)
-                    }
-                }
-                if let probe = flow.probe {
-                    Text("\(probe.os) \(probe.version) · \(probe.arch) · Claude: \(probe.claude ?? "non installato") · pi: \(probe.pi ?? "non installato")")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let error = flow.error {
-                    Text(error).foregroundStyle(Theme.danger).textSelection(.enabled)
-                }
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)
+        // the sheet hangs off the Settings window (640 pt with its toolbar): the form
+        // scrolls inside this, so the buttons below stay on screen
+        .frame(height: 380)
         HStack {
             if flow.running { ProgressView().controlSize(.small) }
             if let activity = flow.activity { Text(activity).font(.caption).foregroundStyle(.secondary) }

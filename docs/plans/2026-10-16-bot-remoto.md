@@ -643,8 +643,36 @@ sul server. Verificato con `PiConfigIntegrationTests`: permessi, backup, nomi fu
 
 - Prova su un VPS vero: dominio pubblico e Let's Encrypt, `claude setup-token` vero e un turno reale, pi.
 - Prima pubblicazione dei motori Linux con `release-mac.sh`; prova dell'app firmata (Portachiavi reale).
-- Interfaccia vista a schermo solo in parte (senza permesso di Accessibilità non posso cliccare): procedura
-  guidata, QR, aggiornamento del motore, copia dei connettori.
+- Login di pi copiato da interfaccia: non cliccato, perché copierebbe le chiavi reali dell'utente
+  (la logica è coperta da `PiConfigIntegrationTests`).
 - Più avanti: barra laterale con i bot di più motori, approvazioni sui bot remoti (fine di R5), OAuth sul
   motore remoto, app iOS con notifiche (APNs).
+
+### Prova dell'interfaccia (2026-10-18)
+
+Con il permesso di Accessibilità, l'app di sviluppo è stata guidata a clic su `SWARMEBOT_HOME=/tmp/sbui`,
+contro un server Ubuntu nuovo:
+- **Server remoti › Aggiungi un server:** modulo; "Collegati"; fingerprint mostrato e uguale a quello vero
+  del server (`ssh-keygen -lf`); approvazione; password ssh; tutti i passi verdi (sudo con la stessa
+  password, senza richiesta); "Mostra i bot del server".
+- **Abbina un dispositivo:** il QR, decodificato dallo screenshot, contiene
+  `swarmebot://pair?url=…&code=…&name=…` e niente token. Il codice ha abbinato un "iPhone di prova" via API.
+- **Dispositivi abbinati:** elenco con "(questo Mac)" non revocabile; "Revoca" sull'iPhone lo toglie.
+- **Aggiornamento del motore:** con il binario del server alterato compare "Aggiornamento del motore
+  disponibile"; "Aggiorna motore" lo sostituisce e la scheda torna a "Motore aggiornato".
+- **Login di Claude sul server:** il token incollato arriva in `secrets.json` (0600) del server.
+- **Connettori › Copia su server:** "Copiato su VPS di prova: 7 strumenti, provato sul server"; connettore
+  e segreto presenti sul server.
+- **Selettore del motore:** da "VPS di prova" a "Questo Mac" e ritorno, ciascuno con i suoi bot.
+
+Difetti trovati così, e corretti:
+- **Foglio "Aggiungi un server" più alto della finestra delle impostazioni:** "Collegati" e "Chiudi"
+  finivano fuori schermo. Ora il modulo scorre in 380 pt.
+- **Fingerprint, password ed errori in fondo, sotto l'elenco dei passi e fuori vista,** con "Collegati"
+  grigio. Ora, appena il collegamento parte, il modulo diventa un riepilogo di una riga e la parte su cui
+  agire sta sopra i passi.
+- **Etichetta dei campi password così lunga da schiacciare il campo.** Ora etichetta corta, con la
+  spiegazione sotto.
+- **Selettore del motore che sembrava un'etichetta:** un `Menu` borderless su macOS ignora l'etichetta
+  personalizzata. Ora è un popup nativo, con il pallino di stato e l'ingranaggio per Server remoti.
 
