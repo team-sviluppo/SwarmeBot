@@ -7,7 +7,10 @@
 # on Ubuntu 24.04 and 26.04. The Swift runtime is linked in
 # (--static-swift-stdlib); the server needs only libsqlite3-0 and libcurl4t64,
 # which the setup installs. x86_64 runs under emulation on Apple silicon:
-# slow (tens of minutes), but the same toolchain.
+# slow (about 11 minutes with QEMU), but the same toolchain. Docker Desktop
+# needs an amd64 handler: turn on Rosetta in its settings, or register QEMU
+# in its VM (until Docker restarts):
+#   docker run --privileged --rm tonistiigi/binfmt --install amd64
 #
 # Output: build/linux/swarme-harness-<arch> and a .sha256 next to each.
 set -euo pipefail

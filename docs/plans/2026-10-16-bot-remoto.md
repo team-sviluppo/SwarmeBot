@@ -460,8 +460,11 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
 - Su Ubuntu 24.04 pulito: motore remoto avviato, token, SSE, e **un turno Claude vero** con il finto CLI
   della parity (spawn, stream-json, messaggi), **compresa una card di permesso** (broker su socket unix e
   proxy `mcp-permission`).
-- **Da fare:** Mac come server (LaunchDaemon, Portachiavi della CLI), login non interattivo di Claude e pi,
-  build x86_64 verificata su una macchina x86_64.
+- Build x86_64 (2026-10-18): in Docker su Apple Silicon con QEMU registrato nella VM di Docker
+  (`docker run --privileged --rm tonistiigi/binfmt --install amd64`; sparisce al riavvio di Docker Desktop,
+  e con Rosetta attivo nelle impostazioni è più veloce). Circa 11 minuti, binario da 62 MB. Su Ubuntu 24.04
+  amd64 (emulato): turno Claude e card di permesso come su aarch64.
+- **Da fare:** login non interattivo di Claude e pi; prova su un server x86_64 vero.
 
 ### Fase 2 — fatta per Linux (2026-10-18)
 
