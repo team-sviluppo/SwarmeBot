@@ -206,6 +206,17 @@ public struct RemoteAdmin: Sendable {
         return LinuxSetup(socketDirectory: socketDirectory, chatURL: chatURL)
     }
 
+    // MARK: CLI logins
+
+    /// The token `claude setup-token` prints, for the engine on the server (§4.2).
+    public func setClaudeToken(_ token: String) async throws {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("sk-ant-"), !trimmed.contains(where: \.isWhitespace) else {
+            throw ProcessRunner.Failure(message: "Non sembra un token di claude setup-token (inizia con sk-ant-)")
+        }
+        try await ssh.run(RemoteScripts.command(RemoteScripts.setClaudeToken), stdin: Data((trimmed + "\n").utf8), timeout: 60)
+    }
+
     // MARK: Devices
 
     public struct AddedDevice: Sendable {

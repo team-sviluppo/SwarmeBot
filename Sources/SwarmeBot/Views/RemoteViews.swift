@@ -67,6 +67,7 @@ struct RemoteServersPane: View {
     @State private var devicesFor: RemoteEngine?
     @State private var qrFor: RemoteEngine?
     @State private var forgetting: RemoteEngine?
+    @State private var claudeLoginFor: RemoteEngine?
 
     var body: some View {
         Form {
@@ -92,6 +93,7 @@ struct RemoteServersPane: View {
                             Button("Dispositivi abbinati…") { devicesFor = engine }
                             if let identity = model.identity(for: engine) {
                                 Divider()
+                                Button("Login di Claude sul server…") { claudeLoginFor = engine }
                                 Button("Apri un terminale sul server") { try? model.openTerminal(identity) }
                             }
                             Divider()
@@ -115,6 +117,7 @@ struct RemoteServersPane: View {
         .sheet(isPresented: $pairingWithCode) { PairWithCodeSheet() }
         .sheet(item: $devicesFor) { DevicesSheet(engine: $0) }
         .sheet(item: $qrFor) { PairingQRSheet(engine: $0) }
+        .sheet(item: $claudeLoginFor) { ClaudeTokenSheet(engine: $0) }
         .confirmationDialog("Dimenticare \(forgetting?.name ?? "")?", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } })) {
             Button("Dimentica", role: .destructive) {
                 if let engine = forgetting { try? model.forgetRemoteEngine(engine.id) }
@@ -394,3 +397,46 @@ struct DevicesSheet: View {
         do { list = try await model.remoteClient(engine).devices() } catch { self.error = error.localizedDescription }
     }
 }
+
+/// Claude's login for a server: no browser and maybe no Keychain there, so a
+/// long-lived token made on this Mac goes to the engine's secrets.
+struct ClaudeTokenSheet: View {
+    let engine: RemoteEngine
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var token = ""
+    @State private var error: String?
+    @State private var working = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Login di Claude su \(engine.name)").font(.title3.weight(.semibold))
+            Text("Nel Terminale di questo Mac esegui il comando qui sotto e accedi con il tuo abbonamento; poi incolla il token che stampa. Il token resta sul server in un file leggibile solo dal suo utente.")
+                .font(.callout).foregroundStyle(.secondary)
+            Text("claude setup-token").font(.system(.body, design: .monospaced)).textSelection(.enabled)
+            SecureField("sk-ant-…", text: $token)
+            if let error { Text(error).foregroundStyle(Theme.danger) }
+            HStack {
+                Spacer()
+                Button("Annulla") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Salva sul server") {
+                    working = true
+                    Task {
+                        do {
+                            try await model.setClaudeToken(token, for: engine)
+                            dismiss()
+                        } catch {
+                            self.error = error.localizedDescription
+                        }
+                        working = false
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(working || token.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 480)
+    }
+}
+

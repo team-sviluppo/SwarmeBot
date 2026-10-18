@@ -161,3 +161,14 @@ extension AppModel {
         try ServerTerminal.open(identity, store: identityStore)
     }
 }
+
+extension AppModel {
+    /// Claude's login on a server this Mac administers: the `claude setup-token` token (§4.2).
+    public func setClaudeToken(_ token: String, for engine: RemoteEngine) async throws {
+        guard let identity = identity(for: engine) else {
+            throw ProcessRunner.Failure(message: "Questo Mac non amministra \(engine.name): il token si imposta dal Mac che lo ha configurato")
+        }
+        try await RemoteAdmin(identity: identity, store: identityStore).setClaudeToken(token)
+        if engineChoice == .remote(engine.id) { await refreshInstances() }
+    }
+}

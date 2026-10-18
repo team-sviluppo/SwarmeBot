@@ -44,6 +44,9 @@ setvbuf(stdout, nil, _IOLBF, 0)
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "device" {
     runDeviceCommand(Array(CommandLine.arguments.dropFirst(2)), paths: paths)
 }
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "secret" {
+    MainActor.assumeIsolated { runSecretCommand(Array(CommandLine.arguments.dropFirst(2)), paths: paths) }
+}
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "serve" {
     let rest = Array(CommandLine.arguments.dropFirst(2))
     guard rest.contains("--remote") else { fail("serve needs --remote (the local engine starts without arguments)") }

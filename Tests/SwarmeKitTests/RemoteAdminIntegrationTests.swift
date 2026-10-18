@@ -112,6 +112,18 @@ final class RemoteAdminIntegrationTests: XCTestCase {
         let unauthorized = try await URLSession.shared.data(for: anonymous)
         XCTAssertEqual((unauthorized.1 as? HTTPURLResponse)?.statusCode, 401)
 
+        // Claude's login: the setup-token token, into the engine's secrets, seen after the restart
+        try await admin.setClaudeToken("sk-ant-oat01-integration-test-not-real")
+        var authenticated = false
+        for _ in 0..<40 where !authenticated {
+            try await Task.sleep(nanoseconds: 500_000_000)
+            if let instances = try? await client.instances(),
+               let claude = instances.first(where: { $0.driverKind == "claudeAgent" }) {
+                authenticated = claude.snapshot.authenticated == true
+            }
+        }
+        XCTAssertTrue(authenticated, "the engine's claude does not see the token")
+
         // the setup is idempotent: running it again changes nothing that works
         _ = try await admin.setupLinux(caddy: caddy, chatURL: chatURL, probe: probe, sudoPassword: "s3cret-pw")
         let healthAgain = try await client.perform(client.makeRequest("GET", "/api/health"))

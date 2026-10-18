@@ -464,7 +464,7 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
   (`docker run --privileged --rm tonistiigi/binfmt --install amd64`; sparisce al riavvio di Docker Desktop,
   e con Rosetta attivo nelle impostazioni è più veloce). Circa 11 minuti, binario da 62 MB. Su Ubuntu 24.04
   amd64 (emulato): turno Claude e card di permesso come su aarch64.
-- **Da fare:** login non interattivo di Claude e pi; prova su un server x86_64 vero.
+- **Da fare:** login di pi sul server (per Claude: token, vedi Mac come server); prova su un server x86_64 vero.
 
 ### Fase 2 — fatta per Linux (2026-10-18)
 
@@ -558,9 +558,31 @@ In `Sources/SwarmeKit/Remote/`:
   - motore sotto `launchd` (dominio utente) con lo stesso plist: socket, chat via Caddy con prefisso e
     token, riavvio automatico dopo `kill -9`;
   - `claude auth status` sotto `launchd`: login visibile.
-- **Da provare con root:**
-  - LaunchDaemon di sistema con `UserName` (lì il Portachiavi di login potrebbe non essere sbloccato, e
-    `claude` potrebbe non vedere il login);
-  - Caddy come root sulle porte 80/443;
-  - sshd (Login remoto).
+- **Provato con root (2026-10-18)** su questo Mac, con un utente amministratore usa e getta (`sbtest`) e
+  sshd limitato a lui (`com.apple.access_ssh`). `MacServerIntegrationTests` percorre la procedura completa
+  verso `sbtest@127.0.0.1`:
+  - chiave dedicata;
+  - probe macOS;
+  - sudo con password;
+  - motore e Caddy come LaunchDaemon, Caddy su `:18445`;
+  - token;
+  - chat via HTTP.
+
+  Verificato inoltre:
+  - il motore gira come `sbtest`, Caddy come root lo raggiunge, e l'utente principale non vede nemmeno la
+    cartella dei socket di `sbtest`;
+  - `kill -9` del motore → launchd lo riavvia.
+- **Il Portachiavi non c'è:** un utente che non ha mai fatto login grafico non ha un Portachiavi di login,
+  né in ssh né nel LaunchDaemon (le scritture falliscono con "default keychain could not be found" e
+  "Write permissions error"). Quindi `claude` non può salvare lì il suo login. **Soluzione, che vale
+  anche per Linux:**
+  - `claude setup-token` sul Mac dell'utente produce un token di lunga durata;
+  - "Login di Claude sul server…" lo invia via ssh a `swarme-harness secret set CLAUDE_CODE_OAUTH_TOKEN`,
+    che lo salva in `secrets.json` (0600);
+  - il motore remoto lo passa alle CLI (`RemoteSecrets.passthrough`) e si riavvia: systemd sul server Linux,
+    KeepAlive di launchd sul Mac.
+
+  Verificato: con la variabile `claude auth status` dà `loggedIn: true` anche senza home né Portachiavi.
+  Sui due server di prova l'istanza Claude del motore risulta autenticata dopo il token.
+- **Non provato:** Caddy sulle porte 80/443 con certificato pubblico (serve un dominio che punti al Mac).
 

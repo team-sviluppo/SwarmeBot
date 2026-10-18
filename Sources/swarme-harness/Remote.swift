@@ -5,6 +5,8 @@
 //   device add --name <name> [--kind mac|ios|other]   prints the token once
 //   device list
 //   device revoke <id>
+//   secret set <NAME>      the value on stdin, into secrets.json (0600)
+//   secret unset <NAME>
 //
 // Three listeners. The public unix socket, behind Caddy, takes device
 // tokens and never serves /api/internal. A loopback TCP port on a free
@@ -95,6 +97,37 @@ func runDeviceCommand(_ args: [String], paths: DataPaths) -> Never {
     exit(0)
 }
 
+/// Secrets the remote engine hands to the CLIs it runs. `CLAUDE_CODE_OAUTH_TOKEN`
+/// (from `claude setup-token`) is how Claude logs in on a server: a user that
+/// never logged in at the console has no login Keychain, on a Mac server too.
+enum RemoteSecrets {
+    static let passthrough: Set<String> = ["CLAUDE_CODE_OAUTH_TOKEN"]
+}
+
+/// `swarme-harness secret …`, run over ssh by the setup.
+@MainActor
+func runSecretCommand(_ args: [String], paths: DataPaths) -> Never {
+    paths.ensure()
+    guard args.count == 2, RemoteSecrets.passthrough.contains(args[1]) else {
+        fail("secret set|unset <\(RemoteSecrets.passthrough.sorted().joined(separator: "|"))>")
+    }
+    var secrets = AppConfig.readSecrets(paths)
+    switch args[0] {
+    case "set":
+        let value = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, !value.contains(where: \.isNewline) else { fail("the value comes on stdin, one line") }
+        secrets[args[1]] = value
+    case "unset":
+        secrets[args[1]] = nil
+    default:
+        fail("secret set|unset <name>")
+    }
+    do { try AppConfig.writeSecrets(paths, secrets) } catch { fail(error.localizedDescription) }
+    print(JSON.object(["ok": true]).serialized())
+    exit(0)
+}
+
 @MainActor
 func bootRemote(_ options: RemoteOptions, paths: DataPaths, environment: [String: String]) async {
     // a client that hangs up mid-write must not kill the engine
@@ -105,6 +138,9 @@ func bootRemote(_ options: RemoteOptions, paths: DataPaths, environment: [String
             let dir = (socket as NSString).deletingLastPathComponent
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o750])
         }
+        // the CLIs' own logins, from secrets.json: on a server there may be no Keychain for them
+        var environment = environment
+        for (name, value) in AppConfig.readSecrets(paths) where RemoteSecrets.passthrough.contains(name) { environment[name] = value }
         let harness = try Harness(paths: paths, environment: environment, drivers: HarnessDrivers.all)
         await harness.boot()
         let routes = Routes(harness: harness)
