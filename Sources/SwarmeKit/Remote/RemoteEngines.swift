@@ -27,10 +27,10 @@ public struct RemoteEngine: Codable, Hashable, Identifiable, Sendable {
 
 public final class RemoteEngineStore: @unchecked Sendable {
     public let file: URL
-    static let keychainService = "com.swarmebot.mac.remote-engine"
+    static var keychainService: String { "com.swarmebot.mac.remote-engine" + AppPaths.keychainSuffix }
     private let lock = NSLock()
 
-    public init(file: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".swarmebot/remote-engines.json")) {
+    public init(file: URL = AppPaths.home.appendingPathComponent(".swarmebot/remote-engines.json")) {
         self.file = file
     }
 
@@ -71,7 +71,23 @@ public final class RemoteEngineStore: @unchecked Sendable {
 
     // MARK: Device tokens, in the Keychain
 
+    /// On test data (SWARMEBOT_HOME) a 0600 file instead: a development build is
+    /// re-signed on every compile, and the Keychain would ask for the login
+    /// password each time it reads an item another build wrote.
+    static var isolatedTokens: URL { AppPaths.home.appendingPathComponent(".swarmebot/remote-tokens.json") }
+
+    static func readIsolatedTokens() -> [String: String] {
+        (try? Data(contentsOf: isolatedTokens)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] } ?? [:]
+    }
+
+    static func writeIsolatedTokens(_ tokens: [String: String]) throws {
+        try FileManager.default.createDirectory(at: isolatedTokens.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: tokens, options: [.sortedKeys]).write(to: isolatedTokens, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: isolatedTokens.path)
+    }
+
     public static func token(engineId: String) -> String? {
+        if AppPaths.isIsolated { return readIsolatedTokens()[engineId] }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
@@ -85,6 +101,12 @@ public final class RemoteEngineStore: @unchecked Sendable {
     }
 
     public static func setToken(_ token: String, engineId: String) throws {
+        if AppPaths.isIsolated {
+            var tokens = readIsolatedTokens()
+            tokens[engineId] = token
+            try writeIsolatedTokens(tokens)
+            return
+        }
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
@@ -104,6 +126,12 @@ public final class RemoteEngineStore: @unchecked Sendable {
     }
 
     public static func deleteToken(engineId: String) {
+        if AppPaths.isIsolated {
+            var tokens = readIsolatedTokens()
+            tokens[engineId] = nil
+            try? writeIsolatedTokens(tokens)
+            return
+        }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,

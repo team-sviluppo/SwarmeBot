@@ -16,6 +16,8 @@ struct ComposerView: View {
     @State private var attachments: [String: [ComposerAttachment]] = [:]
     @State private var height: CGFloat = 24
     @State private var dropTargeted = false
+    /// The server path being edited, for a bot on a remote engine.
+    @State private var remoteFolder: String?
     /// Pastes longer than this become a chip, like the web composer.
     private let pasteChipThreshold = 1200
 
@@ -88,8 +90,9 @@ struct ComposerView: View {
                 HStack(spacing: 8) {
                     ModelPickerButton(bot: bot)
                     let folder = workingFolder(bot)
-                    let missing = !folderExists(folder)
-                    Button(action: { pickWorkingFolder(bot) }) {
+                    // a server's folder cannot be checked, or picked, from this Mac
+                    let missing = !model.isRemote && !folderExists(folder)
+                    Button(action: { model.isRemote ? (remoteFolder = folder) : pickWorkingFolder(bot) }) {
                         HStack(spacing: 6) {
                             Image(systemName: missing ? "exclamationmark.triangle.fill" : "folder").font(.system(size: 12))
                             Text(chipText((folder as NSString).lastPathComponent, 28))
@@ -101,7 +104,14 @@ struct ComposerView: View {
                         .foregroundStyle(missing ? Theme.warning : Theme.secondary)
                     }
                     .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
-                    .help(missing ? "La cartella \(folder) non esiste più: clicca per sceglierne un'altra" : "Cartella di lavoro: \(folder)")
+                    .help(missing ? "La cartella \(folder) non esiste più: clicca per sceglierne un'altra"
+                          : model.isRemote ? "Cartella di lavoro sul server: \(folder)" : "Cartella di lavoro: \(folder)")
+                    .popover(isPresented: Binding(get: { remoteFolder != nil }, set: { if !$0 { remoteFolder = nil } })) {
+                        RemoteFolderEditor(path: remoteFolder ?? folder) { path in
+                            remoteFolder = nil
+                            Task { await model.setWorkingFolder(path) }
+                        }
+                    }
                     LibraryChip(bot: bot)
                     ConnectorsChip(bot: bot)
                     Spacer(minLength: 0)
@@ -182,7 +192,8 @@ struct ComposerView: View {
     private func workingFolder(_ bot: Bot) -> String {
         if let cwd = bot.tasks?.first(where: { $0.threadId == bot.threadId })?.cwd, !cwd.isEmpty { return cwd }
         if let cwd = bot.cwd, !cwd.isEmpty { return cwd }
-        return FileManager.default.homeDirectoryForCurrentUser.path
+        // on a server the engine picks its own default; this Mac's home means nothing there
+        return model.isRemote ? "~" : FileManager.default.homeDirectoryForCurrentUser.path
     }
 
     private func folderExists(_ path: String) -> Bool {
@@ -218,6 +229,9 @@ struct ComposerView: View {
         let type = UTType(filenameExtension: url.pathExtension)
         if let type, let mime = Self.imageMime(type), let data = try? Data(contentsOf: url), data.count <= 10_000_000 {
             add(.init(name: url.lastPathComponent, kind: .image(data, mime: mime)))
+        } else if model.isRemote {
+            // a file goes by path, and this Mac's paths do not exist on the server
+            model.lastError = "Su un server remoto si allegano solo immagini: copia \(url.lastPathComponent) sul server e indica il percorso nel messaggio"
         } else {
             add(.init(name: url.lastPathComponent, kind: .file(url.path)))
         }
@@ -681,3 +695,27 @@ final class PlaceholderTextView: NSTextView {
         needsDisplay = true
     }
 }
+
+/// A folder on the server, typed: there is no Finder for it on this Mac.
+private struct RemoteFolderEditor: View {
+    @State var path: String
+    let save: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Cartella di lavoro sul server").font(.headline)
+            TextField("/home/utente/progetto", text: $path)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 320)
+                .onSubmit { save(path) }
+            Text("Un percorso del server, non di questo Mac.").font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Usa") { save(path) }.keyboardShortcut(.defaultAction)
+                    .disabled(path.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(14)
+    }
+}
+

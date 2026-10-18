@@ -58,7 +58,7 @@ public final class SSHIdentityStore: @unchecked Sendable {
     public let root: URL
     private let lock = NSLock()
 
-    public init(root: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".swarmebot/ssh", isDirectory: true)) {
+    public init(root: URL = AppPaths.home.appendingPathComponent(".swarmebot/ssh", isDirectory: true)) {
         self.root = root
     }
 

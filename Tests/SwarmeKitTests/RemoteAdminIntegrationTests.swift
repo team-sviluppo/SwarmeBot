@@ -161,10 +161,13 @@ final class ServerSetupFlowIntegrationTests: XCTestCase {
             throw XCTSkip("SWARMEBOT_VPS_TEST / _HTTP / _ENGINE not set")
         }
         let parts = target.split(separator: ":")
+        // SWARMEBOT_VPS_KEEP=1 (with SWARMEBOT_HOME) leaves the result in the app's own stores:
+        // a development app started on that home then shows the server
+        let keep = env["SWARMEBOT_VPS_KEEP"] == "1" && AppPaths.isIsolated
         let root = URL(fileURLWithPath: "/tmp/sbf-\(UUID().uuidString.prefix(4))", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let identities = SSHIdentityStore(root: root.appendingPathComponent("ssh"))
-        let engines = RemoteEngineStore(file: root.appendingPathComponent("remote-engines.json"))
+        defer { if !keep { try? FileManager.default.removeItem(at: root) } }
+        let identities = keep ? SSHIdentityStore() : SSHIdentityStore(root: root.appendingPathComponent("ssh"))
+        let engines = keep ? RemoteEngineStore() : RemoteEngineStore(file: root.appendingPathComponent("remote-engines.json"))
         let sha = try String(contentsOfFile: engine + ".sha256", encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
         let flow = ServerSetupFlow(identities: identities, engines: engines) { _ in (URL(fileURLWithPath: engine), sha) }
         flow.name = "Prova"
@@ -196,7 +199,7 @@ final class ServerSetupFlowIntegrationTests: XCTestCase {
         let saved = try XCTUnwrap(engines.all().first)
         XCTAssertEqual(saved.chatURL, http + "/srv1/deploy")
         let token = try XCTUnwrap(RemoteEngineStore.token(engineId: saved.id))
-        defer { RemoteEngineStore.deleteToken(engineId: saved.id) }
+        defer { if !keep { RemoteEngineStore.deleteToken(engineId: saved.id) } }
         let health = try await CompanionClient(connection: XCTUnwrap(saved.connection), token: token).remoteHealth()
         XCTAssertEqual(health.remote, true)
         let fleet = try await CompanionClient(connection: XCTUnwrap(saved.connection), token: token).fleet(messages: 1)

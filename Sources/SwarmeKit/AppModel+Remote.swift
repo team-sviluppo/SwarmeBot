@@ -16,7 +16,7 @@ public enum EngineChoice: Hashable, Sendable {
 
     /// The choice of the last session, if that engine still exists.
     static func restored(from engines: [RemoteEngine]) -> EngineChoice {
-        guard let saved = UserDefaults.standard.string(forKey: defaultsKey), saved != "local",
+        guard let saved = AppPaths.defaults.string(forKey: defaultsKey), saved != "local",
               engines.contains(where: { $0.id == saved }) else { return .local }
         return .remote(saved)
     }
@@ -37,6 +37,9 @@ extension AppModel {
 
     public var engineName: String { activeRemoteEngine?.name ?? "Questo Mac" }
 
+    /// The shown engine is on a server: its paths are the server's, not this Mac's.
+    public var isRemote: Bool { activeRemoteEngine != nil }
+
     public func reloadRemoteEngines() {
         remoteEngines = remoteStore.all()
         if case let .remote(id) = engineChoice, !remoteEngines.contains(where: { $0.id == id }) { select(engine: .local) }
@@ -46,7 +49,7 @@ extension AppModel {
     public func select(engine choice: EngineChoice) {
         guard choice != engineChoice || client == nil else { return }
         engineChoice = choice
-        UserDefaults.standard.set(choice.saved, forKey: EngineChoice.defaultsKey)
+        AppPaths.defaults.set(choice.saved, forKey: EngineChoice.defaultsKey)
         streamTask?.cancel()
         streamTask = nil
         state = CompanionState()

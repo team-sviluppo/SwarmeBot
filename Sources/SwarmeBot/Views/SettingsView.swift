@@ -363,14 +363,14 @@ private struct UpdatesPane: View {
 /// Whether bots may drive this Mac (Cua). Off by default.
 private struct MacControlPane: View {
     @Environment(AppModel.self) private var model
-    @State private var localComputer = UserDefaults.standard.bool(forKey: "localComputerEnabled")
+    @State private var localComputer = AppPaths.defaults.bool(forKey: "localComputerEnabled")
 
     var body: some View {
         Form {
             Section {
                 Toggle("Consenti ai bot di usare questo Mac", isOn: $localComputer)
                     .onChange(of: localComputer) { _, on in
-                        UserDefaults.standard.set(on, forKey: "localComputerEnabled")
+                        AppPaths.defaults.set(on, forKey: "localComputerEnabled")
                         model.retry()
                     }
             } footer: {
