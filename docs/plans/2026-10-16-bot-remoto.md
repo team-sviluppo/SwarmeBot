@@ -1,6 +1,6 @@
 # Bot remoto (motore SwarmeBot su server) — piano di implementazione
 
-Stato: fasi 0–4 fatte e provate per Linux; Mac come server scritto, provato senza root; fase 5 da fare (branch `feat/remote-engine`); vedi §14. Data: 2026-10-16.
+Stato: fasi 0–5 fatte e provate su un server Ubuntu di prova e su un Mac come server (branch `feat/remote-engine`); manca la prova su un VPS vero con dominio pubblico; vedi §14. Data: 2026-10-16.
 Motore: solo Swift (`HarnessCore` / `HarnessDrivers` / `swarme-harness`); il motore Node non riceve la funzione.
 
 ## 0. Obiettivo e decisioni prese
@@ -619,4 +619,32 @@ loro chiavi, `settings.json`). "Copia la configurazione di pi…" li copia sul s
 ssh, nome preso da un elenco chiuso e controllato anche dallo script, 0600, con il file precedente salvato
 come `.swarmebot-backup`; poi riavvia il motore. L'installazione di pi (npm) resta nel Terminale aperto
 sul server. Verificato con `PiConfigIntegrationTests`: permessi, backup, nomi fuori elenco rifiutati.
+
+### Fase 5 — Connettori sul motore remoto — fatta (2026-10-18)
+
+- Nell'editor di un connettore del motore di questo Mac c'è "Copia su server ▸ <server>", non per OAuth.
+  `ConnectorCopy`:
+  - legge i segreti da `mcp-connector-secrets.json` del motore locale (l'API non li restituisce mai, per
+    scelta) e li rimette nel modulo del connettore;
+  - lo crea sul motore remoto via HTTPS, oppure sostituisce quello con lo stesso id;
+  - lancia "Prova connessione" là, perché un comando che c'è sul Mac può mancare sul server, e ne mostra
+    l'esito.
+- Errori espliciti: connettore OAuth; segreto non salvato su questo Mac.
+- I connettori creati direttamente sul motore remoto (viste di sempre, con il server selezionato) restano
+  possibili come prima.
+- Verificato:
+  - `ConnectorCopyTests`;
+  - `ConnectorCopyIntegrationTests`: connettore stdio con segreto copiato sul server Ubuntu, prova riuscita,
+    segreto in un file 0600 e mai nelle risposte dell'API, seconda copia senza duplicati;
+  - a mano, la catena intera: turno del bot sul server → `mcp-connector` → listener interno → pool →
+    server MCP stdio; lo strumento risponde e vede il segreto.
+
+### Resta da fare
+
+- Prova su un VPS vero: dominio pubblico e Let's Encrypt, `claude setup-token` vero e un turno reale, pi.
+- Prima pubblicazione dei motori Linux con `release-mac.sh`; prova dell'app firmata (Portachiavi reale).
+- Interfaccia vista a schermo solo in parte (senza permesso di Accessibilità non posso cliccare): procedura
+  guidata, QR, aggiornamento del motore, copia dei connettori.
+- Più avanti: barra laterale con i bot di più motori, approvazioni sui bot remoti (fine di R5), OAuth sul
+  motore remoto, app iOS con notifiche (APNs).
 

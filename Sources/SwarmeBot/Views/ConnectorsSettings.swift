@@ -96,6 +96,7 @@ private struct ConnectorEditor: View {
     @State private var error: String?
     @State private var busy = false
     @State private var confirmDelete = false
+    @State private var copied: String?
 
     init(input: MCPConnectorInput, connector: MCPConnector?, onCreated: @escaping (MCPConnector) -> Void) {
         _input = State(initialValue: input)
@@ -180,6 +181,16 @@ private struct ConnectorEditor: View {
                             }
                         }
                         .disabled(busy)
+                        // a connector of this Mac's engine can go to a server, with its secrets (R14)
+                        if !model.isRemote, !model.remoteEngines.isEmpty, !connector.usesOAuth {
+                            Menu("Copia su server") {
+                                ForEach(model.remoteEngines) { engine in
+                                    Button(engine.name) { Task { await copy(connector, to: engine) } }
+                                }
+                            }
+                            .fixedSize()
+                            .disabled(busy)
+                        }
                         Spacer()
                         Button("Elimina", role: .destructive) { confirmDelete = true }
                     }
@@ -187,6 +198,9 @@ private struct ConnectorEditor: View {
                 }
                 if let error {
                     Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger).textSelection(.enabled)
+                }
+                if let copied {
+                    Text(copied).font(.system(size: 12)).foregroundStyle(.secondary).textSelection(.enabled)
                 }
             }
         }
@@ -202,6 +216,21 @@ private struct ConnectorEditor: View {
 
     private var parsedArgs: [String] {
         argsText.split(separator: "\n", omittingEmptySubsequences: true).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    private func copy(_ connector: MCPConnector, to engine: RemoteEngine) async {
+        busy = true
+        defer { busy = false }
+        error = nil
+        do {
+            let remote = try await model.copyConnector(connector, to: engine)
+            let check = remote.lastCheck
+            copied = check?.ok == true
+                ? "Copiato su \(engine.name): \(check?.tools?.count ?? 0) strumenti, provato sul server"
+                : "Copiato su \(engine.name), ma la prova sul server non è riuscita: \(check?.error ?? "errore sconosciuto")"
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     private func save() async {
