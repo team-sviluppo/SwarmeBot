@@ -180,8 +180,13 @@ final class ServerSetupFlowIntegrationTests: XCTestCase {
         defer { if !keep { try? FileManager.default.removeItem(at: root) } }
         let identities = keep ? SSHIdentityStore() : SSHIdentityStore(root: root.appendingPathComponent("ssh"))
         let engines = keep ? RemoteEngineStore() : RemoteEngineStore(file: root.appendingPathComponent("remote-engines.json"))
-        let sha = try String(contentsOfFile: engine + ".sha256", encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        let flow = ServerSetupFlow(identities: identities, engines: engines) { _ in (URL(fileURLWithPath: engine), sha) }
+        let builds = URL(fileURLWithPath: engine).deletingLastPathComponent()
+        // SWARMEBOT_VPS_MANIFEST: download the engine as a release build does, instead of the local build
+        let manifest = env["SWARMEBOT_VPS_MANIFEST"].flatMap { try? Data(contentsOf: URL(fileURLWithPath: $0)) }
+            .flatMap { try? JSONDecoder().decode(LinuxEngineManifest.self, from: $0) }
+        let flow = ServerSetupFlow(identities: identities, engines: engines,
+                                   linuxEngines: LinuxEngines(manifest: manifest, cache: root.appendingPathComponent("cache"),
+                                                              localBuilds: manifest == nil ? builds : nil))
         flow.name = "Prova"
         flow.host = String(parts[0])
         flow.port = Int(parts[1]) ?? 22

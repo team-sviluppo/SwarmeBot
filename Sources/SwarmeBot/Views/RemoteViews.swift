@@ -233,6 +233,7 @@ private struct SetupBody: View {
         .frame(height: 520)
         HStack {
             if flow.running { ProgressView().controlSize(.small) }
+            if let activity = flow.activity { Text(activity).font(.caption).foregroundStyle(.secondary) }
             Spacer()
             if flow.step == .done {
                 Button("Mostra i bot del server", action: finished).keyboardShortcut(.defaultAction)

@@ -55,15 +55,17 @@ public final class ServerSetupFlow {
 
     @ObservationIgnored let identities: SSHIdentityStore
     @ObservationIgnored let engines: RemoteEngineStore
-    @ObservationIgnored let binaries: (String) -> (url: URL, sha256: String)?
+    @ObservationIgnored let linuxEngines: LinuxEngines
     @ObservationIgnored let macBinary: (String) -> (url: URL, sha256: String)?
+    /// What a long step is doing right now ("Scarico il motore Linux…"), for the sheet.
+    public private(set) var activity: String?
 
     public init(identities: SSHIdentityStore, engines: RemoteEngineStore,
-                binaries: @escaping (String) -> (url: URL, sha256: String)? = ServerSetupFlow.bundledEngine,
+                linuxEngines: LinuxEngines = .standard,
                 macBinary: @escaping (String) -> (url: URL, sha256: String)? = ServerSetupFlow.macEngine) {
         self.identities = identities
         self.engines = engines
-        self.binaries = binaries
+        self.linuxEngines = linuxEngines
         self.macBinary = macBinary
     }
 
@@ -176,10 +178,9 @@ public final class ServerSetupFlow {
                 }
                 binary = mac
             } else {
-                guard let linux = binaries(arch) else {
-                    throw ProcessRunner.Failure(message: "Questa build dell'app non contiene il motore Linux \(arch) (scripts/build-linux-engine.sh)")
-                }
-                binary = linux
+                activity = "Scarico e verifico il motore Linux \(arch)…"
+                defer { activity = nil }
+                binary = try await linuxEngines.engine(arch)
             }
             try await RemoteAdmin(identity: identity, store: identities).installEngine(binary: binary.url, sha256: binary.sha256, probe: probe)
             return true
@@ -218,25 +219,6 @@ public final class ServerSetupFlow {
         case .done:
             return true
         }
-    }
-
-    // MARK: The engine binaries
-
-    /// `Contents/Resources/linux/swarme-harness-<arch>` (+ `.sha256`), or
-    /// `build/linux/` next to a development checkout (SWARMEBOT_LINUX_ENGINES).
-    public nonisolated static func bundledEngine(_ arch: String) -> (url: URL, sha256: String)? {
-        var folders: [URL] = []
-        if let resources = Bundle.main.resourceURL { folders.append(resources.appendingPathComponent("linux")) }
-        if let dev = ProcessInfo.processInfo.environment["SWARMEBOT_LINUX_ENGINES"] { folders.append(URL(fileURLWithPath: dev)) }
-        for folder in folders {
-            let binary = folder.appendingPathComponent("swarme-harness-\(arch)")
-            let hash = URL(fileURLWithPath: binary.path + ".sha256")
-            guard FileManager.default.fileExists(atPath: binary.path),
-                  let sha = try? String(contentsOf: hash, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
-                  sha.count == 64 else { continue }
-            return (binary, sha)
-        }
-        return nil
     }
 }
 

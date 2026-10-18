@@ -469,7 +469,19 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
 ### Fase 2 — fatta per Linux (2026-10-18)
 
 `scripts/build-linux-engine.sh [aarch64|x86_64]` → `build/linux/swarme-harness-<arch>` + `.sha256`.
-Manca l'inclusione nel bundle dell'app (`bundle-app.sh`).
+
+**Distribuzione (decisione dell'utente, 2026-10-18): download con hash fissato, non nel pacchetto.**
+- `scripts/linux-engines-manifest.sh <versione>` compila i due binari, li prepara come asset di release e
+  scrive `Resources/linux-engines.json` (URL dell'asset sulla release `v<versione>`, dimensione, SHA-256).
+  Il file è ignorato da git; `bundle-app.sh` lo mette in `Contents/Resources`.
+- `release-mac.sh` lancia lo script (con `SKIP_LINUX_ENGINES=1` riusa `build/linux`) e carica i binari con
+  DMG, zip e appcast.
+- `LinuxEngines` (SwarmeKit) scarica il binario quando un server ne ha bisogno e lo usa solo se dimensione
+  e SHA-256 coincidono. Lo tiene in `~/Library/Caches/SwarmeBot/linux` e lo ricontrolla a ogni uso: una
+  cache manomessa viene scartata e il binario riscaricato. In sviluppo `SWARMEBOT_LINUX_ENGINES=build/linux`.
+- Verificato: `LinuxEnginesTests` (hash giusto, sbagliato, file troncato, cache, cache manomessa);
+  procedura completa su un server nuovo con il motore scaricato via HTTP da un manifest.
+- **Non fatto:** pubblicazione reale su GitHub (avviene al prossimo `release-mac.sh`).
 
 ### Fase 3 — fatta per Linux (2026-10-18)
 

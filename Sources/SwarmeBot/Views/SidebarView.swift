@@ -4,8 +4,9 @@ import SwiftUI
 
 /// The chat list (`Sidebar.tsx`, compact rail): 272 pt, `panel`, a search
 /// field beside the traffic lights, sections of 46 pt rows, rooms, and the
-/// footer (Automazioni, Vai a…, profile + settings). A section is only a
-/// label each bot carries, so renaming one is patching every bot under it.
+/// footer (Automazioni, profile + settings; "Vai a…" lives on ⌘K and in the
+/// menu). A section is only a label each bot carries, so renaming one is
+/// patching every bot under it.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
@@ -217,8 +218,6 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             FooterRow(icon: "calendar", title: "Automazioni") { openWindow(id: "automations") }
                 .help("Automazioni (⇧⌘R)")
-            FooterRow(icon: "command", title: "Vai a…") { model.showPalette = true }
-                .help("Cerca chat, comandi e messaggi (⌘K)")
             HStack(spacing: 8) {
                 InitialsAvatar(name: userName, size: 22)
                 Text(userName)
