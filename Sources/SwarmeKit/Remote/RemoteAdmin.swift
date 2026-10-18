@@ -222,6 +222,19 @@ public struct RemoteAdmin: Sendable {
         try await ssh.run(RemoteScripts.command(RemoteScripts.restartEngine), timeout: 60)
     }
 
+    /// pi's login on the server: its agent config, copied from this Mac (keys and custom providers).
+    @discardableResult
+    public func copyPiConfig(from directory: URL = PiConfig.localDirectory) async throws -> [String] {
+        let present = PiConfig.files.filter { FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path) }
+        guard !present.isEmpty else { throw ProcessRunner.Failure(message: "Su questo Mac non c'è una configurazione di pi (\(directory.path))") }
+        for name in present {
+            let data = try Data(contentsOf: directory.appendingPathComponent(name))
+            try await ssh.run(RemoteScripts.command(RemoteScripts.installPiFile, [name]), stdin: data, timeout: 60)
+        }
+        try await restartEngine()
+        return present
+    }
+
     // MARK: Engine updates (§5.5)
 
     /// The binary this app would install on that server, and its digest — without downloading.
@@ -267,3 +280,13 @@ public struct RemoteAdmin: Sendable {
         return AddedDevice(deviceId: id, token: token)
     }
 }
+
+/// pi keeps its keys and providers in ~/.pi/agent (Pi.swift): these files make its login.
+public enum PiConfig {
+    public static let files = ["auth.json", "models.json", "settings.json"]
+    /// The person's own pi, not the app's data: the real home even on test data.
+    public static var localDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".pi/agent", isDirectory: true)
+    }
+}
+

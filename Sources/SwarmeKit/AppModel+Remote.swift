@@ -243,3 +243,14 @@ extension AppModel {
         }
     }
 }
+
+extension AppModel {
+    /// Copy this Mac's pi config (keys, custom providers) to a server it administers.
+    public func copyPiConfig(to engine: RemoteEngine) async throws -> [String] {
+        guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
+        let copied = try await RemoteAdmin(identity: identity, store: identityStore).copyPiConfig()
+        if engineChoice == .remote(engine.id) { await refreshInstances() }
+        return copied
+    }
+}
+

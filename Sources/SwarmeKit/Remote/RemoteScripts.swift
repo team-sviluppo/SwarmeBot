@@ -364,6 +364,22 @@ public enum RemoteScripts {
     echo "token=set"
     """#
 
+    /// One file of pi's agent config (stdin) into ~/.pi/agent/$1, 0600; the
+    /// previous one kept as `$1.swarmebot-backup`. $1 is one of PiConfig.files.
+    public static let installPiFile = #"""
+    set -eu
+    case "$1" in auth.json|models.json|settings.json) ;; *) echo "not a pi config file: $1" >&2; exit 2 ;; esac
+    umask 077
+    dir="$HOME/.pi/agent"
+    mkdir -p "$dir"
+    tmp="$dir/.$1.$$"
+    cat > "$tmp"
+    [ -f "$dir/$1" ] && cp -p "$dir/$1" "$dir/$1.swarmebot-backup"
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$dir/$1"
+    echo "copied=$1"
+    """#
+
     // MARK: Devices (as the user)
 
     /// $1 = device name, $2 = kind. Prints the JSON of `device add`.

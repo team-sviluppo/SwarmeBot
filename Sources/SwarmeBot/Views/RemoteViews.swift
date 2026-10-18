@@ -68,6 +68,8 @@ struct RemoteServersPane: View {
     @State private var qrFor: RemoteEngine?
     @State private var forgetting: RemoteEngine?
     @State private var claudeLoginFor: RemoteEngine?
+    @State private var piCopyFor: RemoteEngine?
+    @State private var notice: String?
 
     var body: some View {
         Form {
@@ -95,6 +97,7 @@ struct RemoteServersPane: View {
                             if let identity = model.identity(for: engine) {
                                 Divider()
                                 Button("Login di Claude sul server…") { claudeLoginFor = engine }
+                                Button("Copia la configurazione di pi…") { piCopyFor = engine }
                                 Button("Apri un terminale sul server") { try? model.openTerminal(identity) }
                             }
                             Divider()
@@ -119,6 +122,25 @@ struct RemoteServersPane: View {
         .sheet(item: $devicesFor) { DevicesSheet(engine: $0) }
         .sheet(item: $qrFor) { PairingQRSheet(engine: $0) }
         .sheet(item: $claudeLoginFor) { ClaudeTokenSheet(engine: $0) }
+        .confirmationDialog("Copiare la configurazione di pi su \(piCopyFor?.name ?? "")?",
+                            isPresented: Binding(get: { piCopyFor != nil }, set: { if !$0 { piCopyFor = nil } })) {
+            Button("Copia") {
+                guard let engine = piCopyFor else { return }
+                Task {
+                    do {
+                        let copied = try await model.copyPiConfig(to: engine)
+                        notice = "Copiati su \(engine.name): \(copied.joined(separator: ", "))"
+                    } catch {
+                        notice = error.localizedDescription
+                    }
+                }
+            }
+        } message: {
+            Text("auth.json, models.json e settings.json di ~/.pi/agent vanno sul server, leggibili solo dal suo utente. Contengono le chiavi API dei tuoi provider. I file già presenti sul server restano come copia di backup.")
+        }
+        .alert(notice ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
+            Button("OK") { notice = nil }
+        }
         .confirmationDialog("Dimenticare \(forgetting?.name ?? "")?", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } })) {
             Button("Dimentica", role: .destructive) {
                 if let engine = forgetting { try? model.forgetRemoteEngine(engine.id) }

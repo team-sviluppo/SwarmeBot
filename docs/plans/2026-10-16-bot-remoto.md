@@ -464,7 +464,7 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
   (`docker run --privileged --rm tonistiigi/binfmt --install amd64`; sparisce al riavvio di Docker Desktop,
   e con Rosetta attivo nelle impostazioni è più veloce). Circa 11 minuti, binario da 62 MB. Su Ubuntu 24.04
   amd64 (emulato): turno Claude e card di permesso come su aarch64.
-- **Da fare:** login di pi sul server (per Claude: token, vedi Mac come server); prova su un server x86_64 vero.
+- **Da fare:** prova su un server x86_64 vero.
 
 ### Fase 2 — fatta per Linux (2026-10-18)
 
@@ -611,4 +611,12 @@ In `Sources/SwarmeKit/Remote/`:
 - Verificato: `EngineUpdateIntegrationTests` sul server Ubuntu di prova, con un turno lento in corso:
   aggiornamento rifiutato e motore invariato; con `force` motore B installato, servizio attivo, contratto
   compatibile.
+
+### Login di pi sul server — fatto (2026-10-18)
+
+pi legge chiavi e provider da `~/.pi/agent` (`auth.json`, `models.json` con i provider personalizzati e le
+loro chiavi, `settings.json`). "Copia la configurazione di pi…" li copia sul server: un file per chiamata
+ssh, nome preso da un elenco chiuso e controllato anche dallo script, 0600, con il file precedente salvato
+come `.swarmebot-backup`; poi riavvia il motore. L'installazione di pi (npm) resta nel Terminale aperto
+sul server. Verificato con `PiConfigIntegrationTests`: permessi, backup, nomi fuori elenco rifiutati.
 

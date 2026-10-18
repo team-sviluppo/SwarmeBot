@@ -299,3 +299,47 @@ final class EngineUpdateIntegrationTests: XCTestCase {
         XCTAssertEqual(RemoteAdmin.expectedEngine(for: afterB, linux: linux), afterB.engineHash)
     }
 }
+
+/// pi's login on a server: its agent config, copied (never this Mac's real one in a test).
+final class PiConfigIntegrationTests: XCTestCase {
+    func testPiConfigLandsPrivateWithABackup() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let target = env["SWARMEBOT_VPS_TEST"] else { throw XCTSkip("SWARMEBOT_VPS_TEST not set") }
+        let parts = target.split(separator: ":")
+        let root = URL(fileURLWithPath: "/tmp/sbp-\(UUID().uuidString.prefix(4))", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = SSHIdentityStore(root: root.appendingPathComponent("ssh"))
+        var identity = try store.findOrCreate(host: String(parts[0]), port: Int(parts[1]) ?? 22, user: "deploy")
+        identity = try await HostKeys.approve(try await HostKeys.scan(host: identity.host, port: identity.port)[0], for: identity, store: store)
+        identity = try await RemoteAdmin(identity: identity, store: store).installKey(password: "s3cret-pw")
+        let admin = RemoteAdmin(identity: identity, store: store)
+        let ssh = SSHCommand(identity: identity, store: store)
+
+        let local = root.appendingPathComponent("pi", isDirectory: true)
+        try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+        try Data(#"{"providers":{"x":{"apiKey":"first"}}}"#.utf8).write(to: local.appendingPathComponent("models.json"))
+        try Data("{}".utf8).write(to: local.appendingPathComponent("auth.json"))
+        try Data("not copied".utf8).write(to: local.appendingPathComponent("sessions.json"))
+        try await ssh.run("rm -rf ~/.pi")
+
+        let copied = try await admin.copyPiConfig(from: local)
+        XCTAssertEqual(copied, ["auth.json", "models.json"])
+        let listing = try await ssh.run("stat -c '%a %n' ~/.pi/agent/* | sort").text
+        XCTAssertEqual(listing, "600 /home/deploy/.pi/agent/auth.json\n600 /home/deploy/.pi/agent/models.json\n")
+
+        try Data(#"{"providers":{"x":{"apiKey":"second"}}}"#.utf8).write(to: local.appendingPathComponent("models.json"))
+        try await admin.copyPiConfig(from: local)
+        let now = try await ssh.run("cat ~/.pi/agent/models.json").text
+        let backup = try await ssh.run("cat ~/.pi/agent/models.json.swarmebot-backup").text
+        XCTAssertTrue(now.contains("second"))
+        XCTAssertTrue(backup.contains("first"))
+
+        // the script takes only pi's own file names, whatever reaches it
+        do {
+            try await ssh.run(RemoteScripts.command(RemoteScripts.installPiFile, ["../../.ssh/authorized_keys"]), stdin: Data("x".utf8))
+            XCTFail("a path outside pi's config was accepted")
+        } catch {}
+        let keys = try await ssh.run("grep -c swarmebot: ~/.ssh/authorized_keys").text
+        XCTAssertNotEqual(keys.trimmingCharacters(in: .whitespacesAndNewlines), "0")
+    }
+}
