@@ -31,11 +31,14 @@ public struct RemoteProbe: Equatable, Sendable {
     public var serviceActive: Bool { values["service"] == "active" }
     public var isLinux: Bool { os != "macos" && !os.isEmpty }
 
-    /// Ubuntu 24.04 and 26.04 are what the Linux engine is built for (R2).
+    /// Ubuntu 24.04 and 26.04 are what the Linux engine is built for (R2);
+    /// on a Mac, the app's own floor (macOS 14).
     public var supported: Bool {
-        if os == "macos" { return true }
+        if os == "macos" { return (Int(version.split(separator: ".").first ?? "") ?? 0) >= 14 }
         return os == "ubuntu" && ["24.04", "26.04"].contains(version)
     }
+
+    public var isMac: Bool { os == "macos" }
 
     /// `aarch64` / `x86_64`, as the bundled binaries are named.
     public var engineArch: String? {
@@ -189,6 +192,17 @@ public struct RemoteAdmin: Sendable {
         try await ssh.run(RemoteScripts.command(RemoteScripts.serviceLinux, [socketDirectory, chatURL]), timeout: 120)
         _ = try await runAsRoot(RemoteScripts.caddyLinux, [identity.user, caddy.site, caddy.prefix, socketDirectory, caddy.tls.rawValue],
                                 probe: probe, sudoPassword: sudoPassword, timeout: 180)
+        return LinuxSetup(socketDirectory: socketDirectory, chatURL: chatURL)
+    }
+
+    // MARK: Mac setup
+
+    /// The engine and Caddy as LaunchDaemons, the user's routes (root, one step).
+    public func setupMac(caddy: CaddySettings, chatURL: String, probe: RemoteProbe, sudoPassword: String?) async throws -> LinuxSetup {
+        try caddy.validate()
+        let result = try await runAsRoot(RemoteScripts.rootMac, [identity.user, caddy.site, caddy.prefix, caddy.tls.rawValue, chatURL],
+                                         probe: probe, sudoPassword: sudoPassword, timeout: 180)
+        let socketDirectory = RemoteScripts.values(result.text)["socketDir"] ?? "~/.swarmebot/run"
         return LinuxSetup(socketDirectory: socketDirectory, chatURL: chatURL)
     }
 

@@ -50,8 +50,9 @@ public enum RemoteScripts {
       if command -v sha256sum >/dev/null 2>&1; then echo "engineHash=$(sha256sum "$engine" | cut -d' ' -f1)"
       else echo "engineHash=$(shasum -a 256 "$engine" | cut -d' ' -f1)"; fi
     fi
-    command -v claude >/dev/null 2>&1 && echo "claude=$(claude --version 2>/dev/null | head -n1)"
-    command -v pi >/dev/null 2>&1 && echo "pi=$(pi --version 2>/dev/null | head -n1)"
+    # a command that answers no version is not the CLI we mean (macOS has a `pi` of its own on some setups)
+    v="$(claude --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "claude=$v"
+    v="$(pi --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "pi=$v"
     command -v node >/dev/null 2>&1 && echo "node=$(node --version 2>/dev/null)"
     command -v caddy >/dev/null 2>&1 && echo "caddy=$(caddy version 2>/dev/null | cut -d' ' -f1)"
     if command -v systemctl >/dev/null 2>&1; then
@@ -219,6 +220,123 @@ public enum RemoteScripts {
     fi
     systemctl reload caddy || systemctl restart caddy
     echo "caddy=reloaded"
+    """#
+
+    // MARK: Mac server (sudo) — bot-remoto §3.5
+
+    /// Everything a Mac server needs, as root, in one idempotent step:
+    /// the engine as a LaunchDaemon running as the user (starts at boot, no
+    /// login), Caddy as a root LaunchDaemon (it may read the user's 0700
+    /// socket folder, so no shared group is needed), the user's routes, a
+    /// validated reload. $1 user, $2 site, $3 prefix, $4 tls, $5 public URL.
+    public static let rootMac = #"""
+    set -eu
+    user="$1"; site="$2"; prefix="$3"; tls="$4"; url="$5"
+    home="$(dscl . -read "/Users/$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+    [ -n "$home" ] && [ -d "$home" ] || { echo "no such user $user" >&2; exit 2; }
+    engine="$home/.swarmebot/bin/swarme-harness"
+    [ -x "$engine" ] || { echo "the engine is not installed in $engine" >&2; exit 2; }
+    caddy="$(command -v caddy || true)"
+    for c in /opt/homebrew/bin/caddy /usr/local/bin/caddy; do [ -z "$caddy" ] && [ -x "$c" ] && caddy="$c"; done
+    [ -n "$caddy" ] || { echo "Caddy is not installed: brew install caddy" >&2; exit 3; }
+    sock="$home/.swarmebot/run"
+    sudo -u "$user" mkdir -p "$sock" "$home/Library/Logs"
+    chmod 700 "$sock"
+    label="it.swarmebot.engine.$user"
+    plist="/Library/LaunchDaemons/$label.plist"
+    cat > "$plist" <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0"><dict>
+      <key>Label</key><string>$label</string>
+      <key>UserName</key><string>$user</string>
+      <key>ProgramArguments</key><array>
+        <string>$engine</string><string>serve</string><string>--remote</string>
+        <string>--socket</string><string>$sock/engine.sock</string>
+        <string>--webhook-socket</string><string>$sock/hooks.sock</string>
+        <string>--public-url</string><string>$url</string>
+      </array>
+      <key>EnvironmentVariables</key><dict>
+        <key>HOME</key><string>$home</string>
+        <key>PATH</key><string>$home/.local/bin:$home/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+      </dict>
+      <key>WorkingDirectory</key><string>$home</string>
+      <key>RunAtLoad</key><true/>
+      <key>KeepAlive</key><true/>
+      <key>StandardOutPath</key><string>$home/Library/Logs/swarmebot-engine.log</string>
+      <key>StandardErrorPath</key><string>$home/Library/Logs/swarmebot-engine.log</string>
+    </dict></plist>
+    EOF
+    chown root:wheel "$plist"; chmod 644 "$plist"
+    launchctl bootout "system/$label" 2>/dev/null || true
+    launchctl bootstrap system "$plist"
+
+    conf=/usr/local/etc/swarmebot
+    mkdir -p "$conf/routes"
+    routes="$conf/routes/$user.routes"
+    [ -f "$routes" ] && cp -p "$routes" "$routes.backup"
+    cat > "$routes" <<EOF
+    handle_path $prefix/hooks/* {
+    	rewrite * /hooks{path}
+    	reverse_proxy unix/$sock/hooks.sock
+    }
+    handle_path $prefix/* {
+    	reverse_proxy unix/$sock/engine.sock {
+    		flush_interval -1
+    		transport http {
+    			read_timeout 0
+    		}
+    	}
+    }
+    EOF
+    case "$tls" in
+      off) case "$site" in http://*|:*) ;; *) site="http://$site" ;; esac ;;
+    esac
+    cat > "$conf/Caddyfile.new" <<EOF
+    {
+    	admin off
+    }
+    $site {
+    	import $conf/routes/*.routes
+    	handle {
+    		respond 404
+    	}
+    }
+    EOF
+    if ! "$caddy" validate --config "$conf/Caddyfile.new" --adapter caddyfile >/tmp/swarmebot-caddy.log 2>&1; then
+      rm -f "$conf/Caddyfile.new"
+      if [ -f "$routes.backup" ]; then mv -f "$routes.backup" "$routes"; else rm -f "$routes"; fi
+      tail -n 5 /tmp/swarmebot-caddy.log >&2
+      echo "the Caddy configuration was not valid; nothing was changed" >&2
+      exit 5
+    fi
+    mv -f "$conf/Caddyfile.new" "$conf/Caddyfile"
+    cplist=/Library/LaunchDaemons/it.swarmebot.caddy.plist
+    cat > "$cplist" <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0"><dict>
+      <key>Label</key><string>it.swarmebot.caddy</string>
+      <key>ProgramArguments</key><array>
+        <string>$caddy</string><string>run</string><string>--config</string><string>$conf/Caddyfile</string><string>--adapter</string><string>caddyfile</string>
+      </array>
+      <key>RunAtLoad</key><true/>
+      <key>KeepAlive</key><true/>
+      <key>StandardOutPath</key><string>/var/log/swarmebot-caddy.log</string>
+      <key>StandardErrorPath</key><string>/var/log/swarmebot-caddy.log</string>
+    </dict></plist>
+    EOF
+    chown root:wheel "$cplist"; chmod 644 "$cplist"
+    # admin is off, so a config change is a restart
+    launchctl bootout system/it.swarmebot.caddy 2>/dev/null || true
+    launchctl bootstrap system "$cplist"
+    for i in $(seq 1 30); do
+      [ -S "$sock/engine.sock" ] && { echo "socketDir=$sock"; echo "service=active"; echo "root=ok"; exit 0; }
+      sleep 1
+    done
+    tail -n 20 "$home/Library/Logs/swarmebot-engine.log" >&2 || true
+    echo "the engine did not open its socket within 30 seconds" >&2
+    exit 4
     """#
 
     // MARK: Devices (as the user)

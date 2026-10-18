@@ -56,12 +56,15 @@ public final class ServerSetupFlow {
     @ObservationIgnored let identities: SSHIdentityStore
     @ObservationIgnored let engines: RemoteEngineStore
     @ObservationIgnored let binaries: (String) -> (url: URL, sha256: String)?
+    @ObservationIgnored let macBinary: (String) -> (url: URL, sha256: String)?
 
     public init(identities: SSHIdentityStore, engines: RemoteEngineStore,
-                binaries: @escaping (String) -> (url: URL, sha256: String)? = ServerSetupFlow.bundledEngine) {
+                binaries: @escaping (String) -> (url: URL, sha256: String)? = ServerSetupFlow.bundledEngine,
+                macBinary: @escaping (String) -> (url: URL, sha256: String)? = ServerSetupFlow.macEngine) {
         self.identities = identities
         self.engines = engines
         self.binaries = binaries
+        self.macBinary = macBinary
     }
 
     public var caddy: CaddySettings { CaddySettings(site: site, prefix: prefix, tls: tls) }
@@ -88,7 +91,10 @@ public final class ServerSetupFlow {
     }
 
     /// The root script the next step will run, to show before it runs.
-    public var rootPreview: String { RemoteScripts.rootLinux + "\n\n# poi, per le rotte:\n" + RemoteScripts.caddyLinux }
+    public var rootPreview: String {
+        if probe?.isMac == true { return RemoteScripts.rootMac }
+        return RemoteScripts.rootLinux + "\n\n# poi, per le rotte:\n" + RemoteScripts.caddyLinux
+    }
 
     // MARK: Running
 
@@ -147,10 +153,10 @@ public final class ServerSetupFlow {
             guard let identity else { return false }
             let found = try await RemoteAdmin(identity: identity, store: identities).probe()
             probe = found
-            guard found.isLinux else {
-                throw ProcessRunner.Failure(message: "Un Mac come server non è ancora gestito da questa procedura (piano §3.5): per ora solo Ubuntu")
+            guard found.supported else {
+                throw ProcessRunner.Failure(message: found.isMac ? "macOS \(found.version): serve macOS 14 o successivo"
+                                                                  : "Server \(found.os) \(found.version): servono Ubuntu 24.04 o 26.04 (o un Mac)")
             }
-            guard found.supported else { throw ProcessRunner.Failure(message: "Server \(found.os) \(found.version): servono Ubuntu 24.04 o 26.04") }
             guard found.engineArch != nil else { throw ProcessRunner.Failure(message: "Architettura \(found.arch) non supportata") }
             needsSudoPassword = !found.isRoot && found.sudo == "password"
             if found.sudo == "none", !found.isRoot {
@@ -163,15 +169,29 @@ public final class ServerSetupFlow {
             return true
         case .engine:
             guard let identity, let probe, let arch = probe.engineArch else { return false }
-            guard let binary = binaries(arch) else {
-                throw ProcessRunner.Failure(message: "Questa build dell'app non contiene il motore Linux \(arch) (scripts/build-linux-engine.sh)")
+            let binary: (url: URL, sha256: String)
+            if probe.isMac {
+                guard let mac = macBinary(arch) else {
+                    throw ProcessRunner.Failure(message: "Il motore di questa app non è per Mac \(probe.arch): usa la build dell'app per quell'architettura")
+                }
+                binary = mac
+            } else {
+                guard let linux = binaries(arch) else {
+                    throw ProcessRunner.Failure(message: "Questa build dell'app non contiene il motore Linux \(arch) (scripts/build-linux-engine.sh)")
+                }
+                binary = linux
             }
             try await RemoteAdmin(identity: identity, store: identities).installEngine(binary: binary.url, sha256: binary.sha256, probe: probe)
             return true
         case .service:
             guard let identity, let probe else { return false }
-            _ = try await RemoteAdmin(identity: identity, store: identities)
-                .setupLinux(caddy: caddy, chatURL: chatURL, probe: probe, sudoPassword: needsSudoPassword ? sudoPassword : nil)
+            let admin = RemoteAdmin(identity: identity, store: identities)
+            let password = needsSudoPassword ? sudoPassword : nil
+            if probe.isMac {
+                _ = try await admin.setupMac(caddy: caddy, chatURL: chatURL, probe: probe, sudoPassword: password)
+            } else {
+                _ = try await admin.setupLinux(caddy: caddy, chatURL: chatURL, probe: probe, sudoPassword: password)
+            }
             return true
         case .device:
             guard let identity else { return false }
@@ -217,6 +237,46 @@ public final class ServerSetupFlow {
             return (binary, sha)
         }
         return nil
+    }
+}
+
+extension ServerSetupFlow {
+    /// This app's own engine (Contents/Helpers, or next to a development build),
+    /// when it runs on the server Mac's architecture (`arm64` reads as `aarch64`).
+    public nonisolated static func macEngine(_ arch: String) -> (url: URL, sha256: String)? {
+        guard let binary = HarnessLocator.swiftEngine() else { return nil }
+        let wanted = arch == "aarch64" ? "arm64" : arch
+        guard let archs = try? machOArchitectures(binary), archs.contains(wanted),
+              let data = try? Data(contentsOf: binary) else { return nil }
+        return (binary, SHA256Digest.of(data).map { String(format: "%02x", $0) }.joined())
+    }
+
+    /// The slices of a Mach-O, thin or universal, without running lipo.
+    nonisolated static func machOArchitectures(_ url: URL) throws -> Set<String> {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let head = try handle.read(upToCount: 4096) ?? Data()
+        func u32(_ at: Int, big: Bool) -> UInt32 {
+            guard head.count >= at + 4 else { return 0 }
+            let value = head[at..<at + 4].reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+            return big ? value : value.byteSwapped
+        }
+        func name(_ cpu: UInt32) -> String? {
+            switch cpu {
+            case 0x0100000C: return "arm64"
+            case 0x01000007: return "x86_64"
+            default: return nil
+            }
+        }
+        switch u32(0, big: true) {
+        case 0xCAFEBABE: // universal, big-endian header
+            let count = Int(u32(4, big: true))
+            return Set((0..<min(count, 8)).compactMap { name(u32(8 + $0 * 20, big: true)) })
+        case 0xCFFAEDFE: // thin 64-bit, little-endian
+            return Set([name(u32(4, big: false))].compactMap { $0 })
+        default:
+            return []
+        }
     }
 }
 

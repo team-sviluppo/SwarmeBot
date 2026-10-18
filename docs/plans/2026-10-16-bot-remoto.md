@@ -1,6 +1,6 @@
 # Bot remoto (motore SwarmeBot su server) — piano di implementazione
 
-Stato: fasi 0–3 fatte per Linux, fase 4 scritta ma non provata nell'app (branch `feat/remote-engine`); Mac server e fase 5 da fare; vedi §14. Data: 2026-10-16.
+Stato: fasi 0–4 fatte e provate per Linux; Mac come server scritto, provato senza root; fase 5 da fare (branch `feat/remote-engine`); vedi §14. Data: 2026-10-16.
 Motore: solo Swift (`HarnessCore` / `HarnessDrivers` / `swarme-harness`); il motore Node non riceve la funzione.
 
 ## 0. Obiettivo e decisioni prese
@@ -523,6 +523,41 @@ In `Sources/SwarmeKit/Remote/`:
 - Verificato: `ServerSetupFlowIntegrationTests` percorre la procedura su un server nuovo, dal modulo alla
   chat (fingerprint, password chiesta e poi dimenticata, sudo, servizio, token nel Portachiavi, salute e
   flotta via HTTP). `RemoteConnectionTests` e `RemotePairingLinkTests` verdi.
-- **Non verificato:** l'app vera non è stata avviata. L'app di sviluppo usa sempre `~/.swarmebot` (su macOS
-  `HOME` non lo sposta) e il Portachiavi dell'utente: va provata con il suo consenso.
+- **Provata nell'app (2026-10-18)**, con `SWARMEBOT_HOME=/tmp/sbapp` (dati, log, identità ssh e preferenze in
+  quella cartella; token in un file 0600 invece del Portachiavi, perché una build di sviluppo rifirmata non
+  legge senza password le voci scritte da un'altra build). L'app parte sul server di prova e mostra i suoi
+  bot. Un messaggio mandato da un secondo dispositivo (via API, come farà il telefono) compare in diretta,
+  con la risposta trasmessa dal server.
+- Bug trovati avviando l'app, e corretti:
+  - il backup di `~/.swarmebot`, fatto prima del primo avvio del motore Swift, falliva sui socket di
+    controllo ssh e il motore locale non partiva: ora salta socket, FIFO e la cartella `ssh`;
+  - il chip della cartella di lavoro controllava sul Mac un percorso del server: ora mostra il percorso del
+    server e lo modifica come testo;
+  - in remoto si allegano solo immagini.
+- Non provati a schermo, perché non ho il permesso di Accessibilità per guidare l'interfaccia:
+  - la scheda Server remoti e la procedura guidata (la stessa logica è coperta da
+    `ServerSetupFlowIntegrationTests`);
+  - il QR.
+
+### Mac come server — scritto, provato senza root (2026-10-18)
+
+- `RemoteScripts.rootMac` fa tutto in un passo root:
+  - il motore come LaunchDaemon `it.swarmebot.engine.<utente>` con `UserName` (parte all'avvio, senza login);
+  - Caddy come LaunchDaemon `it.swarmebot.caddy`, in esecuzione come root, con
+    `/usr/local/etc/swarmebot/Caddyfile` e le rotte per utente; la configurazione viene validata, e se non
+    è valida tutto torna come prima.
+  - **Deviazione:** su macOS i socket stanno in `~/.swarmebot/run` (0700). Caddy è root e li raggiunge senza
+    gruppi condivisi.
+- `ServerSetupFlow`: macOS ≥ 14 accettato; il motore caricato è quello dell'app stessa, se la sua
+  architettura (letta dall'header Mach-O) è quella del Mac server.
+- Provato su questo Mac, senza root:
+  - probe;
+  - motore sotto `launchd` (dominio utente) con lo stesso plist: socket, chat via Caddy con prefisso e
+    token, riavvio automatico dopo `kill -9`;
+  - `claude auth status` sotto `launchd`: login visibile.
+- **Da provare con root:**
+  - LaunchDaemon di sistema con `UserName` (lì il Portachiavi di login potrebbe non essere sbloccato, e
+    `claude` potrebbe non vedere il login);
+  - Caddy come root sulle porte 80/443;
+  - sshd (Login remoto).
 
