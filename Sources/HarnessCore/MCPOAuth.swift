@@ -15,8 +15,15 @@
 //
 // The engine holds the tokens: a bot's CLI never sees one, and changing
 // harness never means logging in again.
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct MCPOAuthError: LocalizedError {
     public let message: String

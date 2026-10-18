@@ -10,7 +10,11 @@
 // payload reaches the bot inside an UNTRUSTED WEBHOOK EVENT DATA block, the
 // instructions come from the user's configuration, and the turn runs
 // unattended, so auto mode does not apply to it.
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
 
 @MainActor
@@ -74,8 +78,9 @@ public final class WebhookManager {
     }
 
     static func base64url(_ count: Int) -> String {
-        var bytes = [UInt8](repeating: 0, count: count)
-        _ = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
+        // the system CSPRNG on every platform (arc4random / getrandom)
+        var generator = SystemRandomNumberGenerator()
+        let bytes = (0..<count).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
         return Data(bytes).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
     }

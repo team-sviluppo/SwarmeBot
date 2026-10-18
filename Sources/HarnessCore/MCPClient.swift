@@ -12,6 +12,9 @@
 // The client only asks; the one server request it answers is `ping`. No
 // roots, no sampling, no elicitation: a connector is a bag of tools.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct MCPError: LocalizedError, Sendable {
     public var message: String
@@ -146,7 +149,7 @@ final class MCPHTTPTransport: MCPTransport {
         if let protocolVersion { request.setValue(protocolVersion, forHTTPHeaderField: "MCP-Protocol-Version") }
         request.httpBody = message.data
 
-        let (bytes, response) = try await session.bytes(for: request)
+        let (bytes, response) = try await session.streamingBytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw MCPError("risposta HTTP non valida") }
         if let id = http.value(forHTTPHeaderField: "Mcp-Session-Id"), !id.isEmpty { sessionId = id }
         guard (200...299).contains(http.statusCode) else {
@@ -176,7 +179,7 @@ final class MCPHTTPTransport: MCPTransport {
         if case let .array(batch) = parsed { batch.forEach { onMessage?($0) } } else { onMessage?(parsed) }
     }
 
-    private func readEvents(_ bytes: URLSession.AsyncBytes) async {
+    private func readEvents(_ bytes: StreamingBytes) async {
         var data: [String] = []
         do {
             for try await raw in bytes.lines {

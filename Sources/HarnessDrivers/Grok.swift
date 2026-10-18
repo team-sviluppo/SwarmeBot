@@ -4,6 +4,9 @@
 // the grok.com CLI (that is `grokAgent`, an ACP harness). Transcript-replay:
 // the harness hands over the folded history every turn.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import HarnessCore
 
 public struct GrokDriver: ProviderDriver {
@@ -80,7 +83,7 @@ final class GrokInstance: ProviderInstance, ProviderAdapter {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = JSON.object(["model": .string(model), "messages": .array(messages), "stream": true]).data
-        let (bytes, response) = try await session.bytes(for: request)
+        let (bytes, response) = try await session.streamingBytes(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200...299).contains(status) else {
             var body = Data()

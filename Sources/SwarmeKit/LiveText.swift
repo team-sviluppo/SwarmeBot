@@ -39,6 +39,12 @@ public final class LiveText {
         text[threadId, default: ""] += delta
     }
 
+    /// Everything, when the app switches to another engine.
+    public func clearAll() {
+        text = [:]
+        reasoning = [:]
+    }
+
     public func clear(_ threadId: String) {
         if text[threadId] != nil { text.removeValue(forKey: threadId) }
         if reasoning[threadId] != nil { reasoning.removeValue(forKey: threadId) }

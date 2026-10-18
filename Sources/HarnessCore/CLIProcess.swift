@@ -1,4 +1,4 @@
-// Spawning the agent CLIs — `server/procs.ts`, macOS only.
+// Spawning the agent CLIs — `server/procs.ts`; macOS, and Linux for the remote engine.
 //
 // Foundation's `Process` cannot put the child in its own process group, and
 // that is the one thing a CLI driver needs: `claude` spawns MCP servers of its
@@ -40,7 +40,9 @@ public final class CLIProcess: @unchecked Sendable {
     private var stdinOpen = true
     private let lock = NSLock()
     private var exited = false
+    #if canImport(Darwin)
     private var exitSource: DispatchSourceProcess?
+    #endif
 
     /// One complete stdout line (without the newline), UTF-8 decoded whole.
     public var onLine: (@MainActor (String) -> Void)?
@@ -77,15 +79,27 @@ public final class CLIProcess: @unchecked Sendable {
             throw SpawnFailure.describe(errno: errno, cli: cli)
         }
 
+        #if canImport(Darwin)
         var actions: posix_spawn_file_actions_t?
+        #else
+        var actions = posix_spawn_file_actions_t()
+        #endif
         posix_spawn_file_actions_init(&actions)
         defer { posix_spawn_file_actions_destroy(&actions) }
         posix_spawn_file_actions_adddup2(&actions, inPipe[0], 0)
         posix_spawn_file_actions_adddup2(&actions, outPipe[1], 1)
         posix_spawn_file_actions_adddup2(&actions, errPipe[1], 2)
         if let cwd { posix_spawn_file_actions_addchdir_np(&actions, cwd) }
+        #if !canImport(Darwin)
+        // no POSIX_SPAWN_CLOEXEC_DEFAULT on Linux: close every inherited fd past stdio (glibc ≥ 2.34)
+        posix_spawn_file_actions_addclosefrom_np(&actions, 3)
+        #endif
 
+        #if canImport(Darwin)
         var attributes: posix_spawnattr_t?
+        #else
+        var attributes = posix_spawnattr_t()
+        #endif
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
         // own process group, so killTree reaps the MCP servers it spawns;
@@ -93,8 +107,12 @@ public final class CLIProcess: @unchecked Sendable {
         // default signal handling and an empty mask: the engine ignores SIGTERM
         // itself (main.swift), and an ignored signal survives exec — a CLI
         // that inherited it could never be interrupted
+        #if canImport(Darwin)
         posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT
                                                    | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
+        #else
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
+        #endif
         posix_spawnattr_setpgroup(&attributes, 0)
         var allSignals = sigset_t()
         sigfillset(&allSignals)
@@ -121,7 +139,7 @@ public final class CLIProcess: @unchecked Sendable {
         pid = child
         stdinFD = inPipe[1]
         // a write to a dead child must be an error, not a SIGPIPE that kills us
-        _ = fcntl(stdinFD, F_SETNOSIGPIPE, 1)
+        Sys.noSigPipe(stdinFD)
         stdoutFD = outPipe[0]
         stderrFD = errPipe[0]
     }
@@ -142,6 +160,7 @@ public final class CLIProcess: @unchecked Sendable {
     /// `MainActor.assumeIsolated` on a main-queue block traps).
     public func start() {
         let (stream, continuation) = AsyncStream<Stream>.makeStream()
+        #if canImport(Darwin)
         let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .global())
         source.setEventHandler { [weak self] in
             if let code = self?.reap() { continuation.yield(.exited(code)) }
@@ -150,6 +169,13 @@ public final class CLIProcess: @unchecked Sendable {
         source.resume()
         // the child may already be gone before the source was armed
         if let code = reap() { continuation.yield(.exited(code)) }
+        #else
+        // no process sources in Linux Dispatch: one thread blocks in waitpid
+        Thread.detachNewThread { [weak self] in
+            guard let self else { return }
+            if let code = self.reap(blocking: true) { continuation.yield(.exited(code)) }
+        }
+        #endif
 
         let out = stdoutFD, err = stderrFD
         Thread.detachNewThread {
@@ -206,14 +232,26 @@ public final class CLIProcess: @unchecked Sendable {
 
     /// waitpid once: the first time the child is seen gone, its exit code
     /// (itself nil when a signal killed it); nil while it runs.
-    private func reap() -> Int32?? {
+    private func reap(blocking: Bool = false) -> Int32?? {
+        var status: Int32 = 0
+        if blocking {
+            // outside the lock: write() and killTree() must not wait for the child
+            var result: pid_t
+            repeat { result = waitpid(pid, &status, 0) } while result < 0 && errno == EINTR
+            lock.lock()
+            defer { lock.unlock() }
+            guard result == pid, !exited else { return nil }
+            exited = true
+            return .some((status & 0x7F) == 0 ? (status >> 8) & 0xFF : nil)
+        }
         lock.lock()
         defer { lock.unlock() }
         if exited { return nil }
-        var status: Int32 = 0
         guard waitpid(pid, &status, WNOHANG) == pid else { return nil }
         exited = true
+        #if canImport(Darwin)
         exitSource?.cancel()
+        #endif
         // WIFEXITED / WEXITSTATUS, which Swift does not import
         return .some((status & 0x7F) == 0 ? (status >> 8) & 0xFF : nil)
     }
@@ -232,7 +270,7 @@ public final class CLIProcess: @unchecked Sendable {
         let total = data.count
         var offset = 0
         while offset < total {
-            let written = data.withUnsafeBytes { Darwin.write(stdinFD, $0.baseAddress! + offset, total - offset) }
+            let written = data.withUnsafeBytes { Sys.write(stdinFD, $0.baseAddress! + offset, total - offset) }
             if written < 0 { if errno == EINTR { continue }; return }
             offset += written
         }
@@ -254,7 +292,9 @@ public final class CLIProcess: @unchecked Sendable {
     }
 
     deinit {
+        #if canImport(Darwin)
         exitSource?.cancel()
+        #endif
     }
 
     // MARK: - One-shot runs

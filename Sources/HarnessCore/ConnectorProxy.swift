@@ -8,6 +8,9 @@
 // the rest arrives in the env: OMB_HARNESS_URL, OMB_COMMS_TOKEN,
 // OMB_CONNECTOR_GRANT. stdout is the MCP channel: nothing else may be printed on it.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public enum ConnectorProxy {
     struct Env {

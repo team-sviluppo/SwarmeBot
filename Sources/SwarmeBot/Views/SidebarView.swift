@@ -19,6 +19,7 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            EngineSwitcher()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     ForEach(Array(filteredSections.enumerated()), id: \.element.name) { index, section in

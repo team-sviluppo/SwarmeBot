@@ -17,6 +17,9 @@
 // - loopback-only methods are refused through paired transport;
 // - bodies and frames are bounded (1 MB), rpc ids must round-trip.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct DSHRpcError: LocalizedError {
     public let code: String

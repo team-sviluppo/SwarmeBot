@@ -7,6 +7,12 @@ import Foundation
 import HarnessCore
 import HarnessDrivers
 
+#if !canImport(Darwin)
+// Linux has no per-descriptor SO_NOSIGPIPE: a peer hanging up must be an
+// EPIPE, never a signal that kills the engine or a proxy (POSIXCompat.swift)
+signal(SIGPIPE, SIG_IGN)
+#endif
+
 // `swarme-harness mcp-permission <socket>`: the MCP permission proxy a CLI
 // spawns for --permission-prompt-tool (PermissionProxy.swift). Checked
 // first, so the helper never touches the data dir or the port.
@@ -33,6 +39,19 @@ let port = UInt16(env["OMB_PORT"] ?? env["OGB_PORT"] ?? "8799") ?? 8799
 let paths = DataPaths.fromEnvironment(env)
 
 setvbuf(stdout, nil, _IOLBF, 0)
+
+// the remote engine and its device tokens (Remote.swift)
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "device" {
+    runDeviceCommand(Array(CommandLine.arguments.dropFirst(2)), paths: paths)
+}
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "serve" {
+    let rest = Array(CommandLine.arguments.dropFirst(2))
+    guard rest.contains("--remote") else { fail("serve needs --remote (the local engine starts without arguments)") }
+    let options: RemoteOptions
+    do { options = try RemoteOptions.parse(rest) } catch { fail(error.localizedDescription) }
+    Task { @MainActor in await bootRemote(options, paths: paths, environment: env) }
+    dispatchMain()
+}
 
 @MainActor
 func boot() async {
