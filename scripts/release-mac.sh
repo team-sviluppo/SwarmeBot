@@ -9,7 +9,7 @@
 # Credentials, read from .env.mac-release.local in this repo or, failing
 # that, in the Electron checkout (../SwarmeBot/.env.mac-release.local):
 #
-#   MAC_SIGN_IDENTITY="Developer ID Application: Hextra Srl (3UYNX3FBA3)"
+#   MAC_SIGN_IDENTITY="Developer ID Application: Your Company (TEAMID1234)"
 #   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarization
 #   NOTARY_PROFILE      a `xcrun notarytool store-credentials` profile, used
 #                       when the Apple ID trio is not set (default AC_PASSWORD)

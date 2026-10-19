@@ -214,7 +214,7 @@ Legenda rischio: 🟢 basso · 🟡 medio · 🔴 alto
 
 - `NavigationSplitView` a 2 colonne + `.inspector` per la colonna destra (chiudibile).
 - Sidebar: in alto il bot corrente in evidenza (avatar grande in card), poi sezioni nominate
-  dall'utente ("Datacenter Hextra", "Utility", "News", "Non assegnati"), riga = avatar 32pt
+  dall'utente ("Datacenter", "Utility", "News", "Non assegnati"), riga = avatar 32pt
   + nome + **tag tipo** (Local AI, Server, Dev) + anteprima ultima riga.
 - Composer a pillola in basso, ancorato, con `+` a sinistra; **si tolgono mic e onda vocale**
   (voce fuori perimetro). In basso a sinistra resta l'avatar utente; il pulsante "Connetti

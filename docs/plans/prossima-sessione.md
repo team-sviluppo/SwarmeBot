@@ -6,11 +6,11 @@ Riferimenti: `docs/plans/2026-10-13-swift-native-macos-analisi.md` (piano), `doc
 
 ## Prompt da incollare nella nuova sessione
 
-Avviare Claude Code in `/Users/cristiano/Sviluppo/SwarmeBotSwift` e incollare:
+Avviare Claude Code nella cartella di questa repo e incollare:
 
 > Continua il port del motore Swift di SwarmeBot. Leggi `docs/plans/prossima-sessione.md`,
 > `docs/plans/fase-2-architettura.md` (soprattutto Decisioni e Lezioni) e `git log --oneline -15`.
-> Il motore Node di riferimento, in sola lettura, è `/Users/cristiano/Sviluppo/SwarmeBot/server`.
+> Il motore Node di riferimento, in sola lettura, è la cartella `server/` del checkout Node (`SWARMEBOT_REPO`).
 > Esegui i blocchi rimasti nell'ordine indicato, ognuno verificato con `parity/all.sh` e `swift test` prima del commit.
 
 ## Dove siamo
@@ -44,7 +44,7 @@ Sorgenti Node: `server/computer-proxy.ts` (~1.070 righe), `container-computer.ts
   uno strumento del server MCP chiamato `computer`).
 
 ### 2. Companion iOS
-Sorgente Node: `/Users/cristiano/Sviluppo/SwarmeBot/companion/` (sidecar mDNS + proxy sulle porte 8810/8811) e come
+Sorgente Node: `companion/` del checkout Node (sidecar mDNS + proxy sulle porte 8810/8811) e come
 lo avvia `electron/`. Client da non cambiare: `SwarmeBot/ios/` (`CompanionCore`).
 - Bonjour con `NWListener` (stesso tipo di servizio e record TXT), stesso pairing e stesse regole di sicurezza
   (token, restrizioni LAN/loopback, filtro header, limiti del body), proxy verso il harness.

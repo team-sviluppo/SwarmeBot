@@ -147,7 +147,7 @@ Moduli che oggi non compilano su Linux: `HTTPServer.swift` (Network), `Permissio
 ### 4.1 Modello — `~/.swarmebot/devices.json` (motore remoto)
 
 ```json
-{ "id": "dev_…", "name": "Mac di Cristiano", "kind": "mac", "tokenHash": "sha256:…",
+{ "id": "dev_…", "name": "Mac di Anna", "kind": "mac", "tokenHash": "sha256:…",
   "createdAt": "…", "lastSeenAt": "…", "revokedAt": null }
 ```
 
