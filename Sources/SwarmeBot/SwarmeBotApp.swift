@@ -124,12 +124,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// Clicking the Dock icon with no window open brings the main one back.
+    /// Clicking the Dock icon brings the main window back. Not only when no
+    /// window is visible: with Automazioni or Settings still open AppKit
+    /// reports visible windows and did nothing, so the chat never came back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        if !hasVisibleWindows {
-            NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }?.makeKeyAndOrderFront(nil)
+        showMainWindow()
+        return false
+    }
+
+    /// Un-minimises the main window, or opens a new one: once closed,
+    /// SwiftUI releases it, and there is nothing left to order front.
+    private func showMainWindow() {
+        let mains = NSApp.windows.filter { $0.identifier?.rawValue.hasPrefix("main") == true }
+        if let window = mains.first(where: \.isVisible) {
+            window.makeKeyAndOrderFront(nil)
+        } else if let window = mains.first(where: \.isMiniaturized) {
+            window.deminiaturize(nil)
+        } else {
+            OpenWindowBridge.open?("main")
         }
-        return true
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// The Dock menu: unread chats first, so a waiting bot is one click away.
@@ -147,7 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openBotFromDock(_ item: NSMenuItem) {
         guard let id = item.representedObject as? String else { return }
         model.selection = .bot(id)
-        NSApp.activate(ignoringOtherApps: true)
+        showMainWindow()
     }
 }
 
