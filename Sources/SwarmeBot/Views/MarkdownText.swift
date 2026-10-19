@@ -44,7 +44,7 @@ struct MarkdownText: View {
             // h4 that looks exactly like body text is a heading that failed.
             inline(text, tail: tail)
                 .font(.system(size: [16, 15, 14.5, 14, 14, 13.5, 13][min(level, 6)], weight: .semibold))
-                .foregroundStyle(level >= 6 ? Theme.secondary : Theme.ink)
+                .foregroundStyle(level >= 6 ? Theme.ink.opacity(0.85) : Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, level <= 2 ? 8 : 6)
 
@@ -57,12 +57,12 @@ struct MarkdownText: View {
         case let .quote(text):
             HStack(alignment: .top, spacing: 8) {
                 Rectangle()
-                    .fill(Theme.hairline)
+                    .fill(Theme.ink.opacity(0.45))
                     .frame(width: 2)
                 inline(text, tail: tail)
                     .font(.system(size: Theme.bodySize))
                     .lineSpacing(Theme.bodyLineSpacing)
-                    .foregroundStyle(Theme.secondary)
+                    .foregroundStyle(Theme.ink.opacity(0.85))
             }
             .fixedSize(horizontal: false, vertical: true)
 
@@ -70,7 +70,7 @@ struct MarkdownText: View {
             CodeBlock(language: language, text: text, caret: caretText(tail))
 
         case .rule:
-            Rectangle().fill(Theme.hairline.opacity(0.4)).frame(height: 1).padding(.vertical, 2)
+            Rectangle().fill(Theme.ink.opacity(0.3)).frame(height: 1).padding(.vertical, 2)
         }
     }
 
@@ -111,7 +111,10 @@ struct MarkdownText: View {
     /// A figure space then a block, so the caret sits off the last glyph
     /// rather than touching it. Empty when not streaming — an empty `Text`
     /// concatenated in costs nothing and keeps the callers branch-free.
-    /// Inline code 13 pt mono on `inset`; links in accent, underlined.
+    /// Inline code 13 pt mono on `inset`; links in ink, bold and
+    /// underlined. The bubble is the bot's colour darkened to 4.5:1 against
+    /// ink, so no tint of it (nor the accent blue, on a blue bot) would still
+    /// read: weight and underline set links apart instead.
     private static func styled(_ input: AttributedString) -> AttributedString {
         var out = input
         for run in out.runs {
@@ -120,7 +123,9 @@ struct MarkdownText: View {
                 out[run.range].backgroundColor = Theme.inset
             }
             if run.link != nil {
-                out[run.range].foregroundColor = Theme.accent
+                out[run.range].foregroundColor = Theme.ink
+                // bold through the intent, so a link in a heading keeps the heading's size
+                out[run.range].inlinePresentationIntent = (run.inlinePresentationIntent ?? []).union(.stronglyEmphasized)
                 out[run.range].underlineStyle = .single
             }
         }

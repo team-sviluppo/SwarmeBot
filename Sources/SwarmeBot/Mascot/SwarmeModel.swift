@@ -101,6 +101,37 @@ enum SwarmePalette {
         return luma < 0.3 ? .white : Color(hex: "#17171C")
     }
 
+    /// The bot's reply bubble: its own colour, darkened (hue kept) just
+    /// enough for `Theme.ink` on it to reach WCAG AA, 4.5:1. Every shade but
+    /// the darkest needs some: white comes out mid grey, yellow olive.
+    static func bubble(_ name: String) -> Color {
+        let shade = bubbleShades[name] ?? bubbleShades["green"]!
+        return Color(.sRGB, red: shade.r, green: shade.g, blue: shade.b, opacity: 1)
+    }
+
+    private static let bubbleShades: [String: (r: Double, g: Double, b: Double)] = {
+        let ink = luminance(rgb("#FCFCFC"))
+        return SwarmePaletteData.hex.mapValues { hex in
+            let v = rgb(hex)
+            var k = 1.0
+            while k > 0, contrast(ink, luminance((v.r * k, v.g * k, v.b * k))) < 4.5 { k -= 0.01 }
+            return (v.r * k / 255, v.g * k / 255, v.b * k / 255)
+        }
+    }()
+
+    /// WCAG relative luminance of 0–255 sRGB.
+    private static func luminance(_ v: (r: CGFloat, g: CGFloat, b: CGFloat)) -> Double {
+        func linear(_ c: CGFloat) -> Double {
+            let s = Double(c) / 255
+            return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(v.r) + 0.7152 * linear(v.g) + 0.0722 * linear(v.b)
+    }
+
+    private static func contrast(_ a: Double, _ b: Double) -> Double {
+        (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+
     private static func rgb(_ hex: String) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
         var value: UInt64 = 0
         Scanner(string: hex.replacingOccurrences(of: "#", with: "")).scanHexInt64(&value)

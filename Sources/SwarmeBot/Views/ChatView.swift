@@ -271,7 +271,9 @@ struct MessageRow: View {
                         }
                     }
                     HoverActions(message: message, threadId: threadId, isUser: false, copyText: message.text ?? "") {
-                        BotBubble { MarkdownText(source: message.text ?? "") }
+                        BotBubble(color: isRoom ? message.from?.color : model.selectedBot?.color) {
+                            MarkdownText(source: message.text ?? "")
+                        }
                             .contextMenu { messageMenu }
                     }
                     if message.interrupted == true {
@@ -539,8 +541,11 @@ struct WidthCap: ViewModifier {
     }
 }
 
-/// `bg-card`, radius 16, 16/10, at most 88% of the column.
+/// The bot's colour (darkened for contrast, see `SwarmePalette.bubble`),
+/// radius 14, 12/9, at most 88% of the column.
 struct BotBubble<Content: View>: View {
+    /// Palette name; nil (a sender no longer known) keeps the neutral grey.
+    let color: String?
     @ViewBuilder let content: Content
     @Environment(\.transcriptColumn) private var column
 
@@ -550,7 +555,7 @@ struct BotBubble<Content: View>: View {
             .textSelection(.enabled)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
-            .background(RoundedRectangle(cornerRadius: Theme.radiusBubble, style: .continuous).fill(Theme.bubbleBot))
+            .background(RoundedRectangle(cornerRadius: Theme.radiusBubble, style: .continuous).fill(color.map(SwarmePalette.bubble) ?? Theme.bubbleBot))
             .modifier(WidthCap(cap: column * 0.88))
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -744,12 +749,18 @@ private struct LiveTail: View {
             ReasoningView(text: reasoning, live: model.live.text[threadId]?.isEmpty ?? true)
         }
         if let streaming = model.live.text[threadId], !streaming.isEmpty {
-            BotBubble { MarkdownText(source: streaming, caret: true) }
+            BotBubble(color: speaker?.color) { MarkdownText(source: streaming, caret: true) }
         }
         // under the streaming reply too: text arriving does not mean the
         // turn is over, and the indicator keeps one identity (and its clock)
         if working {
             TypingIndicator()
         }
+    }
+
+    /// Who is typing: the selected bot, or the room's busy member.
+    private var speaker: Bot? {
+        if let bot = model.selectedBot { return bot }
+        return model.selectedRoom?.busyBotId.flatMap { model.state.bot($0) }
     }
 }
