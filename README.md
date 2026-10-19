@@ -597,8 +597,11 @@ Design documents are currently in Italian.
 
 ## Credits
 
-SwarmeBot is inspired by [OpenMausBot](https://github.com/milind-soni/OpenMausBot) by Milind Soni.
+SwarmeBot is derived from [OpenMausBot](https://github.com/milind-soni/OpenMausBot) by Milind Soni and
+the OpenMausBot contributors (Apache License 2.0): its engine was ported from TypeScript to Swift and
+extended with the native macOS app and remote engines. SwarmeBot is not affiliated with or endorsed by
+OpenMausBot. Third-party notices are in [NOTICE](NOTICE).
 
 ## License
 
-Not yet chosen. Until a license is added, all rights are reserved by the authors.
+Copyright 2026 Hextra Srl. Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE).
