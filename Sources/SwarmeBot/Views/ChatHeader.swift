@@ -41,7 +41,7 @@ struct ChatHeader: View {
                 Button { Task { await model.interrupt() } } label: {
                     Label { Text("Stop") } icon: { Image(systemName: "stop.fill").font(.system(size: 10)) }
                 }
-                .buttonStyle(ChipButtonStyle(filled: true, size: 13))
+                .buttonStyle(ChipButtonStyle(filled: true, size: 13, tint: Theme.danger))
                 .help("Interrompi (⌘.)")
             }
             if let bot = model.selectedBot {

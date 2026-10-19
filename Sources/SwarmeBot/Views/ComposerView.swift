@@ -16,6 +16,8 @@ struct ComposerView: View {
     @State private var attachments: [String: [ComposerAttachment]] = [:]
     @State private var height: CGFloat = 24
     @State private var dropTargeted = false
+    /// Bumped to put the caret in the text field.
+    @State private var focusRequest = 0
     /// The server path being edited, for a bot on a remote engine.
     @State private var remoteFolder: String?
     /// Pastes longer than this become a chip, like the web composer.
@@ -44,7 +46,7 @@ struct ComposerView: View {
                 .buttonStyle(CircleButtonStyle(fill: .clear, hoverFill: Theme.raised, ink: Theme.secondary))
                 .help("Allega file o immagini (oppure trascinali qui, o incolla)")
                 ComposerTextView(
-                    text: draft, height: $height, placeholder: placeholder, onSubmit: submit,
+                    text: draft, height: $height, placeholder: placeholder, focusRequest: focusRequest, onSubmit: submit,
                     onPasteImage: { data, mime in add(.init(name: "Immagine incollata", kind: .image(data, mime: mime))) },
                     onLongPaste: { text in
                         guard text.utf8.count > pasteChipThreshold else { return false }
@@ -53,14 +55,16 @@ struct ComposerView: View {
                     }
                 )
                     .frame(height: min(max(height, 20), 160))
-                    .padding(.vertical, 4)
+                    // 20 + 2 × 6 = the 32 pt buttons, so one line sits on their centre
+                    .padding(.vertical, 6)
                 if busy {
                     Button {
                         Task { await model.interrupt() }
                     } label: {
                         Image(systemName: "stop.fill").font(.system(size: 12))
                     }
-                    .buttonStyle(CircleButtonStyle(fill: .clear, hoverFill: Theme.raised, ink: Theme.secondary))
+                    // red, so a running turn is obvious from the composer alone
+                    .buttonStyle(CircleButtonStyle(fill: Theme.danger, hoverFill: Theme.danger, ink: Theme.dangerInk, brighten: true))
                     .help("Interrompi (⌘.)")
                 }
                 if canSend {
@@ -79,6 +83,9 @@ struct ComposerView: View {
             .padding(.trailing, 8)
             .padding(.vertical, 6)
             .background(Capsule().fill(Theme.raised.opacity(0.7)))
+            // a click anywhere on the pill, not only on the line of text, starts typing
+            .contentShape(Capsule())
+            .onTapGesture { focusRequest += 1 }
             .overlay(
                 Capsule().stroke(dropTargeted ? Theme.accent : Theme.hairline.opacity(0.3), lineWidth: dropTargeted ? 2 : 1)
             )
@@ -556,6 +563,8 @@ struct ComposerTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var height: CGFloat
     let placeholder: String
+    /// A new value puts the caret in the field.
+    var focusRequest = 0
     let onSubmit: () -> Void
     var onPasteImage: ((Data, String) -> Void)? = nil
     /// Return true to take the paste out of the text field (a chip instead).
@@ -570,6 +579,12 @@ struct ComposerTextView: NSViewRepresentable {
         scroll.autohidesScrollers = true
         guard let textView = scroll.documentView as? NSTextView else { return scroll }
         let field = PlaceholderTextView(frame: textView.frame, textContainer: textView.textContainer)
+        // as tall as the visible area at least: clicks under a short line
+        // used to land on the clip view and never reach the text
+        field.minSize = NSSize(width: 0, height: scroll.contentSize.height)
+        field.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        field.isVerticallyResizable = true
+        field.isHorizontallyResizable = false
         field.placeholder = placeholder
         field.delegate = context.coordinator
         field.drawsBackground = false
@@ -581,7 +596,7 @@ struct ComposerTextView: NSViewRepresentable {
             .font: NSFont.systemFont(ofSize: Theme.bodySize),
             .foregroundColor: NSColor(Theme.ink),
             .paragraphStyle: PlaceholderTextView.paragraph,
-            .baselineOffset: 3,
+            .baselineOffset: PlaceholderTextView.baselineOffset,
         ]
         field.textColor = NSColor(Theme.ink)
         field.insertionPointColor = NSColor(Theme.accent)
@@ -591,6 +606,7 @@ struct ComposerTextView: NSViewRepresentable {
         field.isAutomaticDashSubstitutionEnabled = false
         field.autoresizingMask = [.width]
         scroll.documentView = field
+        context.coordinator.focusRequest = focusRequest
         DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
         return scroll
     }
@@ -598,6 +614,12 @@ struct ComposerTextView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let field = scroll.documentView as? PlaceholderTextView else { return }
         context.coordinator.parent = self
+        let clip = scroll.contentSize.height
+        if abs(field.minSize.height - clip) > 0.5 { field.minSize.height = clip }
+        if context.coordinator.focusRequest != focusRequest {
+            context.coordinator.focusRequest = focusRequest
+            DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
+        }
         // Closures capture the current thread. Setting them only in
         // makeNSView left every later chat pasting into the first bot.
         field.onPasteImage = onPasteImage
@@ -614,6 +636,7 @@ struct ComposerTextView: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ComposerTextView
+        var focusRequest = 0
 
         init(_ parent: ComposerTextView) { self.parent = parent }
 
@@ -655,6 +678,9 @@ final class PlaceholderTextView: NSTextView {
         style.maximumLineHeight = 20
         return style
     }()
+    /// TextKit puts a line's extra height above the glyphs; this lifts them
+    /// back to the middle. The placeholder needs it too, or it sits low.
+    static let baselineOffset: CGFloat = 3
 
     var placeholder = ""
     var onPasteImage: ((Data, String) -> Void)?
@@ -686,8 +712,12 @@ final class PlaceholderTextView: NSTextView {
             .font: font ?? .systemFont(ofSize: Theme.bodySize),
             .foregroundColor: NSColor(Theme.secondary),
             .paragraphStyle: Self.paragraph,
+            .baselineOffset: Self.baselineOffset,
         ]
-        (placeholder as NSString).draw(at: NSPoint(x: textContainerInset.width, y: textContainerInset.height), withAttributes: attributes)
+        // drawn like the first line of text: same rect, so the same baseline
+        let line = NSRect(x: textContainerInset.width, y: textContainerInset.height,
+                          width: max(bounds.width - textContainerInset.width * 2, 0), height: 20)
+        (placeholder as NSString).draw(with: line, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attributes)
     }
 
     override func didChangeText() {

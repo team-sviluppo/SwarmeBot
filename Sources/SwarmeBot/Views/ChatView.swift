@@ -177,8 +177,8 @@ extension EnvironmentValues {
     }
 }
 
-/// Copy (and edit) plus the time, revealed on hover under the bubble, on
-/// the bubble's own side (`transition-opacity` 150 ms).
+/// Copy (and edit) plus the time, revealed on hover beside the bubble's
+/// bottom edge, towards the middle of the column (`transition-opacity` 150 ms).
 struct HoverActions<Content: View>: View {
     let message: Message
     let threadId: String
@@ -191,25 +191,28 @@ struct HoverActions<Content: View>: View {
 
     @State private var hideToken = 0
 
-    /// The meta row is in the layout, under the bubble. An overlay aligned to
-    /// the bubble's bottom draws on top of the last line.
+    /// The meta row sits beside the bubble and is always in the layout, only
+    /// faded: under the bubble it pushed every message below down on hover.
     var body: some View {
         HStack(spacing: 0) {
             if isUser { Spacer(minLength: 0) }
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                content
-                if hovering {
-                    HStack(alignment: .center, spacing: 4) {
-                        if isUser { time; actions } else { actions; time }
-                    }
-                    .padding(.horizontal, 2)
-                    .transition(.opacity.animation(Theme.quick))
-                }
+            HStack(alignment: .bottom, spacing: 6) {
+                if isUser { meta; content } else { content; meta }
             }
-            .animation(Theme.quick, value: hovering)
             .onHover(perform: hover)
             if !isUser { Spacer(minLength: 0) }
         }
+    }
+
+    private var meta: some View {
+        HStack(alignment: .center, spacing: 4) {
+            if isUser { time; actions } else { actions; time }
+        }
+        .fixedSize()
+        .padding(.bottom, 2)
+        .opacity(hovering ? 1 : 0)
+        .allowsHitTesting(hovering)
+        .animation(Theme.quick, value: hovering)
     }
 
     private func hover(_ inside: Bool) {
@@ -225,7 +228,6 @@ struct HoverActions<Content: View>: View {
         Text(message.date.formatted(date: .omitted, time: .shortened))
             .font(.system(size: 11).monospacedDigit())
             .foregroundStyle(Theme.ink.opacity(0.42))
-            .transition(.opacity.animation(Theme.quick))
     }
 
     private var actions: some View {
@@ -242,7 +244,6 @@ struct HoverActions<Content: View>: View {
                 .buttonStyle(IconButtonStyle(size: 22, iconSize: 12))
                 .help("Copia")
         }
-        .transition(.opacity.animation(Theme.quick))
     }
 }
 
@@ -506,7 +507,35 @@ struct UserBubble: View {
                     .foregroundStyle(Theme.tertiary)
             }
         }
-        .frame(maxWidth: column * 0.7, alignment: .trailing)
+        .modifier(WidthCap(cap: column * 0.7))
+    }
+}
+
+/// At most `cap` wide, but never wider than the content: a short bubble
+/// stays short, so what sits beside it (time, copy) stays next to it.
+/// `.frame(maxWidth:)` would grow to the cap and push those away.
+struct WidthCap: ViewModifier {
+    let cap: CGFloat
+
+    func body(content: Content) -> some View {
+        CapLayout(cap: cap) { content }
+    }
+
+    private struct CapLayout: Layout {
+        let cap: CGFloat
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            guard let child = subviews.first else { return .zero }
+            return child.sizeThatFits(capped(proposal))
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            subviews.first?.place(at: bounds.origin, proposal: capped(ProposedViewSize(bounds.size)))
+        }
+
+        private func capped(_ proposal: ProposedViewSize) -> ProposedViewSize {
+            ProposedViewSize(width: min(proposal.width ?? cap, cap), height: proposal.height)
+        }
     }
 }
 
@@ -522,7 +551,7 @@ struct BotBubble<Content: View>: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .background(RoundedRectangle(cornerRadius: Theme.radiusBubble, style: .continuous).fill(Theme.bubbleBot))
-            .frame(maxWidth: column * 0.88, alignment: .leading)
+            .modifier(WidthCap(cap: column * 0.88))
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -716,7 +745,10 @@ private struct LiveTail: View {
         }
         if let streaming = model.live.text[threadId], !streaming.isEmpty {
             BotBubble { MarkdownText(source: streaming, caret: true) }
-        } else if working {
+        }
+        // under the streaming reply too: text arriving does not mean the
+        // turn is over, and the indicator keeps one identity (and its clock)
+        if working {
             TypingIndicator()
         }
     }
