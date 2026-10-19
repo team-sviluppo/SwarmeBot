@@ -233,7 +233,7 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     public var activity: String?
     public var pinnedMessageId: String?
     public var cwd: String?
-    /// Desktop appearance: body shape id (`MAUS_SILHOUETTES`); unknown or
+    /// Desktop appearance: body shape id (`SwarmeSilhouetteData`); unknown or
     /// absent renders the default.
     public var mascotSilhouette: String?
     /// Desktop appearance: uploaded SVG markup that replaces the mascot.

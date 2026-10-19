@@ -7,7 +7,8 @@ SwarmeBot is derived from OpenMausBot, https://github.com/milind-soni/OpenMausBo
 Copyright 2026 Milind Soni and OpenMausBot contributors, used under the Apache
 License, Version 2.0. SwarmeBot ports OpenMausBot's engine (the HTTP + SSE
 contract, store, turns, drivers, channels, automations, team packages and
-the bot mascot) from TypeScript to Swift; the ported files have been modified.
+the mascot's animation engine) from TypeScript to Swift; the ported files have
+been modified. SwarmeBot's mascot shapes, faces and palette are its own.
 SwarmeBot is not affiliated with or endorsed by OpenMausBot or Supamaus
 Software Private Limited. The OpenMausBot and MausBot names and the mascot are
 trademarks of Supamaus Software Private Limited.

@@ -369,7 +369,7 @@ struct BotRow: View {
         let last = model.visibleTranscript(bot.threadId).last
         let chief = bot.chiefOfStaff == true
         HStack(spacing: 8) {
-            BotAvatar(bot: bot, size: 32, state: MausState.forBot(bot, last: last), priority: selected || busy)
+            BotAvatar(bot: bot, size: 32, state: SwarmeState.forBot(bot, last: last), priority: selected || busy)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
                     Text(bot.name)

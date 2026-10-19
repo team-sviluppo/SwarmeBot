@@ -1,23 +1,20 @@
-// The bot's face — a port of the desktop's `CursorAvatar` engine
-// (`src/components/CursorAvatar.tsx`) wrapped like its `MausAvatar`
-// (`src/components/Avatar.tsx`).
+// The bot's face: two eyes on a flat body.
 //
 // A state picks a pool of expressions and drifts through them on its
-// cadence, a critically damped spring morphs eyes and mouth between them, it
+// cadence, a critically damped spring morphs the eyes between them, it
 // blinks on its own rhythm, the body bobs / sways / breathes / jitters per
 // state, and states carry effects: ribbons behind the body, confetti in
 // front, or a "!"/"?" glyph standing in for it. One-shot motion beats borrow
 // a state for 1.4 s, blink or spin the eyes around the head's sphere; the
-// eyes follow the pointer. All numbers come from the generated
-// `MausFaceData.swift`.
+// eyes follow the pointer. All numbers are in `SwarmeFaceData.swift`.
 import SwiftUI
 
-/// The desktop's `MausMotion`: one-shot beats the app plays on events.
+/// One-shot beats the app plays on events.
 enum MascotMotion: String {
     case arrive, `switch`, customize, alert, thinking, working, launch, success, celebrate, blink, surprise, failure
 
-    /// `MOTION_FACE` in Avatar.tsx.
-    var face: (state: MausState?, blink: Bool, spin: CGFloat?) {
+    /// The state, blink and spin (ms) each beat shows.
+    var face: (state: SwarmeState?, blink: Bool, spin: CGFloat?) {
         switch self {
         case .arrive: return (.spawning, false, 900)
         case .switch: return (.waking, false, 620)
@@ -43,11 +40,11 @@ struct MascotBeatEvent: Equatable {
 /// How long a beat holds its state before the bot's own returns.
 private let motionFaceSeconds: TimeInterval = 1.4
 
-struct MausAvatar: View {
+struct SwarmeAvatar: View {
     let color: String
     var size: CGFloat = 52
-    var state: MausState = .idle
-    /// A `MAUS_SILHOUETTES` id; unknown or nil is the default `circle`.
+    var state: SwarmeState = .idle
+    /// A `SwarmeSilhouetteData` id; unknown or nil is the default `circle`.
     var silhouette: String? = nil
     /// A request to animate, still subject to the on-screen frame budget.
     var animated: Bool = true
@@ -58,7 +55,7 @@ struct MausAvatar: View {
     var effects: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var engine = MausFaceEngine()
+    @State private var engine = SwarmeFaceEngine()
     @State private var slot = AvatarFrameSlot()
     @State private var granted = false
     @State private var beatLive = false
@@ -66,7 +63,7 @@ struct MausAvatar: View {
     var body: some View {
         let wants = animated && !reduceMotion
         let live = (wants && granted) || (beatLive && !reduceMotion)
-        let shape = MausSilhouette.named(silhouette)
+        let shape = SwarmeSilhouette.named(silhouette)
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !live)) { timeline in
             Canvas { context, canvasSize in
                 engine.request(state, now: timeline.date)
@@ -111,7 +108,7 @@ struct MausAvatar: View {
 
 // MARK: - Frame budget
 
-/// `lib/avatar-frames.ts`: at most 12 mascots animate at once; priority
+/// At most 12 mascots animate at once; priority
 /// claims (selected row, busy bot, a beat) are granted first. Visibility is
 /// the lazy stacks' appear/disappear.
 @MainActor
@@ -187,22 +184,18 @@ final class AvatarFrameSlot {
 // MARK: - Engine
 
 /// The face, frame by frame. One per drawn mascot.
-final class MausFaceEngine {
-    private var requested: MausState = .idle
-    private(set) var state: MausState = .idle
+final class SwarmeFaceEngine {
+    private var requested: SwarmeState = .idle
+    private(set) var state: SwarmeState = .idle
     private var expression = 0
-    private var currentRings: [[CGPoint]] = [MausFaceData.ring(0, eye: 0), MausFaceData.ring(0, eye: 1)]
-    private var targetRings: [[CGPoint]] = [MausFaceData.ring(0, eye: 0), MausFaceData.ring(0, eye: 1)]
-    private var currentMouth = MausFaceData.mouth(0)
-    private var targetMouth = MausFaceData.mouth(0)
-    private var currentGaze = MausFaceData.gaze(0)
-    private var targetGaze = MausFaceData.gaze(0)
+    private var currentRings: [[CGPoint]] = [SwarmeFaceData.ring(0, eye: 0), SwarmeFaceData.ring(0, eye: 1)]
+    private var targetRings: [[CGPoint]] = [SwarmeFaceData.ring(0, eye: 0), SwarmeFaceData.ring(0, eye: 1)]
     private var morph: CGFloat = 1
     private var velocity: CGFloat = 0
     private var blinkStart: Date?
     private var spinStart: Date?
     private var spinDuration: TimeInterval = 0.9
-    private var overrideState: MausState?
+    private var overrideState: SwarmeState?
     private var overrideUntil: Date?
     private var nextExpressionAt: Date?
     private var nextBlinkAt: Date?
@@ -212,13 +205,10 @@ final class MausFaceEngine {
     /// Pointer-follow offset, each axis -1…1.
     var pointerGaze: CGPoint = .zero
 
-    /// `lookAround`: the app passes `forward ? 0 : 1` with forward on, so
-    /// the eyes always face the viewer; the authored gaze is kept at zero.
-    private let lookAround: CGFloat = 0
     private let spring: CGFloat = 7
 
     /// The bot's own state; a beat may override it for a moment.
-    func request(_ new: MausState, now: Date) {
+    func request(_ new: SwarmeState, now: Date) {
         requested = new
         apply(now: now)
     }
@@ -242,10 +232,10 @@ final class MausFaceEngine {
         started = true
         state = desired
         stateStart = now
-        select(MausFaceData.pools[desired]?.first ?? 0)
+        select(SwarmeFaceData.pools[desired]?.first ?? 0)
         if first { morph = 1; velocity = 0 } // first frame: rest on it, no morph in
-        nextExpressionAt = schedule(MausFaceData.expressionCadence[desired], from: now)
-        nextBlinkAt = schedule(MausFaceData.blink[desired], from: now)
+        nextExpressionAt = schedule(SwarmeFaceData.expressionCadence[desired], from: now)
+        nextBlinkAt = schedule(SwarmeFaceData.blink[desired], from: now)
     }
 
     /// A paused mascot gets one frame, so it must be the finished face.
@@ -262,14 +252,10 @@ final class MausFaceEngine {
     }
 
     private func select(_ index: Int) {
-        let i = ((index % MausFaceData.expressionCount) + MausFaceData.expressionCount) % MausFaceData.expressionCount
+        let i = ((index % SwarmeFaceData.expressionCount) + SwarmeFaceData.expressionCount) % SwarmeFaceData.expressionCount
         if i == expression && morph >= 1 { return }
         currentRings = displayedRings()
-        currentMouth = displayedMouth()
-        currentGaze = displayedGaze()
-        targetRings = [MausFaceData.ring(i, eye: 0), MausFaceData.ring(i, eye: 1)]
-        targetMouth = MausFaceData.mouth(i)
-        targetGaze = MausFaceData.gaze(i)
+        targetRings = [SwarmeFaceData.ring(i, eye: 0), SwarmeFaceData.ring(i, eye: 1)]
         expression = i
         morph = 0
         velocity = 0
@@ -284,14 +270,14 @@ final class MausFaceEngine {
         if !morph.isFinite { morph = 1; velocity = 0 }
 
         if let due = nextExpressionAt, now >= due {
-            let pool = MausFaceData.pools[state] ?? [0]
+            let pool = SwarmeFaceData.pools[state] ?? [0]
             let alternatives = pool.filter { $0 != expression }
             select(alternatives.randomElement() ?? pool[0])
-            nextExpressionAt = schedule(MausFaceData.expressionCadence[state], from: now)
+            nextExpressionAt = schedule(SwarmeFaceData.expressionCadence[state], from: now)
         }
         if let due = nextBlinkAt, now >= due {
             blinkStart = now
-            nextBlinkAt = schedule(MausFaceData.blink[state], from: now)
+            nextBlinkAt = schedule(SwarmeFaceData.blink[state], from: now)
         }
     }
 
@@ -305,7 +291,7 @@ final class MausFaceEngine {
         return x - floor(x)
     }
 
-    /// GLYPH_BANG / GLYPH_QUERY from CursorAvatar.tsx.
+    /// The "!" and "?" glyphs, in face-box units.
     private static let bangFill: Path = {
         var p = SVGPath.parse("M99 58 Q99 43 114.3 43 Q129.6 43 129.6 58 L123 150 Q122 161 114.3 161 Q106.6 161 105.6 150 Z")
         p.addEllipse(in: CGRect(x: 114.3 - 15, y: 188 - 15, width: 30, height: 30))
@@ -314,19 +300,19 @@ final class MausFaceEngine {
     private static let queryStroke = SVGPath.parse("M88 76 A27 27 0 1 1 114.3 112 L114.3 132")
     private static let queryDot = Path(ellipseIn: CGRect(x: 114.3 - 13, y: 170 - 13, width: 26, height: 26))
 
-    func draw(in context: inout GraphicsContext, size: CGSize, color: String, silhouette: MausSilhouette,
+    func draw(in context: inout GraphicsContext, size: CGSize, color: String, silhouette: SwarmeSilhouette,
               live: Bool, effects: Bool, at now: Date) {
         let rect = CGRect(origin: .zero, size: size)
-        context.concatenate(MausSilhouette.fit(rect))
+        context.concatenate(SwarmeSilhouette.fit(rect))
         let elapsed = live ? CGFloat(now.timeIntervalSince(stateStart) * 1000) : 100_000
-        let centre = MausFaceData.faceBox / 2
-        let fx = effects ? MausFaceData.effects[state] : nil
+        let centre = SwarmeFaceData.faceBox / 2
+        let fx = effects ? SwarmeFaceData.effects[state] : nil
 
         if let trails = fx?.trails, live { drawTrails(&context, trails, elapsed: elapsed, centre: centre) }
 
         var body = context
         if effects || live {
-            body.concatenate(bodyTransform(MausFaceData.motion[state] ?? MausBodyMotion(), elapsed: elapsed))
+            body.concatenate(bodyTransform(SwarmeFaceData.motion[state] ?? SwarmeBodyMotion(), elapsed: elapsed))
         }
         let glyph = fx?.glyph
         let amount = glyph.map { live ? Self.glyphAmount($0, elapsed: elapsed) : 0 } ?? 0
@@ -342,11 +328,7 @@ final class MausFaceEngine {
             g.translateBy(x: centre, y: centre)
             g.scaleBy(x: scale, y: scale)
             g.translateBy(x: -centre, y: -centre)
-            let bounds = glyph.kind == .bang ? Self.bangFill.boundingRect : Self.queryStroke.boundingRect.union(Self.queryDot.boundingRect)
-            let paint = GraphicsContext.Shading.linearGradient(
-                Gradient(stops: MausPalette.gradientStops(color)),
-                startPoint: CGPoint(x: bounds.maxX, y: bounds.minY), endPoint: CGPoint(x: bounds.minX, y: bounds.maxY)
-            )
+            let paint = GraphicsContext.Shading.color(SwarmePalette.color(color))
             switch glyph.kind {
             case .bang:
                 g.fill(Self.bangFill, with: paint)
@@ -359,7 +341,7 @@ final class MausFaceEngine {
         if let confetti = fx?.confetti, live { drawConfetti(&context, confetti, elapsed: elapsed, centre: centre) }
     }
 
-    private static func glyphAmount(_ spec: MausGlyphSpec, elapsed: CGFloat) -> CGFloat {
+    private static func glyphAmount(_ spec: SwarmeGlyphSpec, elapsed: CGFloat) -> CGFloat {
         let position = elapsed.truncatingRemainder(dividingBy: spec.period)
         let start = spec.period - spec.hold
         if position < start { return 0 }
@@ -368,7 +350,7 @@ final class MausFaceEngine {
         return max(0, min(1, min(into, remaining) / 200))
     }
 
-    private func drawTrails(_ context: inout GraphicsContext, _ spec: MausTrailSpec, elapsed: CGFloat, centre: CGFloat) {
+    private func drawTrails(_ context: inout GraphicsContext, _ spec: SwarmeTrailSpec, elapsed: CGFloat, centre: CGFloat) {
         for i in 0..<spec.count {
             let seedA = Self.hash01(CGFloat(i + 3)), seedB = Self.hash01(CGFloat(i + 29))
             let direction: CGFloat = i % 2 == 0 ? 1 : -1
@@ -389,7 +371,7 @@ final class MausFaceEngine {
         }
     }
 
-    private func drawConfetti(_ context: inout GraphicsContext, _ spec: MausConfettiSpec, elapsed: CGFloat, centre: CGFloat) {
+    private func drawConfetti(_ context: inout GraphicsContext, _ spec: SwarmeConfettiSpec, elapsed: CGFloat, centre: CGFloat) {
         for i in 0..<spec.count {
             let seedA = Self.hash01(CGFloat(i + 1)), seedB = Self.hash01(CGFloat(i + 41)), seedC = Self.hash01(CGFloat(i + 91))
             let t = (elapsed + seedC * spec.period).truncatingRemainder(dividingBy: spec.period) / spec.life
@@ -414,31 +396,23 @@ final class MausFaceEngine {
         }
     }
 
-    private func drawBody(in context: inout GraphicsContext, color: String, silhouette: MausSilhouette, now: Date, live: Bool) {
+    private func drawBody(in context: inout GraphicsContext, color: String, silhouette: SwarmeSilhouette, now: Date, live: Bool) {
         let body = silhouette.path
-        let bounds = silhouette.bounds
-        context.fill(body, with: .linearGradient(
-            Gradient(stops: MausPalette.gradientStops(color)),
-            startPoint: CGPoint(x: bounds.maxX, y: bounds.minY),
-            endPoint: CGPoint(x: bounds.minX, y: bounds.maxY)
-        ))
+        context.fill(body, with: .color(SwarmePalette.color(color)))
 
         // The face is painted on the body: clipped to it, anchored in it.
         context.clip(to: body)
         let a = silhouette.anchor
         context.translateBy(x: a.x, y: a.y)
         context.scaleBy(x: a.scale, y: a.scale)
-        context.translateBy(x: -MausFaceData.faceCentre.x, y: -MausFaceData.faceCentre.y)
 
-        let ink = GraphicsContext.Shading.color(MausPalette.eyeInk(color))
-        let gaze = displayedGaze()
-        let ox = gaze.x * lookAround, oy = gaze.y * lookAround
-        let rings = displayedRings().map { $0.map { CGPoint(x: $0.x + ox, y: $0.y + oy) } }
-        let gx = live ? min(max(pointerGaze.x, -1), 1) * MausFaceData.gazeTravel.x : 0
-        let gy = live ? min(max(pointerGaze.y, -1), 1) * MausFaceData.gazeTravel.y : 0
+        let ink = GraphicsContext.Shading.color(SwarmePalette.eyeInk(color))
+        let rings = displayedRings()
+        let gx = live ? min(max(pointerGaze.x, -1), 1) * SwarmeFaceData.gazeTravel.x : 0
+        let gy = live ? min(max(pointerGaze.y, -1), 1) * SwarmeFaceData.gazeTravel.y : 0
         let radians = (live ? spinTurn(now: now) : 0) * .pi / 180
         let blink = live ? blinkScale(now: now) : 1
-        let sc = MausFaceData.sphereCentre, sr = MausFaceData.sphereRadius
+        let sc = SwarmeFaceData.sphereCentre, sr = SwarmeFaceData.sphereRadius
 
         func project(_ x: CGFloat) -> (x: CGFloat, perspective: CGFloat, visible: Bool) {
             let base = asin(min(max((x - sc) / sr, -1), 1))
@@ -462,20 +436,6 @@ final class MausFaceEngine {
                 .concatenating(CGAffineTransform(translationX: p.x + gx, y: c.y + gy))
             context.fill(path.applying(t), with: ink)
         }
-
-        let spec = displayedMouth()
-        let frame = Self.mouthFrame(rings, spec)
-        let p = project(frame.x)
-        if p.visible {
-            let t = CGAffineTransform(translationX: -frame.x, y: -frame.y)
-                .concatenating(CGAffineTransform(scaleX: min(max(p.perspective, 0.02), 2.4), y: 1))
-                .concatenating(CGAffineTransform(translationX: p.x + gx, y: frame.y + gy))
-            context.stroke(
-                Self.mouthPath(frame, spec).applying(t),
-                with: ink,
-                style: StrokeStyle(lineWidth: MausFaceData.mouthStroke, lineCap: .round)
-            )
-        }
     }
 
     private func spinTurn(now: Date) -> CGFloat {
@@ -485,10 +445,10 @@ final class MausFaceEngine {
         return 360 * CGFloat(max(t, 0))
     }
 
-    /// The desktop's `bodyTransform`, in face-box units, elapsed in ms.
-    private func bodyTransform(_ m: MausBodyMotion, elapsed: CGFloat) -> CGAffineTransform {
-        let centre = MausFaceData.faceBox / 2
-        let ground = MausFaceData.faceBox
+    /// The body's motion for a state, in face-box units, elapsed in ms.
+    private func bodyTransform(_ m: SwarmeBodyMotion, elapsed: CGFloat) -> CGAffineTransform {
+        let centre = SwarmeFaceData.faceBox / 2
+        let ground = SwarmeFaceData.faceBox
         func wave(_ period: CGFloat, _ phase: CGFloat = 0) -> CGFloat { sin(elapsed / period * .pi * 2 + phase) }
         var dx: CGFloat = 0, dy: CGFloat = 0
         var rotation = m.tilt ?? 0
@@ -558,47 +518,10 @@ final class MausFaceEngine {
             }
         }
     }
-    private func displayedMouth() -> [CGFloat] {
-        let m = min(max(morph, 0), 1)
-        return currentMouth.enumerated().map { i, v in v + (targetMouth[i] - v) * m }
-    }
-    private func displayedGaze() -> CGPoint {
-        let m = min(max(morph, 0), 1)
-        return CGPoint(x: currentGaze.x + (targetGaze.x - currentGaze.x) * m, y: currentGaze.y + (targetGaze.y - currentGaze.y) * m)
-    }
-
     private static func centre(_ ring: [CGPoint]) -> CGPoint {
         var x: CGFloat = 0, y: CGFloat = 0
         for p in ring { x += p.x; y += p.y }
         return CGPoint(x: x / CGFloat(ring.count), y: y / CGFloat(ring.count))
-    }
-
-    private static func mouthFrame(_ rings: [[CGPoint]], _ spec: [CGFloat]) -> (x: CGFloat, y: CGFloat, angle: CGFloat) {
-        let c0 = centre(rings[0]), c1 = centre(rings[1])
-        let theta = atan2(c1.y - c0.y, c1.x - c0.x)
-        var halfHeight: CGFloat = 0
-        for ring in rings {
-            var lo = CGFloat.infinity, hi = -CGFloat.infinity
-            for p in ring { lo = min(lo, p.y); hi = max(hi, p.y) }
-            halfHeight = max(halfHeight, (hi - lo) / 2)
-        }
-        let drop = halfHeight + spec[2]
-        return (
-            x: (c0.x + c1.x) / 2 - sin(theta) * drop,
-            y: (c0.y + c1.y) / 2 + cos(theta) * drop,
-            angle: theta + spec[3] * .pi / 180
-        )
-    }
-
-    private static func mouthPath(_ frame: (x: CGFloat, y: CGFloat, angle: CGFloat), _ spec: [CGFloat]) -> Path {
-        let ca = cos(frame.angle), sa = sin(frame.angle)
-        func at(_ lx: CGFloat, _ ly: CGFloat) -> CGPoint {
-            CGPoint(x: frame.x + lx * ca - ly * sa, y: frame.y + lx * sa + ly * ca)
-        }
-        var path = Path()
-        path.move(to: at(-spec[0], 0))
-        path.addQuadCurve(to: at(spec[0], 0), control: at(0, spec[1]))
-        return path
     }
 
     private static func easeOutBack(_ t: CGFloat) -> CGFloat {
@@ -608,7 +531,7 @@ final class MausFaceEngine {
     private static func easeInOut(_ t: CGFloat) -> CGFloat { t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t) }
 }
 
-/// The person, not a bot: `InitialsAvatar` — a `raised` circle with the
+/// The person, not a bot: a `raised` circle with the
 /// initials at 0.38 × size, medium, ink-secondary.
 struct InitialsAvatar: View {
     let name: String

@@ -16,7 +16,7 @@ struct ChatHeader: View {
         HStack(spacing: 8) {
             HStack(spacing: 10) {
                 if let bot = model.selectedBot {
-                    BotAvatar(bot: bot, size: 22, state: MausState.forBot(bot, last: model.visibleTranscript(bot.threadId).last), priority: true)
+                    BotAvatar(bot: bot, size: 22, state: SwarmeState.forBot(bot, last: model.visibleTranscript(bot.threadId).last), priority: true)
                         .padding(2)
                     Text(bot.name).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink).lineLimit(1)
                     if bot.chiefOfStaff == true {

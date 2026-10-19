@@ -264,7 +264,7 @@ struct MessageRow: View {
                             if let bot = model.state.bot(from.botId) {
                                 BotAvatar(bot: bot, size: 24, animated: false)
                             } else {
-                                MausAvatar(color: from.color, size: 24, animated: false)
+                                SwarmeAvatar(color: from.color, size: 24, animated: false)
                             }
                             Text(from.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.secondary)
                         }

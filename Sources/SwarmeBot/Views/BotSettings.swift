@@ -137,7 +137,7 @@ struct BotDetails: View {
 
     private var hero: some View {
         VStack(spacing: 8) {
-            BotAvatar(bot: bot, size: 84, state: MausState.forBot(bot, last: model.visibleTranscript(bot.threadId).last), priority: true)
+            BotAvatar(bot: bot, size: 84, state: SwarmeState.forBot(bot, last: model.visibleTranscript(bot.threadId).last), priority: true)
             VStack(spacing: 2) {
                 Text(bot.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
                 Text(bot.title.isEmpty ? "Nessun ruolo" : bot.title)
@@ -332,7 +332,7 @@ private struct AppearanceCard: View {
     enum Mode: Hashable { case mascot, picture }
 
     /// `PICKABLE_STATES` of the Electron app.
-    private static let expressions: [MausState] = [
+    private static let expressions: [SwarmeState] = [
         .idle, .happy, .curious, .drowsy, .working, .thinking, .listening, .sleeping, .suspicious, .proud,
     ]
     private let grid = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
@@ -372,8 +372,8 @@ private struct AppearanceCard: View {
     // MARK: Mascot
 
     private var mascot: some View {
-        let shape = MausSilhouette.ids.contains(bot.mascotSilhouette ?? "") ? bot.mascotSilhouette! : MausSilhouetteData.defaultId
-        let face = MausState.forBot(bot, last: nil)
+        let shape = SwarmeSilhouette.ids.contains(bot.mascotSilhouette ?? "") ? bot.mascotSilhouette! : SwarmeSilhouetteData.defaultId
+        let face = SwarmeState.forBot(bot, last: nil)
         return VStack(alignment: .leading, spacing: 14) {
             if wearsPicture {
                 Label("Il bot usa un'immagine: la mascotte torna quando la rimuovi.", systemImage: "info.circle")
@@ -381,13 +381,13 @@ private struct AppearanceCard: View {
             }
             section("Forma") {
                 LazyVGrid(columns: grid, spacing: 6) {
-                    ForEach(MausSilhouette.ids, id: \.self) { id in
+                    ForEach(SwarmeSilhouette.ids, id: \.self) { id in
                         tile(selected: shape == id, help: id) {
                             var patch = BotPatch()
                             patch.mascotSilhouette = id
                             Task { await model.patch(bot, patch) }
                         } content: {
-                            MausAvatar(color: bot.color, size: 36, state: face, silhouette: id, animated: false, trackPointer: false, effects: false)
+                            SwarmeAvatar(color: bot.color, size: 36, state: face, silhouette: id, animated: false, trackPointer: false, effects: false)
                         }
                     }
                 }
@@ -395,23 +395,23 @@ private struct AppearanceCard: View {
             section("Espressione") {
                 LazyVGrid(columns: grid, spacing: 6) {
                     ForEach(Self.expressions, id: \.self) { state in
-                        tile(selected: MausState.normalize(bot.mascotExpression) == state, help: state.rawValue) {
+                        tile(selected: SwarmeState.normalize(bot.mascotExpression) == state, help: state.rawValue) {
                             var patch = BotPatch()
-                            patch.mascotExpression = MausState.normalize(bot.mascotExpression) == state ? "" : state.rawValue
+                            patch.mascotExpression = SwarmeState.normalize(bot.mascotExpression) == state ? "" : state.rawValue
                             Task { await model.patch(bot, patch) }
                         } content: {
-                            MausAvatar(color: bot.color, size: 36, state: state, silhouette: shape, animated: false, trackPointer: false, effects: false)
+                            SwarmeAvatar(color: bot.color, size: 36, state: state, silhouette: shape, animated: false, trackPointer: false, effects: false)
                         }
                     }
                 }
             }
             section("Colore") {
                 HStack(spacing: 0) {
-                    ForEach(MausPaletteData.names, id: \.self) { name in
+                    ForEach(SwarmePaletteData.names, id: \.self) { name in
                         let on = bot.color == name
                         Button { Task { await model.patch(bot, BotPatch(color: name)) } } label: {
                             Circle()
-                                .fill(Color(hex: MausPaletteData.hex[name] ?? "#888888"))
+                                .fill(Color(hex: SwarmePaletteData.hex[name] ?? "#888888"))
                                 .frame(width: 22, height: 22)
                                 .padding(3)
                                 .overlay(Circle().stroke(on ? Theme.accentBorder : .clear, lineWidth: 2))
