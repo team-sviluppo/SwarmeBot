@@ -57,6 +57,11 @@ OMB_PORT=38899 OMB_DATA_DIR=/tmp/swarme swift run swarme-harness   # engine alon
 Before launching it, ask the user, or isolate it with `SWARMEBOT_HOME=/some/test/folder`, which
 moves everything the app owns (data, Application Support, Logs, ssh identities, preferences) and
 replaces the Keychain with a 0600 file. `HOME` does **not** do this on macOS.
+`SWARMEBOT_HOME` does **not** isolate the engine: the launcher first attaches to any engine that
+answers on its known ports (8799…), so with the user's SwarmeBot open a test app shows and acts on
+the real engine. Check `lsof -iTCP:8799 -sTCP:LISTEN` first; if it is taken, start a test engine
+on its own port (`OMB_PORT=38899 OMB_WEBHOOK_PORT=38900 OMB_DATA_DIR=<test>/.swarmebot
+.build/debug/swarme-harness`) and launch the app with `SWARMEBOT_HARNESS_URL=http://127.0.0.1:38899`.
 Never run two engines on the same data directory.
 
 Useful environment variables:
