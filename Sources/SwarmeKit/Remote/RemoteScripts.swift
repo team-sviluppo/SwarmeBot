@@ -210,6 +210,20 @@ public enum RemoteScripts {
     [ -f /etc/caddy/swarmebot.caddy ] && cp -p /etc/caddy/swarmebot.caddy /etc/caddy/swarmebot.caddy.backup
     mv -f /etc/caddy/swarmebot.caddy.new /etc/caddy/swarmebot.caddy
     grep -qxF "import /etc/caddy/swarmebot.caddy" "$main" || printf '\nimport /etc/caddy/swarmebot.caddy\n' >> "$main"
+    # no HTTP/3: after a reload, Caddy 2.6 (Ubuntu's) leaves QUIC clients hanging for minutes
+    if ! grep -qF "# swarmebot: no HTTP/3" "$main"; then
+      h3off='	# swarmebot: no HTTP/3
+    	servers {
+    		protocols h1 h2
+    	}'
+      if [ "$(awk 'NF && $1 !~ /^#/ { print $1; exit }' "$main")" = "{" ]; then
+        H3OFF="$h3off" awk '!done && $1 == "{" { print; print ENVIRON["H3OFF"]; done = 1; next } { print }' "$main" > "$main.new"
+      else
+        { printf '{\n%s\n}\n\n' "$h3off"; cat "$main"; } > "$main.new"
+      fi
+      cat "$main.new" > "$main"
+      rm -f "$main.new"
+    fi
     if ! caddy validate --config "$main" --adapter caddyfile >/tmp/swarmebot-caddy.log 2>&1; then
       cp -p "$main.swarmebot-backup" "$main"
       if [ -f /etc/caddy/swarmebot.caddy.backup ]; then mv -f /etc/caddy/swarmebot.caddy.backup /etc/caddy/swarmebot.caddy; else rm -f /etc/caddy/swarmebot.caddy; fi
@@ -295,6 +309,9 @@ public enum RemoteScripts {
     cat > "$conf/Caddyfile.new" <<EOF
     {
     	admin off
+    	servers {
+    		protocols h1 h2
+    	}
     }
     $site {
     	import $conf/routes/*.routes
@@ -375,6 +392,59 @@ public enum RemoteScripts {
     tmp="$dir/.$1.$$"
     cat > "$tmp"
     [ -f "$dir/$1" ] && cp -p "$dir/$1" "$dir/$1.swarmebot-backup"
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$dir/$1"
+    echo "copied=$1"
+    """#
+
+    // MARK: Coding agents (as the user)
+
+    /// Claude Code in ~/.local/bin, from its own installer, unless it is there already.
+    public static let installClaude = #"""
+    set -eu
+    claude="$HOME/.local/bin/claude"
+    [ -x "$claude" ] || command -v claude >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1
+    [ -x "$claude" ] || claude="$(command -v claude || true)"
+    [ -n "$claude" ] && [ -x "$claude" ] || { echo "the Claude Code installer did not install claude" >&2; exit 3; }
+    echo "claude=$("$claude" --version 2>/dev/null | head -n 1 | cut -d" " -f1)"
+    """#
+
+    /// omp $1 (a version, 18.12.3) in ~/.local/bin as $2 (`omp-linux-x64`…), checked
+    /// against the release's SHA256SUMS.txt. Nothing to do when that version is there.
+    public static let installOmp = #"""
+    set -eu
+    version="$1"; asset="$2"
+    case "$version" in *[!0-9.]*|"") echo "not an omp version: $version" >&2; exit 2 ;; esac
+    case "$asset" in omp-linux-x64|omp-linux-arm64|omp-darwin-x64|omp-darwin-arm64) ;; *) echo "not an omp build: $asset" >&2; exit 2 ;; esac
+    bin="$HOME/.local/bin"
+    if [ "$("$bin/omp" --version 2>/dev/null || true)" = "omp/$version" ]; then echo "omp=omp/$version"; exit 0; fi
+    mkdir -p "$bin"
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    base="https://github.com/can1357/oh-my-pi/releases/download/v$version"
+    curl -fsSL -o "$tmp/SHA256SUMS.txt" "$base/SHA256SUMS.txt"
+    curl -fsSL -o "$tmp/$asset" "$base/$asset"
+    want="$(grep " \*\{0,1\}$asset\$" "$tmp/SHA256SUMS.txt" | cut -d' ' -f1)"
+    if command -v sha256sum >/dev/null 2>&1; then got="$(sha256sum "$tmp/$asset" | cut -d' ' -f1)"; else got="$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)"; fi
+    [ -n "$want" ] && [ "$want" = "$got" ] || { echo "omp $version: the download does not match SHA256SUMS.txt" >&2; exit 4; }
+    chmod 755 "$tmp/$asset"
+    mv -f "$tmp/$asset" "$bin/omp"
+    echo "omp=$("$bin/omp" --version)"
+    """#
+
+    /// One file of omp's agent config (stdin) into ~/.omp/agent/$1, 0600, the previous
+    /// one kept as `$1.swarmebot-backup`. A new agent.db drops the old one's WAL, which
+    /// would otherwise be replayed onto it. $1 is one of OmpConfig.files.
+    public static let installOmpFile = #"""
+    set -eu
+    case "$1" in agent.db|config.yml|models.yml) ;; *) echo "not an omp config file: $1" >&2; exit 2 ;; esac
+    umask 077
+    dir="$HOME/.omp/agent"
+    mkdir -p "$dir"
+    tmp="$dir/.$1.$$"
+    cat > "$tmp"
+    [ -f "$dir/$1" ] && cp -p "$dir/$1" "$dir/$1.swarmebot-backup"
+    [ "$1" = agent.db ] && rm -f "$dir/agent.db-wal" "$dir/agent.db-shm"
     chmod 600 "$tmp"
     mv -f "$tmp" "$dir/$1"
     echo "copied=$1"

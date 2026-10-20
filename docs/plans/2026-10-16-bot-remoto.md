@@ -639,9 +639,49 @@ sul server. Verificato con `PiConfigIntegrationTests`: permessi, backup, nomi fu
   - a mano, la catena intera: turno del bot sul server → `mcp-connector` → listener interno → pool →
     server MCP stdio; lo strumento risponde e vede il segreto.
 
+### Prova su un VPS vero e agenti configurati da soli (2026-10-20)
+
+Server: `swarmebot.hextra.it`, Ubuntu 26.04.1 x86_64, Caddy 2.6.2 dal repository di Ubuntu, utente sudo con password.
+`RealServerIntegrationTests` percorre il foglio "Aggiungi un server" con dominio e certificato pubblico
+(`SWARMEBOT_REAL_SERVER`, `_USER`, `_PASSWORD`; facoltativi `_CLAUDE_TOKEN` e `_OMP=1`).
+
+Verificato dal vivo, da zero (utente ripulito, 55 s):
+- fingerprint, chiave con la password, probe, sudo, motore, servizio systemd, Caddy, dispositivo;
+- certificato Let's Encrypt (sfida TLS-ALPN, circa 4 s dopo il reload) e chat in HTTPS con la fiducia di sistema;
+  senza token 401;
+- passo nuovo **"Claude Code e omp"** (`ServerAgents`):
+  - Claude Code installato dal suo installer;
+  - token di `claude setup-token` nei segreti del motore (0600), istanza Claude autenticata;
+  - omp alla versione del Mac (18.12.3), dalla release GitHub verificata con `SHA256SUMS.txt`;
+  - `~/.omp/agent` copiata (`agent.db` come copia SQLite coerente, `config.yml`, `models.yml`, tutti 0600);
+  - istanza pi con `cli: omp`, 12 modelli visti dal server;
+- turni reali con Claude Haiku 5.5: $0,0016 ciascuno (circa 38.600 token in ingresso, 93–145 in uscita);
+  il bot ha eseguito `uname -m` e `omp --version` sul server; la seconda volta con approvazione di Bash via API.
+
+Difetti trovati così, e corretti:
+- **Con certificato pubblico il primo controllo dell'URL di chat falliva** (errore TLS): Caddy chiede il certificato
+  solo dopo il reload. Il passo "dispositivo" ora riprova per 2 minuti ("Attendo il certificato di Let's Encrypt…").
+- **Dopo un reload di Caddy 2.6.2 i client HTTP/3 restano appesi per circa 3 minuti**, anche su connessioni QUIC
+  nuove (riprodotto con `URLSession`: 11 timeout di fila, poi di nuovo 200). Ogni reload, per esempio la
+  configurazione di un secondo utente, avrebbe staccato tutti i client collegati. Ora Caddy serve solo h1/h2
+  (`servers { protocols h1 h2 }` nelle opzioni globali, su Linux aggiunte al Caddyfile con un marcatore, sul Mac
+  nel Caddyfile nostro). Con h2 due reload di fila costano una riconnessione da circa 20 ms.
+- **Un errore del provider in pi/omp chiudeva il turno come riuscito e vuoto** (`stopReason: "error"` con
+  `errorMessage`, per esempio un 403 di LiteLLM). Ora c'è un `runtime.error` con il motivo e il turno è fallito;
+  verificato dal vivo con il motore Linux ricompilato.
+
+Non verificato:
+- un turno di omp con risposta: la chiave LiteLLM copiata riceve 403 `team_model_access_denied` per tutti i
+  modelli, anche dal Mac; serve una chiave con accesso a qualche modello;
+- le nuove voci dell'interfaccia ("Configura Claude Code e omp", il resoconto nel foglio, il token ricordato nel
+  Portachiavi) non sono state cliccate; la stessa logica è passata dal test;
+- credenziali OAuth di omp: si copiano come le chiavi, ma se omp ruota il refresh token su un lato l'altro
+  può perdere il login (sul Mac di prova c'erano solo chiavi API);
+- parità con Node per il driver pi: il riferimento Node non è disponibile su questa macchina.
+
 ### Resta da fare
 
-- Prova su un VPS vero: dominio pubblico e Let's Encrypt, `claude setup-token` vero e un turno reale, pi.
+- Turno di omp con una chiave valida; clic sulle voci nuove dell'interfaccia.
 - Prima pubblicazione dei motori Linux con `release-mac.sh`; prova dell'app firmata (Portachiavi reale).
 - Login di pi copiato da interfaccia: non cliccato, perché copierebbe le chiavi reali dell'utente
   (la logica è coperta da `PiConfigIntegrationTests`).

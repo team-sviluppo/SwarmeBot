@@ -210,12 +210,14 @@ public struct RemoteAdmin: Sendable {
 
     /// The token `claude setup-token` prints, for the engine on the server (§4.2).
     public func setClaudeToken(_ token: String) async throws {
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("sk-ant-"), !trimmed.contains(where: \.isWhitespace) else {
-            throw ProcessRunner.Failure(message: "Non sembra un token di claude setup-token (inizia con sk-ant-)")
-        }
-        try await ssh.run(RemoteScripts.command(RemoteScripts.setClaudeToken), stdin: Data((trimmed + "\n").utf8), timeout: 60)
+        try await storeClaudeToken(token)
         try await restartEngine()
+    }
+
+    /// The token in the engine's secrets; live from the next restart.
+    public func storeClaudeToken(_ token: String) async throws {
+        let trimmed = try ServerClaudeToken.validated(token)
+        try await ssh.run(RemoteScripts.command(RemoteScripts.setClaudeToken), stdin: Data((trimmed + "\n").utf8), timeout: 60)
     }
 
     public func restartEngine() async throws {
@@ -232,6 +234,34 @@ public struct RemoteAdmin: Sendable {
             try await ssh.run(RemoteScripts.command(RemoteScripts.installPiFile, [name]), stdin: data, timeout: 60)
         }
         try await restartEngine()
+        return present
+    }
+
+    /// Claude Code on the server, from its installer. Returns its version line.
+    public func installClaude() async throws -> String {
+        let result = try await ssh.run(RemoteScripts.command(RemoteScripts.installClaude), timeout: 300)
+        return RemoteScripts.values(result.text)["claude"] ?? ""
+    }
+
+    /// omp `version` on the server, the release build for its system.
+    public func installOmp(version: String, probe: RemoteProbe) async throws -> String {
+        guard let asset = OmpConfig.asset(for: probe) else {
+            throw ProcessRunner.Failure(message: "omp non ha una build per \(probe.os) \(probe.arch)")
+        }
+        let result = try await ssh.run(RemoteScripts.command(RemoteScripts.installOmp, [version, asset]), timeout: 600)
+        return RemoteScripts.values(result.text)["omp"] ?? ""
+    }
+
+    /// omp's login on the server: its agent config, copied from this Mac (keys, providers, settings).
+    @discardableResult
+    public func copyOmpConfig(from directory: URL = OmpConfig.localDirectory) async throws -> [String] {
+        let present = OmpConfig.files.filter { FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path) }
+        guard present.contains("agent.db") else { throw ProcessRunner.Failure(message: "Su questo Mac non c'è una configurazione di omp (\(directory.path))") }
+        for name in present {
+            let data = name == "agent.db" ? try OmpConfig.snapshot(directory.appendingPathComponent(name))
+                                          : try Data(contentsOf: directory.appendingPathComponent(name))
+            try await ssh.run(RemoteScripts.command(RemoteScripts.installOmpFile, [name]), stdin: data, timeout: 120)
+        }
         return present
     }
 

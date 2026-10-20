@@ -171,7 +171,18 @@ extension AppModel {
             throw ProcessRunner.Failure(message: "Questo Mac non amministra \(engine.name): il token si imposta dal Mac che lo ha configurato")
         }
         try await RemoteAdmin(identity: identity, store: identityStore).setClaudeToken(token)
+        // the next servers get it in their setup
+        try ServerClaudeToken.save(token)
         if engineChoice == .remote(engine.id) { await refreshInstances() }
+    }
+
+    /// Claude Code and omp on a server this Mac administers, as its setup does (ServerAgents).
+    public func configureAgents(on engine: RemoteEngine) async throws -> [String] {
+        guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
+        let admin = RemoteAdmin(identity: identity, store: identityStore)
+        let report = try await ServerAgents.configure(admin: admin, client: try remoteClient(engine), probe: try await admin.probe())
+        if engineChoice == .remote(engine.id) { await refreshInstances() }
+        return report
     }
 }
 

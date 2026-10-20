@@ -9,7 +9,7 @@ import Observation
 @Observable
 public final class ServerSetupFlow {
     public enum Step: Int, CaseIterable, Comparable, Sendable {
-        case hostKey, key, probe, root, engine, service, device, done
+        case hostKey, key, probe, root, engine, service, device, agents, done
 
         public static func < (a: Step, b: Step) -> Bool { a.rawValue < b.rawValue }
 
@@ -22,6 +22,7 @@ public final class ServerSetupFlow {
             case .engine: return "Motore SwarmeBot"
             case .service: return "Servizio e rotte HTTPS"
             case .device: return "Token di questo Mac"
+            case .agents: return "Claude Code e omp"
             case .done: return "Pronto"
             }
         }
@@ -56,16 +57,20 @@ public final class ServerSetupFlow {
     @ObservationIgnored let identities: SSHIdentityStore
     @ObservationIgnored let engines: RemoteEngineStore
     @ObservationIgnored let linuxEngines: LinuxEngines
+    @ObservationIgnored let agents: LocalAgents
     @ObservationIgnored let macBinary: (String) -> (url: URL, sha256: String)?
     /// What a long step is doing right now ("Scarico il motore Linux…"), for the sheet.
     public private(set) var activity: String?
+    /// What the agents step did, one line per agent.
+    public private(set) var agentsReport: [String] = []
 
     public init(identities: SSHIdentityStore, engines: RemoteEngineStore,
-                linuxEngines: LinuxEngines = .standard,
+                linuxEngines: LinuxEngines = .standard, agents: LocalAgents = .thisMac,
                 macBinary: @escaping (String) -> (url: URL, sha256: String)? = ServerSetupFlow.macEngine) {
         self.identities = identities
         self.engines = engines
         self.linuxEngines = linuxEngines
+        self.agents = agents
         self.macBinary = macBinary
     }
 
@@ -207,7 +212,7 @@ public final class ServerSetupFlow {
             // the chat path, the way every client will use it
             if let connection = record.connection {
                 do {
-                    let health = try await CompanionClient(connection: connection, token: added.token).remoteHealth()
+                    let health = try await reachChat(CompanionClient(connection: connection, token: added.token))
                     guard health.remote == true else { throw ProcessRunner.Failure(message: "all'URL di chat risponde un altro servizio") }
                 } catch {
                     throw ProcessRunner.Failure(message: "Server pronto, ma l'URL di chat \(chatURL) non risponde da qui: \(error.localizedDescription). Se c'è un proxy davanti, configuralo e riprova.")
@@ -216,8 +221,33 @@ public final class ServerSetupFlow {
             sshPassword = ""
             sudoPassword = ""
             return true
+        case .agents:
+            guard let identity, let probe, let engine, let connection = engine.connection,
+                  let token = RemoteEngineStore.token(engineId: engine.id) else { return false }
+            activity = "Installo Claude Code e omp sul server…"
+            defer { activity = nil }
+            agentsReport = try await ServerAgents.configure(admin: RemoteAdmin(identity: identity, store: identities),
+                                                            client: CompanionClient(connection: connection, token: token),
+                                                            probe: probe, local: agents)
+            return true
         case .done:
             return true
+        }
+    }
+
+    /// With a public certificate Caddy asks Let's Encrypt only after its reload,
+    /// so the first HTTPS calls fail until it arrives (seconds, longer on retries).
+    private func reachChat(_ client: CompanionClient) async throws -> RemoteHealth {
+        guard tls == .public else { return try await client.remoteHealth() }
+        activity = "Attendo il certificato di Let's Encrypt…"
+        defer { activity = nil }
+        let deadline = Date().addingTimeInterval(120)
+        while true {
+            do {
+                return try await client.remoteHealth()
+            } catch APIError.transport where Date() < deadline {
+                try await Task.sleep(nanoseconds: 3_000_000_000)
+            }
         }
     }
 }

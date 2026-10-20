@@ -25,7 +25,8 @@ final class MacServerIntegrationTests: XCTestCase {
         let engine = products.appendingPathComponent("swarme-harness")
         XCTAssertTrue(FileManager.default.fileExists(atPath: engine.path), engine.path)
         let flow = ServerSetupFlow(identities: identities, engines: engines,
-                                   linuxEngines: LinuxEngines(manifest: nil, cache: root.appendingPathComponent("cache"))) { arch in
+                                   linuxEngines: LinuxEngines(manifest: nil, cache: root.appendingPathComponent("cache")),
+                                   agents: .none) { arch in
             guard let archs = try? ServerSetupFlow.machOArchitectures(engine), archs.contains(arch == "aarch64" ? "arm64" : arch),
                   let data = try? Data(contentsOf: engine) else { return nil }
             return (engine, SHA256Digest.of(data).map { String(format: "%02x", $0) }.joined())

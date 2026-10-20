@@ -65,6 +65,7 @@ struct RemoteServersPane: View {
     @State private var forgetting: RemoteEngine?
     @State private var claudeLoginFor: RemoteEngine?
     @State private var piCopyFor: RemoteEngine?
+    @State private var configuring: String?
     @State private var notice: String?
 
     var body: some View {
@@ -83,6 +84,12 @@ struct RemoteServersPane: View {
                             if let identity = model.identity(for: engine) {
                                 Text("Amministrato da questo Mac come \(identity.label)").font(.system(size: 11)).foregroundStyle(.tertiary)
                                 EngineUpdateLine(engine: engine)
+                                if configuring == engine.id {
+                                    HStack(spacing: 6) {
+                                        ProgressView().controlSize(.small)
+                                        Text("Installo Claude Code e omp sul server…").font(.system(size: 11)).foregroundStyle(.secondary)
+                                    }
+                                }
                             }
                         }
                         Spacer()
@@ -92,6 +99,8 @@ struct RemoteServersPane: View {
                             Button("Dispositivi abbinati…") { devicesFor = engine }
                             if let identity = model.identity(for: engine) {
                                 Divider()
+                                Button("Configura Claude Code e omp") { configureAgents(engine) }
+                                    .disabled(configuring != nil)
                                 Button("Login di Claude sul server…") { claudeLoginFor = engine }
                                 Button("Copia la configurazione di pi…") { piCopyFor = engine }
                                 Button("Apri un terminale sul server") { try? model.openTerminal(identity) }
@@ -147,6 +156,18 @@ struct RemoteServersPane: View {
         }
         .onAppear { model.reloadRemoteEngines() }
     }
+
+    private func configureAgents(_ engine: RemoteEngine) {
+        configuring = engine.id
+        Task {
+            do {
+                notice = try await model.configureAgents(on: engine).joined(separator: "\n")
+            } catch {
+                notice = error.localizedDescription
+            }
+            configuring = nil
+        }
+    }
 }
 
 // MARK: - Setup walk-through
@@ -189,7 +210,7 @@ private struct SetupBody: View {
     private var editing: Bool { flow.step == .hostKey && flow.scannedKeys.isEmpty && !flow.running }
 
     private var needsAction: Bool {
-        !flow.scannedKeys.isEmpty || flow.error != nil || flow.probe != nil
+        !flow.scannedKeys.isEmpty || flow.error != nil || flow.probe != nil || !flow.agentsReport.isEmpty
             || (flow.needsPassword && flow.step == .key)
             || (flow.needsSudoPassword && flow.step >= .root && flow.step < .device)
     }
@@ -256,6 +277,9 @@ private struct SetupBody: View {
                     if let probe = flow.probe {
                         Text("\(probe.os) \(probe.version) · \(probe.arch) · Claude: \(probe.claude ?? "non installato") · pi: \(probe.pi ?? "non installato")")
                             .font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(flow.agentsReport, id: \.self) { line in
+                        Text(line).font(.caption).textSelection(.enabled)
                     }
                     if let error = flow.error {
                         Text(error).foregroundStyle(Theme.danger).textSelection(.enabled)
@@ -456,7 +480,7 @@ struct ClaudeTokenSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Login di Claude su \(engine.name)").font(.title3.weight(.semibold))
-            Text("Nel Terminale di questo Mac esegui il comando qui sotto e accedi con il tuo abbonamento; poi incolla il token che stampa. Il token resta sul server in un file leggibile solo dal suo utente.")
+            Text("Nel Terminale di questo Mac esegui il comando qui sotto e accedi con il tuo abbonamento; poi incolla il token che stampa. Il token resta sul server in un file leggibile solo dal suo utente, e nel Portachiavi di questo Mac per i prossimi server che configuri.")
                 .font(.callout).foregroundStyle(.secondary)
             Text("claude setup-token").font(.system(.body, design: .monospaced)).textSelection(.enabled)
             SecureField("sk-ant-…", text: $token)

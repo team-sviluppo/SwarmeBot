@@ -186,7 +186,8 @@ final class ServerSetupFlowIntegrationTests: XCTestCase {
             .flatMap { try? JSONDecoder().decode(LinuxEngineManifest.self, from: $0) }
         let flow = ServerSetupFlow(identities: identities, engines: engines,
                                    linuxEngines: LinuxEngines(manifest: manifest, cache: root.appendingPathComponent("cache"),
-                                                              localBuilds: manifest == nil ? builds : nil))
+                                                              localBuilds: manifest == nil ? builds : nil),
+                                   agents: .none)
         flow.name = "Prova"
         flow.host = String(parts[0])
         flow.port = Int(parts[1]) ?? 22
@@ -221,6 +222,93 @@ final class ServerSetupFlowIntegrationTests: XCTestCase {
         XCTAssertEqual(health.remote, true)
         let fleet = try await CompanionClient(connection: XCTUnwrap(saved.connection), token: token).fleet(messages: 1)
         XCTAssertFalse(fleet.bots.isEmpty)
+    }
+}
+
+/// The same sheet flow against a real server with a public domain: Caddy gets a
+/// Let's Encrypt certificate and the chat goes over HTTPS with the system's trust.
+/// Off unless asked (the password only through the environment):
+///
+///   SWARMEBOT_REAL_SERVER=bot.example.it  SWARMEBOT_REAL_SERVER_USER=deploy  SWARMEBOT_REAL_SERVER_PASSWORD=…  \
+///   SWARMEBOT_VPS_ENGINE=build/linux/swarme-harness-x86_64  swift test --filter RealServerIntegrationTests
+///
+/// SWARMEBOT_REAL_SERVER_CLAUDE_TOKEN logs Claude in there; SWARMEBOT_REAL_SERVER_OMP=1 copies this
+/// Mac's omp and its login (real keys) and makes it the pi driver's CLI.
+///
+/// With SWARMEBOT_HOME the result stays in that home's stores, for a development app.
+@MainActor
+final class RealServerIntegrationTests: XCTestCase {
+    func testSetupWithAPublicCertificate() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let domain = env["SWARMEBOT_REAL_SERVER"], let user = env["SWARMEBOT_REAL_SERVER_USER"],
+              let password = env["SWARMEBOT_REAL_SERVER_PASSWORD"], let engine = env["SWARMEBOT_VPS_ENGINE"] else {
+            throw XCTSkip("SWARMEBOT_REAL_SERVER / _USER / _PASSWORD / SWARMEBOT_VPS_ENGINE not set")
+        }
+        // the agents step: Claude's token from the environment, omp (this Mac's login) only when asked
+        let claudeToken = env["SWARMEBOT_REAL_SERVER_CLAUDE_TOKEN"]
+        let copyOmp = env["SWARMEBOT_REAL_SERVER_OMP"] == "1"
+        let agents = LocalAgents(claudeToken: { claudeToken }, ompVersion: { copyOmp ? await OmpConfig.localVersion() : nil },
+                                 ompDirectory: copyOmp ? OmpConfig.localDirectory : URL(fileURLWithPath: "/nonexistent"))
+        let keep = AppPaths.isIsolated
+        let root = URL(fileURLWithPath: "/tmp/sbr-\(UUID().uuidString.prefix(4))", isDirectory: true)
+        defer { if !keep { try? FileManager.default.removeItem(at: root) } }
+        let identities = keep ? SSHIdentityStore() : SSHIdentityStore(root: root.appendingPathComponent("ssh"))
+        let engines = keep ? RemoteEngineStore() : RemoteEngineStore(file: root.appendingPathComponent("remote-engines.json"))
+        let flow = ServerSetupFlow(identities: identities, engines: engines,
+                                   linuxEngines: LinuxEngines(manifest: nil, cache: root.appendingPathComponent("cache"),
+                                                              localBuilds: URL(fileURLWithPath: engine).deletingLastPathComponent()),
+                                   agents: agents)
+        flow.name = domain
+        flow.host = domain
+        flow.user = user
+        flow.site = domain
+        flow.tls = .public
+        flow.suggestPrefix()
+        XCTAssertNil(flow.formError)
+        XCTAssertEqual(flow.chatURL, "https://\(domain)\(flow.prefix)")
+
+        await flow.run()
+        XCTAssertNil(flow.error, flow.error ?? "")
+        if flow.step == .hostKey {
+            let key = try XCTUnwrap(flow.scannedKeys.first(where: { $0.type == "ssh-ed25519" }))
+            print("host key \(key.type) \(key.fingerprint)")
+            await flow.approve(key)
+        }
+        if flow.needsPassword {
+            flow.sshPassword = password
+            await flow.run()
+        }
+        XCTAssertNil(flow.error, flow.error ?? "")
+        XCTAssertEqual(flow.step, .done)
+        XCTAssertEqual(flow.sshPassword, "", "the password must not outlive the setup")
+
+        let saved = try XCTUnwrap(flow.engine)
+        let token = try XCTUnwrap(RemoteEngineStore.token(engineId: saved.id))
+        defer { if !keep { RemoteEngineStore.deleteToken(engineId: saved.id) } }
+        let client = CompanionClient(connection: try XCTUnwrap(saved.connection), token: token)
+        let health = try await client.remoteHealth()
+        XCTAssertEqual(health.remote, true)
+        XCTAssertTrue(health.isCompatible)
+        let fleet = try await client.fleet(messages: 1)
+        XCTAssertFalse(fleet.bots.isEmpty)
+        print(flow.agentsReport.joined(separator: "\n"))
+        XCTAssertTrue(flow.agentsReport.first?.hasPrefix("Claude Code ") == true, "\(flow.agentsReport)")
+        let instances = try await client.instances()
+        if claudeToken != nil {
+            XCTAssertEqual(instances.first(where: { $0.driverKind == "claudeAgent" })?.snapshot.authenticated, true)
+        }
+        if copyOmp {
+            let pi = try XCTUnwrap(instances.first(where: { $0.driverKind == "piAgent" }))
+            let local = await OmpConfig.localVersion()
+            XCTAssertEqual(pi.snapshot.version, local.map { "omp/\($0)" })
+            XCTAssertFalse(pi.models.options.isEmpty, "omp on the server sees no models")
+        }
+
+        // without the token
+        var anonymous = try client.makeRequest("GET", "/api/bots")
+        anonymous.setValue(nil, forHTTPHeaderField: "Authorization")
+        let unauthorized = try await URLSession.shared.data(for: anonymous)
+        XCTAssertEqual((unauthorized.1 as? HTTPURLResponse)?.statusCode, 401)
     }
 }
 

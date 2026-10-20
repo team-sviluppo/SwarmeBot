@@ -422,6 +422,12 @@ public struct CompanionClient: Sendable {
         try await send(try makeRequest("GET", "/api/instances"), as: InstanceList.self).instances
     }
 
+    /// The CLI an instance runs (`omp` for the pi driver); "" is the driver's default.
+    /// Reloads that provider, cutting its turns short.
+    public func setInstanceCLI(_ instanceId: String, cli: String) async throws -> [Instance] {
+        try await send(try makeRequest("PATCH", "/api/instances/\(instanceId)", body: ["cli": cli]), as: InstanceList.self).instances
+    }
+
     public func config() async throws -> ConfigStatus {
         try await send(try makeRequest("GET", "/api/config"), as: ConfigStatus.self)
     }

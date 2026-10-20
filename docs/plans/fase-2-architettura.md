@@ -178,6 +178,9 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
   Scoperto dal test di parità (`queued: null` nel motore Swift).
 - L'ordine dei frame conta: il motore Node passa il bot a "working" prima di fissare la cartella
   del task; invertirli cambiava la sequenza vista dai client.
+- pi/omp chiude un turno fallito con `turn_end`/`agent_end` e `stopReason: "error"` (il motivo in
+  `message.errorMessage`), senza testo: trattarlo come "end_turn" lasciava in chat una risposta vuota. Trovato
+  su un server vero con un 403 di LiteLLM (2026-10-20); scenario `RIFIUTO` in `parity/fake_pi.py`.
 
 ## Non verificato dal vivo
 

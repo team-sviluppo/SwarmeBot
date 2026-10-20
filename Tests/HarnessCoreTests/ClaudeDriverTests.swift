@@ -299,3 +299,26 @@ final class ACPHarnessTests: XCTestCase {
         XCTAssertEqual(ACPHarnesses.classifyCursor(RPCError(message: "Your subscription has expired", code: nil)), "inactive_subscription")
     }
 }
+
+@MainActor
+final class PiDriverTests: XCTestCase {
+    static let fake = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .appendingPathComponent("../../parity/fake_pi.py").standardized.path
+
+    /// What omp sends when the provider answers 403: the turn fails and says why.
+    func testAProviderErrorFailsTheTurnWithItsReason() async throws {
+        let instance = try PiInstance(input: DriverCreateInput(instanceId: "pi", displayName: nil, environment: ProcessInfo.processInfo.environment,
+                                                               enabled: true, config: ["cli": .string(Self.fake)]))
+        var events: [RuntimeEvent.Body] = []
+        instance.onEvent { events.append($0.body) }
+        _ = try await instance.sendTurn(SendTurnInput(threadId: "t-pi-err", text: "RIFIUTO", model: "fake/uno"))
+        for _ in 0..<250 where !events.contains(where: { if case .turnCompleted = $0 { true } else { false } }) {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(events.contains(.runtimeError(message: "403 The requested model is not available for this API key", setup: nil)), "\(events)")
+        let completed = events.compactMap { if case let .turnCompleted(ok, stopReason, _, _, _) = $0 { (ok, stopReason) } else { nil } }
+        XCTAssertEqual(completed.count, 1, "settled once, not again on agent_end")
+        XCTAssertEqual(completed.first?.0, false)
+        XCTAssertEqual(completed.first?.1, "failed")
+    }
+}

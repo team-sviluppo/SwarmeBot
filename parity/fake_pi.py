@@ -5,7 +5,8 @@ get_available_models, new_session (a sessionFile) / switch_session, set_model,
 prompt → message_update deltas, tool_execution_*, a `turn_end` with
 stopReason toolUse that must NOT settle, then `agent_end`. PERMESSO asks
 `confirm`, DOMANDA asks `input` (after a setStatus that must be ignored),
-LENTO streams slowly until `abort`. FAKE_PI_RECORD gets one line per prompt.
+LENTO streams slowly until `abort`, RIFIUTO ends with
+stopReason error like a provider 403. FAKE_PI_RECORD gets one line per prompt.
 """
 import json
 import os
@@ -60,6 +61,14 @@ def prompt(message):
         out({"type": "extension_ui_request", "id": "st-1", "method": "setStatus", "title": "lavoro"})
         reply = ask("input", "Quale colore?")
         text(f"risposta: {reply.get('value')}")
+    elif "RIFIUTO" in message:
+        # what omp sends when the provider answers 403: no text, the reason in errorMessage
+        failed = {"role": "assistant", "content": [], "stopReason": "error",
+                  "errorMessage": "403 The requested model is not available for this API key\n(type=team_model_access_denied)"}
+        out({"type": "message_end", "message": failed})
+        out({"type": "turn_end", "message": failed})
+        out({"type": "agent_end", "message": failed})
+        return
     elif "LENTO" in message:
         for word in ["Sto ", "scrivendo ", "piano ", "piano ", "piano "]:
             if aborted.wait(0.6):
