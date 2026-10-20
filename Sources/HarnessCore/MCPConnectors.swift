@@ -345,6 +345,15 @@ public final class MCPConnectors {
                 guard scope.count <= 1024, !scope.contains("\n") else { throw MCPConnectorInvalid("oauth.scope too long") }
                 oauth["scope"] = .string(scope)
             }
+            let redirect = body["oauth"]?["redirectUri"]?.string?.trimmingCharacters(in: .whitespaces) ?? ""
+            if !redirect.isEmpty {
+                // HTTPS, or plain HTTP back to this machine
+                guard redirect.count <= 2048, let url = URL(string: redirect), let host = url.host, !host.isEmpty,
+                      url.scheme == "https" || (url.scheme == "http" && HTTPServer.isLoopbackHost(host)) else {
+                    throw MCPConnectorInvalid("oauth.redirectUri must be an https URL")
+                }
+                oauth["redirectUri"] = .string(redirect)
+            }
             if let secret = body["oauth"]?["clientSecret"], secret["secret"]?.bool == true {
                 let value = secret["value"]?.string ?? previousSecrets?["oauth"]?["clientSecret"]?.string ?? ""
                 if !value.isEmpty {

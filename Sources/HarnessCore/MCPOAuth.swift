@@ -71,7 +71,18 @@ public final class MCPOAuth {
         self.baseURL = baseURL
     }
 
-    var redirectUri: String { baseURL() + Self.callbackPath }
+    /// On `localhost`, not `127.0.0.1`: some providers (Meta) refuse an IP
+    /// address among an app's domains and redirects.
+    var redirectUri: String {
+        baseURL().replacingOccurrences(of: "://127.0.0.1:", with: "://localhost:") + Self.callbackPath
+    }
+
+    /// The redirect a connector's login uses: the one typed for it — an HTTPS
+    /// page that forwards to the engine's callback, for providers that refuse
+    /// a loopback redirect once their app is published — or the engine's own.
+    func redirectUri(for id: String) -> String {
+        registry.connector(id)?["oauth"]?["redirectUri"]?.string.flatMap { $0.isEmpty ? nil : $0 } ?? redirectUri
+    }
 
     // MARK: Login
 
@@ -82,7 +93,7 @@ public final class MCPOAuth {
             throw MCPOAuthError("questo connettore non usa OAuth")
         }
         let discovery = try await Self.discover(serverURL, session: session)
-        let redirect = redirectUri
+        let redirect = redirectUri(for: id)
         var clientId = record["oauth"]?["clientId"]?.string.flatMap { $0.isEmpty ? nil : $0 }
         var clientSecret = clientId != nil ? registry.oauthSecrets(id)["clientSecret"]?.string : nil
         if clientId == nil {

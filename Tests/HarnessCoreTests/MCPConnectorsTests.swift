@@ -281,6 +281,7 @@ final class MCPConnectorsTests: XCTestCase {
         (status, body) = try await call("GET", "/api/mcp-connectors/oauth-redirect")
         XCTAssertEqual(status, 200)
         XCTAssertEqual(body["redirectUri"]?.string?.hasSuffix("/oauth/mcp/callback"), true)
+        XCTAssertEqual(body["redirectUri"]?.string?.hasPrefix("http://localhost:"), true)
         (status, _) = try await call("GET", "/api/mcp-connectors/altro")
         XCTAssertEqual(status, 404)
         harness.mcpPool.stopAll()
@@ -449,6 +450,20 @@ final class MCPConnectorsTests: XCTestCase {
         XCTAssertNil(registry.oauthSecrets("web")["access"])
         XCTAssertNil(registry.connector("web")?["oauthClient"])
         XCTAssertEqual(registry.oauthSecrets("web")["clientSecret"], "cs-123456", "the user's own client secret stays")
+
+        // a redirect typed by hand: HTTPS, or HTTP back to this machine
+        let oauth = MCPOAuth(registry: registry) { "http://127.0.0.1:8799" }
+        XCTAssertEqual(oauth.redirectUri(for: "web"), "http://localhost:8799/oauth/mcp/callback")
+        for bad in ["http://example.com/cb", "ftp://example.com/cb", "not a url"] {
+            edit["oauth"] = ["clientId": "mine", "redirectUri": .string(bad)]
+            XCTAssertThrowsError(try registry.update("web", edit), bad)
+        }
+        edit["oauth"] = ["clientId": "mine", "redirectUri": "https://proxy.example/oauth/mcp/callback"]
+        try registry.update("web", edit)
+        XCTAssertEqual(registry.wire(registry.connector("web")!)["oauth"]?["redirectUri"], "https://proxy.example/oauth/mcp/callback")
+        XCTAssertEqual(oauth.redirectUri(for: "web"), "https://proxy.example/oauth/mcp/callback")
+        edit["oauth"] = ["clientId": "mine", "redirectUri": "http://localhost:9000/cb"]
+        XCTAssertNoThrow(try registry.update("web", edit))
     }
 
     // MARK: Tool details in the transcript
