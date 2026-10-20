@@ -3,56 +3,9 @@ import CoreImage.CIFilterBuiltins
 import SwarmeKit
 import SwiftUI
 
-// Remote engines — docs/plans/2026-10-16-bot-remoto.md §7: the engine picker
-// atop the sidebar, Settings › Server remoti, the setup walk-through, pairing
-// another device with a QR, and the device list.
-
-/// "Questo Mac" or a remote engine, atop the sidebar. Shown once there is a remote engine.
-/// A native pop-up (it reads as something to click, with its arrows), the
-/// connection's state beside it, and a way to the server settings.
-struct EngineSwitcher: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.openSettings) private var openSettings
-
-    var body: some View {
-        if !model.remoteEngines.isEmpty {
-            HStack(spacing: 6) {
-                statusDot
-                Picker("Motore", selection: Binding(get: { model.engineChoice }, set: { model.select(engine: $0) })) {
-                    Label("Questo Mac", systemImage: "laptopcomputer").tag(EngineChoice.local)
-                    ForEach(model.remoteEngines) { engine in
-                        Label(engine.name, systemImage: "server.rack").tag(EngineChoice.remote(engine.id))
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
-                Spacer(minLength: 0)
-                Button { openSettings() } label: {
-                    Image(systemName: "gearshape").font(.system(size: 11))
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(Theme.secondary)
-                .help("Server remoti…")
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 6)
-            .help("Il motore di cui vedi i bot: questo Mac o un server remoto")
-        }
-    }
-
-    private var statusDot: some View {
-        let color: Color
-        let label: String
-        switch model.status {
-        case .live: (color, label) = (Theme.success, "collegato")
-        case .connecting, .starting: (color, label) = (Theme.secondary, "collegamento in corso")
-        case .offline, .failed: (color, label) = (Theme.danger, "non raggiungibile")
-        }
-        return Circle().fill(color).frame(width: 7, height: 7).help("Motore \(label)")
-    }
-}
+// Remote engines — docs/plans/2026-10-16-bot-remoto.md §7: Settings › Server
+// remoti, the setup walk-through, pairing another device with a QR, and the
+// device list. In the window each server is a section of the sidebar.
 
 // MARK: - Settings › Server remoti
 

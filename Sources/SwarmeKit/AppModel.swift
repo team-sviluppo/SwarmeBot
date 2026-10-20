@@ -54,6 +54,8 @@ public final class AppModel {
     /// Which engine the window shows: this Mac's, or a remote one (AppModel+Remote.swift).
     public internal(set) var engineChoice: EngineChoice = .local
     public internal(set) var remoteEngines: [RemoteEngine] = []
+    /// The engines not shown, streaming for the sidebar (EnginePeer.swift).
+    public internal(set) var peers: [EngineChoice: EnginePeer] = [:]
     @ObservationIgnored let remoteStore = RemoteEngineStore()
     @ObservationIgnored let identityStore = SSHIdentityStore()
     /// The local engine's port once it runs, so switching back needs no restart.
@@ -81,12 +83,14 @@ public final class AppModel {
     public func start() {
         // a remote engine does not wait for the local one to boot
         if case .remote = engineChoice { connectToChoice() }
+        syncPeers()
         Task { await launcher.start() }
     }
 
     public func shutdown() {
         streamTask?.cancel()
         streamTask = nil
+        for peer in peers.values { peer.stop() }
         launcher.stop()
     }
 
@@ -101,7 +105,10 @@ public final class AppModel {
     private func harnessChanged(_ harness: HarnessState) {
         // the local engine's progress only matters while it is the one shown
         guard engineChoice == .local else {
-            if case let .running(port, _) = harness { localPort = port }
+            if case let .running(port, _) = harness {
+                localPort = port
+                syncPeers()
+            }
             return
         }
         switch harness {
@@ -235,7 +242,9 @@ public final class AppModel {
     }
 
     /// Sidebar sections, in first-seen order; unlabeled bots go last.
-    public var sections: [(name: String?, bots: [Bot])] {
+    public var sections: [(name: String?, bots: [Bot])] { Self.sections(of: visibleBots) }
+
+    public static func sections(of visibleBots: [Bot]) -> [(name: String?, bots: [Bot])] {
         var order: [String?] = []
         var grouped: [String?: [Bot]] = [:]
         for bot in visibleBots {

@@ -664,21 +664,29 @@ struct ShimmerText: View {
     }
 }
 
-/// "Working": `raised` bubble, three 6 pt dots bouncing (Tailwind
-/// `animate-bounce`, delays 0/150/300 ms) and "Al lavoro da Ns".
+/// "Working": `raised` bubble, the working bot's mascot pacing left and
+/// right, and "Al lavoro da Ns". Three bouncing dots when nobody is known.
 struct TypingIndicator: View {
+    var bot: Bot?
     @State private var start = Date()
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
             let t = timeline.date.timeIntervalSince(start)
             HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    ForEach(0..<3) { i in
-                        Circle()
-                            .fill(Theme.secondary)
-                            .frame(width: 6, height: 6)
-                            .offset(y: Self.bounce((t + 1 - Double(i) * 0.15).truncatingRemainder(dividingBy: 1)))
+                if let bot {
+                    // 1.6 s there and back over 24 pt, eased at the ends
+                    BotAvatar(bot: bot, size: 22, state: .working, priority: true, trackPointer: false)
+                        .offset(x: 12 * CGFloat(sin(t * .pi / 0.8)))
+                        .frame(width: 46)
+                } else {
+                    HStack(spacing: 6) {
+                        ForEach(0..<3) { i in
+                            Circle()
+                                .fill(Theme.secondary)
+                                .frame(width: 6, height: 6)
+                                .offset(y: Self.bounce((t + 1 - Double(i) * 0.15).truncatingRemainder(dividingBy: 1)))
+                        }
                     }
                 }
                 Text("Al lavoro da \(Int(t))s")
@@ -686,7 +694,7 @@ struct TypingIndicator: View {
                     .foregroundStyle(Theme.secondary)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, bot == nil ? 12 : 7)
             .background(RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous).fill(Theme.raised))
         }
     }
@@ -754,7 +762,7 @@ private struct LiveTail: View {
         // under the streaming reply too: text arriving does not mean the
         // turn is over, and the indicator keeps one identity (and its clock)
         if working {
-            TypingIndicator()
+            TypingIndicator(bot: speaker)
         }
     }
 

@@ -685,8 +685,24 @@ Non verificato:
 - Prima pubblicazione dei motori Linux con `release-mac.sh`; prova dell'app firmata (Portachiavi reale).
 - Login di pi copiato da interfaccia: non cliccato, perché copierebbe le chiavi reali dell'utente
   (la logica è coperta da `PiConfigIntegrationTests`).
-- Più avanti: barra laterale con i bot di più motori, approvazioni sui bot remoti (fine di R5), OAuth sul
-  motore remoto, app iOS con notifiche (APNs).
+- Più avanti: canali dei server nella barra laterale, notifiche dei motori non mostrati, approvazioni sui
+  bot remoti (fine di R5), OAuth sul motore remoto, app iOS con notifiche (APNs).
+
+### Barra laterale con tutti i motori (2026-10-20)
+
+- Via il selettore del motore (decisione dell'utente). La barra laterale mostra le sezioni di questo Mac e,
+  sotto, una sezione per ogni server remoto (nome, icona, pallino di stato) con tutti i suoi bot: i server
+  non hanno sezioni loro.
+- La finestra resta su un motore alla volta (chat, inspector, automazioni, impostazioni). Ogni altro motore
+  ha un `EnginePeer` (`SwarmeKit/EnginePeer.swift`): il suo stream `/api/events`, senza i frame runtime,
+  piegato in uno stato leggero (flotta con 20 messaggi per riga di anteprima). Clic su un bot di un altro
+  motore = `select(engine:)` + selezione del bot; il motore lasciato diventa un peer con lo stato e il
+  cursore che aveva, quindi la sua sezione non si svuota.
+- I bot dei motori non mostrati non hanno menu contestuale (le azioni andrebbero al motore mostrato); i canali
+  dei server non sono in barra.
+- Verificato su `SWARMEBOT_HOME` di prova, con un secondo motore `serve --remote` locale come "VPS di prova":
+  screenshot con il Mac attivo (sezioni del Mac + sezione del server) e con il server attivo (bot del Mac
+  sopra, letti dal peer). Il clic vero su una riga non è stato provato (niente Accessibilità in questa sessione).
 
 ### Prova dell'interfaccia (2026-10-18)
 

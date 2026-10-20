@@ -1,10 +1,10 @@
 // Remote engines in the window — bot-remoto §7.
 //
-// One engine at a time: the sidebar shows the bots of the engine picked at
-// its top, this Mac's or a remote one. Switching re-points the client (chat
-// URL, device token) and hydrates from scratch; everything else — chats,
-// bots, automations, connectors — is the same API on either side. A sidebar
-// mixing several engines at once is a later step.
+// One engine at a time in the window: the chat, inspector, automations and
+// settings are those of the engine whose chat is open, this Mac's or a remote
+// one. The sidebar lists every engine's bots (the others through an
+// EnginePeer each); opening a chat of another engine switches to it, which
+// re-points the client (chat URL, device token) and hydrates from scratch.
 import CompanionCore
 import Foundation
 
@@ -43,16 +43,33 @@ extension AppModel {
     public func reloadRemoteEngines() {
         remoteEngines = remoteStore.all()
         if case let .remote(id) = engineChoice, !remoteEngines.contains(where: { $0.id == id }) { select(engine: .local) }
+        syncPeers()
+    }
+
+    /// The engine a sidebar row belongs to, for the engines not shown.
+    public func peer(_ choice: EngineChoice) -> EnginePeer? { peers[choice] }
+
+    /// Open a bot's chat, switching the window to its engine first.
+    public func open(bot id: String, on choice: EngineChoice) {
+        if choice != engineChoice { select(engine: choice) }
+        selection = .bot(id)
     }
 
     /// Show another engine: drop everything of the current one, then connect.
+    /// The one left keeps streaming as a peer, so its sidebar rows stay live.
     public func select(engine choice: EngineChoice) {
         guard choice != engineChoice || client == nil else { return }
+        if client != nil, peers[engineChoice] == nil {
+            peers[engineChoice] = EnginePeer(choice: engineChoice, state: state, cursor: cursor)
+        }
+        let taken = peers.removeValue(forKey: choice)
+        taken?.stop()
         engineChoice = choice
         AppPaths.defaults.set(choice.saved, forKey: EngineChoice.defaultsKey)
         streamTask?.cancel()
         streamTask = nil
-        state = CompanionState()
+        // the peer's bots keep the sidebar filled until the hydrate replaces them
+        state = taken?.state ?? CompanionState()
         live.clearAll()
         cursor = nil
         visibleCache = [:]
@@ -64,6 +81,32 @@ extension AppModel {
         selection = nil
         client = nil
         connectToChoice()
+        syncPeers()
+    }
+
+    /// A peer for every engine but the shown one; none for engines forgotten.
+    func syncPeers() {
+        var wanted: [EngineChoice] = remoteEngines.map { .remote($0.id) }
+        if localPort != nil { wanted.append(.local) }
+        wanted.removeAll { $0 == engineChoice }
+        for (choice, peer) in peers where !wanted.contains(choice) {
+            peer.stop()
+            peers[choice] = nil
+        }
+        for choice in wanted {
+            let peer = peers[choice] ?? EnginePeer(choice: choice)
+            peers[choice] = peer
+            if let client = peerClient(choice) { peer.start(client) }
+        }
+    }
+
+    private func peerClient(_ choice: EngineChoice) -> CompanionClient? {
+        switch choice {
+        case .local:
+            return localPort.map { CompanionClient(connection: Connection(name: "Questo Mac", host: "127.0.0.1", port: $0), token: nil) }
+        case let .remote(id):
+            return remoteEngines.first { $0.id == id }.flatMap { try? remoteClient($0) }
+        }
     }
 
     /// Point the client at the chosen engine and open its stream.

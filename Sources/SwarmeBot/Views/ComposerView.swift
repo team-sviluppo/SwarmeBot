@@ -14,7 +14,9 @@ struct ComposerView: View {
     @Environment(AppModel.self) private var model
     @State private var drafts: [String: String] = [:]
     @State private var attachments: [String: [ComposerAttachment]] = [:]
-    @State private var height: CGFloat = 24
+    /// One 20 pt line: taller, the field outgrows the bottom-aligned buttons
+    /// and its first line rides above the "+".
+    @State private var height: CGFloat = 20
     @State private var dropTargeted = false
     /// Bumped to put the caret in the text field.
     @State private var focusRequest = 0
@@ -679,8 +681,9 @@ final class PlaceholderTextView: NSTextView {
         return style
     }()
     /// TextKit puts a line's extra height above the glyphs; this lifts them
-    /// back to the middle. The placeholder needs it too, or it sits low.
-    static let baselineOffset: CGFloat = 3
+    /// until the capitals sit on the line's middle, level with the "+".
+    /// The placeholder needs it too, or it sits low.
+    static let baselineOffset: CGFloat = 2
 
     var placeholder = ""
     var onPasteImage: ((Data, String) -> Void)?

@@ -111,16 +111,17 @@ struct MarkdownText: View {
     /// A figure space then a block, so the caret sits off the last glyph
     /// rather than touching it. Empty when not streaming — an empty `Text`
     /// concatenated in costs nothing and keeps the callers branch-free.
-    /// Inline code 13 pt mono on `inset`; links in ink, bold and
-    /// underlined. The bubble is the bot's colour darkened to 4.5:1 against
-    /// ink, so no tint of it (nor the accent blue, on a blue bot) would still
-    /// read: weight and underline set links apart instead.
+    /// Inline code in bold, in the text's own font: a dark mono chip on a
+    /// coloured bubble read as a separate, confusing thing. Links in ink,
+    /// bold and underlined. The bubble is the bot's colour darkened to 4.5:1
+    /// against ink, so no tint of it (nor the accent blue, on a blue bot)
+    /// would still read: weight and underline set links apart instead.
     private static func styled(_ input: AttributedString) -> AttributedString {
         var out = input
         for run in out.runs {
-            if let intent = run.inlinePresentationIntent, intent.contains(.code) {
-                out[run.range].font = .system(size: 13, design: .monospaced)
-                out[run.range].backgroundColor = Theme.inset
+            if var intent = run.inlinePresentationIntent, intent.contains(.code) {
+                intent.remove(.code)
+                out[run.range].inlinePresentationIntent = intent.union(.stronglyEmphasized)
             }
             if run.link != nil {
                 out[run.range].foregroundColor = Theme.ink
