@@ -82,7 +82,7 @@ struct SidebarView: View {
             }
             if !collapsed.contains(key) {
                 ForEach(section.bots) { bot in
-                    row(for: bot).padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
+                    row(for: bot, on: .local).padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
                 }
             }
         }
@@ -119,14 +119,18 @@ struct SidebarView: View {
     private func peerSections(_ peer: EnginePeer) -> some View {
         let sections = filter(layout.arrange(AppModel.sections(of: peer.visibleBots)))
             .filter { !$0.bots.isEmpty }
-        ForEach(Array(sections.enumerated()), id: \.element.name) { index, section in
+        // ids of their own: the lazy stack keys its rows by id, and with the
+        // shown engine's ids it reused those rows — their tap and menu
+        // included — after a switch (a click then selected a chat the shown
+        // engine does not have: "Nessuna chat selezionata")
+        ForEach(Array(sections.enumerated()), id: \.element.name.peerKey) { index, section in
             let key = section.name ?? ""
             if section.name != nil || sections.count > 1 {
                 SectionHeader(title: section.name ?? "Non assegnati", count: section.bots.count, first: index == 0,
                               collapsed: collapsed.contains(key)) { flip(key) }
             }
             if !collapsed.contains(key) {
-                ForEach(section.bots) { bot in
+                ForEach(section.bots, id: \.peerKey) { bot in
                     BotRow(bot: bot, selected: false, peer: peer)
                         .onTapGesture { model.open(bot: bot.id, on: .local) }
                         .padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
@@ -161,10 +165,14 @@ struct SidebarView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                 }
-                ForEach(bots) { bot in
-                    if shown {
-                        row(for: bot, sections: false)
-                    } else {
+                // two ForEach, not one with a branch inside: the same ids
+                // would let the lazy stack reuse a row across a switch
+                if shown {
+                    ForEach(bots) { bot in
+                        row(for: bot, on: choice, sections: false)
+                    }
+                } else {
+                    ForEach(bots, id: \.peerKey) { bot in
                         BotRow(bot: bot, selected: false, peer: peer)
                             .onTapGesture { model.open(bot: bot.id, on: choice) }
                     }
@@ -326,11 +334,14 @@ struct SidebarView: View {
 
     private var userName: String { NSFullUserName().isEmpty ? NSUserName() : NSFullUserName() }
 
-    /// `sections` is false for a server's bots: they have none.
+    /// A row of the engine shown. `sections` is false for a server's bots:
+    /// they have none. The tap goes through `open`, which switches engine
+    /// when needed, so even a row SwiftUI kept from before a switch opens
+    /// the right chat.
     @ViewBuilder
-    private func row(for bot: Bot, sections: Bool = true) -> some View {
+    private func row(for bot: Bot, on engine: EngineChoice, sections: Bool = true) -> some View {
         BotRow(bot: bot, selected: model.selection == .bot(bot.id))
-            .onTapGesture { model.selection = .bot(bot.id) }
+            .onTapGesture { model.open(bot: bot.id, on: engine) }
             .draggable("bot:\(bot.id)") {
                 HStack(spacing: 6) {
                     BotAvatar(bot: bot, size: 20, animated: false)
@@ -659,4 +670,14 @@ private struct SectionNameSheet: View {
         save(name)
         dismiss()
     }
+}
+
+/// Row ids for another engine's bots and sections, apart from the shown
+/// engine's (see peerSections).
+private extension Bot {
+    var peerKey: String { "peer:" + id }
+}
+
+private extension Optional where Wrapped == String {
+    var peerKey: String { "peer-section:" + (self ?? "") }
 }
