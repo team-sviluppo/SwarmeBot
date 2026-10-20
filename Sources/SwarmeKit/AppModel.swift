@@ -196,9 +196,13 @@ public final class AppModel {
         // The desktop shows long threads; 200 is a first screenful with room
         // to scroll before the first scrollback fetch.
         let fleet = try await client.fleet(messages: 200)
+        // switched to another engine meanwhile: this fleet is not the one shown
+        try Task.checkCancellation()
         state.hydrate(fleet)
         stateVersion &+= 1
-        if selection == nil { selection = defaultSelection }
+        // a chat this engine does not have (gone, or of another engine) would
+        // leave "Nessuna chat selezionata" with the list full of bots
+        if selection == nil || (selectedBot == nil && selectedRoom == nil) { selection = defaultSelection }
     }
 
     public func refreshInstances() async {
@@ -347,12 +351,6 @@ public final class AppModel {
         await answer(threadId: threadId, card: card, choice: "Allow")
     }
 
-    public func createBot() async {
-        await perform { client in
-            let bot = try await client.createBot()
-            self.selection = .bot(bot.id)
-        }
-    }
 
     public func patch(_ bot: Bot, _ patch: BotPatch) async {
         await perform { try await $0.patchBot(bot.id, patch) }

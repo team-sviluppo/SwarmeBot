@@ -149,6 +149,8 @@ struct SidebarView: View {
             SectionHeader(title: engine.name, count: bots.count, first: false, collapsed: collapsed.contains(key),
                           icon: "server.rack", status: shown ? model.status == .live : peer?.reachable ?? false) { flip(key) }
                 .contextMenu {
+                    Button("Nuovo bot su \(engine.name)") { Task { await model.createBot(on: choice) } }
+                    Divider()
                     Button("Impostazioni dei server remoti…") { openSettings() }
                 }
             if !collapsed.contains(key) {
@@ -270,6 +272,14 @@ struct SidebarView: View {
             .background(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous).fill(Theme.raised.opacity(0.7)))
             Menu {
                 Button("Nuovo bot") { Task { await model.createBot() } }
+                if !model.remoteEngines.isEmpty {
+                    // the submenu is the question: on which server
+                    Menu("Nuovo bot remoto") {
+                        ForEach(model.remoteEngines) { engine in
+                            Button(engine.name) { Task { await model.createBot(on: .remote(engine.id)) } }
+                        }
+                    }
+                }
                 Button("Nuovo canale…") { model.showNewRoom = true }
                 Button("Nuova sezione…") { naming = .new }
                 Divider()
@@ -284,7 +294,7 @@ struct SidebarView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Nuovo bot (⌘N) o canale (⇧⌘N)")
+            .help("Nuovo bot su questo Mac (⌘N) o su un server, nuovo canale (⇧⌘N)")
         }
         .padding(.horizontal, 10)
         .padding(.top, 10)

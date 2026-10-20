@@ -55,6 +55,21 @@ extension AppModel {
         selection = .bot(id)
     }
 
+    /// A new bot on this Mac (the default) or on a server, then its chat,
+    /// switching the window to that engine when it is not the one shown.
+    public func createBot(on choice: EngineChoice = .local) async {
+        guard let target = choice == engineChoice ? client : peerClient(choice) else {
+            lastError = "Motore non raggiungibile: il bot non è stato creato"
+            return
+        }
+        do {
+            let bot = try await target.createBot()
+            open(bot: bot.id, on: choice)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
     /// Show another engine: drop everything of the current one, then connect.
     /// The one left keeps streaming as a peer, so its sidebar rows stay live.
     public func select(engine choice: EngineChoice) {

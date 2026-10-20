@@ -124,8 +124,14 @@ struct CommandPalette: View {
                 model.selection = .room(room.id)
             })
         }
+        let remoteBots = model.remoteEngines.map { engine in
+            Item(section: "Comandi", id: "cmd-new-bot-\(engine.id)", icon: "server.rack", title: "Nuovo bot su \(engine.name)", detail: "Server remoto") {
+                Task { await model.createBot(on: .remote(engine.id)) }
+            }
+        }
         let commands: [Item] = [
             Item(section: "Comandi", id: "cmd-new-bot", icon: "plus", title: "Nuovo bot", detail: "⌘N") { Task { await model.createBot() } },
+        ] + remoteBots + [
             Item(section: "Comandi", id: "cmd-new-room", icon: "person.3", title: "Nuovo canale", detail: "") { model.showNewRoom = true },
             Item(section: "Comandi", id: "cmd-automations", icon: "clock.arrow.circlepath", title: "Automazioni", detail: "Routine e webhook") {
                 openWindow(id: "automations")
