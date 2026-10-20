@@ -166,6 +166,17 @@ extension AppModel {
         await perform { _ = try await $0.switchTask(botId: bot.id, threadId: task.threadId) }
     }
 
+    /// A routine or webhook run that starts gets a task of its own, not the
+    /// chat on screen: open that task, so what the bot does is in view.
+    /// A frame replayed after a reconnect, long after the start, moves nothing.
+    func show(run: RoutineRun) async {
+        guard let threadId = run.threadId, state.bot(run.botId) != nil else { return }
+        if let startedAt = run.startedAt, Date().timeIntervalSince1970 * 1000 - startedAt > 60_000 { return }
+        selection = .bot(run.botId)
+        guard state.bot(run.botId)?.threadId != threadId else { return }
+        await perform { _ = try await $0.switchTask(botId: run.botId, threadId: threadId) }
+    }
+
     public func renameTask(_ task: BotTask, title: String) async {
         guard let bot = selectedBot else { return }
         await perform { try await $0.renameTask(botId: bot.id, threadId: task.threadId, title: title) }

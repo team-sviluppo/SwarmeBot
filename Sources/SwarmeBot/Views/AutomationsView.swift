@@ -220,7 +220,10 @@ private struct RoutineEditor: View {
             Picker(tr("Bot"), selection: $draft.botId) {
                 ForEach(model.visibleBots) { Text($0.name).tag($0.id) }
             }
-            TextField(tr("Prompt"), text: $draft.prompt, axis: .vertical).lineLimit(4...10)
+            Section(tr("Prompt")) {
+                PromptEditor(text: $draft.prompt)
+            }
+            Section {
             Picker(tr("Quando"), selection: $draft.once) {
                 Text(tr("Ripeti")).tag(false)
                 Text(tr("Una volta")).tag(true)
@@ -242,9 +245,10 @@ private struct RoutineEditor: View {
             }
             Stepper(tr("Durata massima: %@ min", String(draft.duration)), value: $draft.duration, in: 5...240, step: 5)
             Toggle(tr("Attiva"), isOn: $draft.enabled)
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 500)
+        .frame(width: 520, height: 620)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button(tr("Annulla")) { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
@@ -257,6 +261,22 @@ private struct RoutineEditor: View {
                 .disabled(draft.name.isEmpty || draft.prompt.isEmpty || draft.botId.isEmpty || (!draft.once && draft.weekdays.isEmpty))
             }
         }
+    }
+}
+
+/// A prompt typed like a note: full width, left-aligned, wrapping lines.
+private struct PromptEditor: View {
+    @Binding var text: String
+
+    var body: some View {
+        TextEditor(text: $text)
+            .font(.system(size: 13))
+            .scrollContentBackground(.hidden)
+            .frame(minHeight: 140)
+            .padding(4)
+            .background(RoundedRectangle(cornerRadius: Theme.smallRadius).fill(Theme.inset))
+            .overlay(RoundedRectangle(cornerRadius: Theme.smallRadius).stroke(Theme.hairline))
+            .accessibilityLabel(tr("Prompt"))
     }
 }
 
@@ -381,11 +401,17 @@ private struct WebhookCreator: View {
         Form {
             TextField(tr("Nome"), text: $name)
             Picker(tr("Bot"), selection: $botId) { ForEach(model.visibleBots) { Text($0.name).tag($0.id) } }
-            TextField(tr("Compito (il payload ricevuto viene aggiunto sotto)"), text: $prompt, axis: .vertical).lineLimit(3...8)
-            TextField(tr("Tipi di evento (facoltativo, separati da virgola)"), text: $events)
+            Section {
+                PromptEditor(text: $prompt)
+            } header: {
+                Text(tr("Compito (il payload ricevuto viene aggiunto sotto)"))
+            }
+            Section {
+                TextField(tr("Tipi di evento (facoltativo, separati da virgola)"), text: $events)
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 360)
+        .frame(width: 520, height: 480)
         .onAppear { botId = model.visibleBots.first?.id ?? "" }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button(tr("Annulla")) { dismiss() } }
