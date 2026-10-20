@@ -59,10 +59,10 @@ public enum OmpConfig {
         guard sqlite3_open_v2(database.path, &source, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
               sqlite3_open(copy.path, &target) == SQLITE_OK,
               let backup = sqlite3_backup_init(target, "main", source, "main")
-        else { throw ProcessRunner.Failure(message: "Non riesco a leggere \(database.path)") }
+        else { throw ProcessRunner.Failure(message: tr("Non riesco a leggere %@", database.path)) }
         let step = sqlite3_backup_step(backup, -1)
         sqlite3_backup_finish(backup)
-        guard step == SQLITE_DONE else { throw ProcessRunner.Failure(message: "Copia di \(database.lastPathComponent) non riuscita (\(step))") }
+        guard step == SQLITE_DONE else { throw ProcessRunner.Failure(message: tr("Copia di %@ non riuscita (%@)", database.lastPathComponent, String(step))) }
         sqlite3_close(target)
         target = nil
         return try Data(contentsOf: copy)
@@ -82,7 +82,7 @@ public enum ServerClaudeToken {
     static func validated(_ token: String) throws -> String {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("sk-ant-"), !trimmed.contains(where: \.isWhitespace) else {
-            throw ProcessRunner.Failure(message: "Non sembra un token di claude setup-token (inizia con sk-ant-)")
+            throw ProcessRunner.Failure(message: tr("Non sembra un token di claude setup-token (inizia con sk-ant-)"))
         }
         return trimmed
     }
@@ -117,9 +117,9 @@ public enum ServerAgents {
         let token = local.claudeToken()
         if let token {
             try await admin.storeClaudeToken(token)
-            report.append("Claude Code \(claude): login con il token salvato su questo Mac")
+            report.append(tr("Claude Code %@: login con il token salvato su questo Mac", claude))
         } else {
-            report.append("Claude Code \(claude): manca il login (menu del server › Login di Claude sul server…)")
+            report.append(tr("Claude Code %@: manca il login (menu del server › Login di Claude sul server…)", claude))
         }
 
         var omp: String?
@@ -127,10 +127,10 @@ public enum ServerAgents {
             if let version = await local.ompVersion() {
                 let installed = try await admin.installOmp(version: version, probe: probe)
                 let copied = try await admin.copyOmpConfig(from: local.ompDirectory)
-                report.append("\(installed.isEmpty ? "omp" : installed): configurazione di questo Mac copiata (\(copied.joined(separator: ", "))), usato dai bot con pi")
+                report.append(tr("%@: configurazione di questo Mac copiata (%@), usato dai bot con pi", installed.isEmpty ? "omp" : installed, copied.joined(separator: ", ")))
                 omp = installed
             } else {
-                report.append("omp: c'è la configurazione ma non il programma su questo Mac, quindi non so quale versione installare")
+                report.append(tr("omp: c'è la configurazione ma non il programma su questo Mac, quindi non so quale versione installare"))
             }
         }
 

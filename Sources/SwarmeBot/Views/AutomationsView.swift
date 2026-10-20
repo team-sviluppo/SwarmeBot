@@ -11,8 +11,8 @@ struct AutomationsView: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("", selection: $tab) {
-                Text("Routine").tag(0)
-                Text("Webhook").tag(1)
+                Text(tr("Routine")).tag(0)
+                Text(tr("Webhook")).tag(1)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -44,7 +44,7 @@ private struct RoutinesView: View {
             .scrollContentBackground(.hidden)
             .overlay {
                 if model.state.routines.isEmpty {
-                    ContentUnavailableView("Nessuna routine", systemImage: "clock", description: Text("Metti i bot su un ritmo: un prompt che parte a orari fissi."))
+                    ContentUnavailableView(tr("Nessuna routine"), systemImage: "clock", description: Text(tr("Metti i bot su un ritmo: un prompt che parte a orari fissi.")))
                 }
             }
             RunsList(runs: model.state.routineRuns.sorted { ($0.createdAt ?? 0) > ($1.createdAt ?? 0) })
@@ -55,7 +55,7 @@ private struct RoutinesView: View {
             Button {
                 editing = RoutineDraft(botId: model.visibleBots.first?.id ?? "")
             } label: {
-                Label("Nuova routine", systemImage: "plus")
+                Label(tr("Nuova routine"), systemImage: "plus")
             }
         }
         .sheet(item: $editing) { draft in RoutineEditor(draft: draft) }
@@ -77,19 +77,19 @@ private struct RoutineRow: View {
                 Text(routine.name).font(.system(size: 13, weight: .medium))
                 Text(describe(routine.schedule)).font(.system(size: 11.5)).foregroundStyle(.secondary)
                 if let bot = model.state.bot(routine.botId) {
-                    Text("→ \(bot.name)").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Text(verbatim: "→ \(bot.name)").font(.system(size: 11.5)).foregroundStyle(.secondary)
                 }
                 if let next = routine.nextRunAt, routine.enabled {
-                    Text("Prossima: \(Date(timeIntervalSince1970: next / 1000).formatted(date: .abbreviated, time: .shortened))")
+                    Text(tr("Prossima: %@", Date(timeIntervalSince1970: next / 1000).appFormatted(date: .abbreviated, time: .shortened)))
                         .font(.system(size: 11)).foregroundStyle(.tertiary)
                 }
             }
             Spacer()
             Menu {
-                Button("Esegui ora") { Task { await model.run(routine) } }
-                Button("Modifica…", action: edit)
+                Button(tr("Esegui ora")) { Task { await model.run(routine) } }
+                Button(tr("Modifica…"), action: edit)
                 Divider()
-                Button("Elimina", role: .destructive) { Task { await model.delete(routine) } }
+                Button(tr("Elimina"), role: .destructive) { Task { await model.delete(routine) } }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -103,12 +103,12 @@ private struct RoutineRow: View {
 
     private func describe(_ schedule: RoutineSchedule) -> String {
         if schedule.type == "once", let at = schedule.at {
-            return "Una volta, " + Date(timeIntervalSince1970: at / 1000).formatted(date: .abbreviated, time: .shortened)
+            return tr("Una volta, %@", Date(timeIntervalSince1970: at / 1000).appFormatted(date: .abbreviated, time: .shortened))
         }
         let days = schedule.weekdays ?? []
-        let names = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"]
-        let label = days.count == 7 ? "ogni giorno" : days.sorted().map { names[$0 % 7] }.joined(separator: " ")
-        return "\(label) alle \(schedule.time ?? "?")"
+        let names = tr("dom lun mar mer gio ven sab").split(separator: " ").map(String.init)
+        let label = days.count == 7 ? tr("ogni giorno") : days.sorted().map { names[$0 % 7] }.joined(separator: " ")
+        return tr("%@ alle %@", label, schedule.time ?? "?")
     }
 }
 
@@ -118,20 +118,20 @@ private struct RunsList: View {
 
     var body: some View {
         List {
-            Section("Esecuzioni recenti") {
+            Section(tr("Esecuzioni recenti")) {
                 ForEach(runs.prefix(80)) { run in
                     HStack(alignment: .top) {
                         Circle().fill(color(run.status)).frame(width: 7, height: 7).padding(.top, 5)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(run.routineName ?? "Webhook").font(.system(size: 12.5, weight: .medium))
+                            Text(run.routineName ?? tr("Webhook")).font(.system(size: 12.5, weight: .medium))
                             Text(label(run)).font(.system(size: 11)).foregroundStyle(.secondary)
                             if let error = run.error { Text(error).font(.system(size: 11)).foregroundStyle(Theme.danger).lineLimit(3) }
                         }
                         Spacer()
                         if run.isActive {
-                            Button("Annulla") { Task { await model.cancel(run) } }.controlSize(.small)
+                            Button(tr("Annulla")) { Task { await model.cancel(run) } }.controlSize(.small)
                         } else if let threadId = run.threadId {
-                            Button("Apri") { open(threadId: threadId, botId: run.botId) }.controlSize(.small)
+                            Button(tr("Apri")) { open(threadId: threadId, botId: run.botId) }.controlSize(.small)
                         }
                     }
                 }
@@ -149,7 +149,7 @@ private struct RunsList: View {
 
     private func label(_ run: RoutineRun) -> String {
         let when = (run.startedAt ?? run.scheduledFor ?? run.createdAt).map {
-            Date(timeIntervalSince1970: $0 / 1000).formatted(date: .abbreviated, time: .shortened)
+            Date(timeIntervalSince1970: $0 / 1000).appFormatted(date: .abbreviated, time: .shortened)
         } ?? ""
         return "\(run.status) · \(when)"
     }
@@ -209,28 +209,30 @@ struct RoutineDraft: Identifiable {
 
 private struct RoutineEditor: View {
     @State var draft: RoutineDraft
+    /// One letter per weekday, Sunday first (the engine's numbering).
+    private static var dayLetters: [String] { tr("D L M M G V S").split(separator: " ").map(String.init) }
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Form {
-            TextField("Nome", text: $draft.name)
-            Picker("Bot", selection: $draft.botId) {
+            TextField(tr("Nome"), text: $draft.name)
+            Picker(tr("Bot"), selection: $draft.botId) {
                 ForEach(model.visibleBots) { Text($0.name).tag($0.id) }
             }
-            TextField("Prompt", text: $draft.prompt, axis: .vertical).lineLimit(4...10)
-            Picker("Quando", selection: $draft.once) {
-                Text("Ripeti").tag(false)
-                Text("Una volta").tag(true)
+            TextField(tr("Prompt"), text: $draft.prompt, axis: .vertical).lineLimit(4...10)
+            Picker(tr("Quando"), selection: $draft.once) {
+                Text(tr("Ripeti")).tag(false)
+                Text(tr("Una volta")).tag(true)
             }
             .pickerStyle(.segmented)
             if draft.once {
-                DatePicker("Data e ora", selection: $draft.at)
+                DatePicker(tr("Data e ora"), selection: $draft.at)
             } else {
-                DatePicker("Ora", selection: $draft.time, displayedComponents: .hourAndMinute)
+                DatePicker(tr("Ora"), selection: $draft.time, displayedComponents: .hourAndMinute)
                 HStack {
                     ForEach([1, 2, 3, 4, 5, 6, 0], id: \.self) { day in
-                        Toggle(["D", "L", "M", "M", "G", "V", "S"][day], isOn: Binding(
+                        Toggle(Self.dayLetters[day], isOn: Binding(
                             get: { draft.weekdays.contains(day) },
                             set: { if $0 { draft.weekdays.insert(day) } else { draft.weekdays.remove(day) } }
                         ))
@@ -238,15 +240,15 @@ private struct RoutineEditor: View {
                     }
                 }
             }
-            Stepper("Durata massima: \(draft.duration) min", value: $draft.duration, in: 5...240, step: 5)
-            Toggle("Attiva", isOn: $draft.enabled)
+            Stepper(tr("Durata massima: %@ min", String(draft.duration)), value: $draft.duration, in: 5...240, step: 5)
+            Toggle(tr("Attiva"), isOn: $draft.enabled)
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 500)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) { Button(tr("Annulla")) { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Salva") {
+                Button(tr("Salva")) {
                     let input = draft.input
                     let id = draft.existingId
                     Task { await model.save(routine: input, id: id) }
@@ -272,7 +274,7 @@ private struct WebhooksView: View {
                 ForEach(model.state.webhooks) { webhook in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(webhook.name).font(.system(size: 13, weight: .medium))
-                        Text("\(webhook.deliveryCount ?? 0) consegne · \(model.state.bot(webhook.botId)?.name ?? "?")")
+                        Text(tr("%@ consegne · %@", String(webhook.deliveryCount ?? 0), model.state.bot(webhook.botId)?.name ?? "?"))
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     .tag(webhook.id)
@@ -282,24 +284,24 @@ private struct WebhooksView: View {
             .scrollContentBackground(.hidden)
             .overlay {
                 if model.state.webhooks.isEmpty {
-                    ContentUnavailableView("Nessun webhook", systemImage: "link", description: Text("Un URL privato che, quando riceve un POST, dà un compito a un bot."))
+                    ContentUnavailableView(tr("Nessun webhook"), systemImage: "link", description: Text(tr("Un URL privato che, quando riceve un POST, dà un compito a un bot.")))
                 }
             }
             Group {
                 if let id = selected, let webhook = model.state.webhooks.first(where: { $0.id == id }) {
                     WebhookDetail(webhook: webhook) { credential = $0 }
                 } else {
-                    Text("Seleziona un webhook").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Text(tr("Seleziona un webhook")).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(minWidth: 420)
         }
         .toolbar {
-            Button { creating = true } label: { Label("Nuovo webhook", systemImage: "plus") }
+            Button { creating = true } label: { Label(tr("Nuovo webhook"), systemImage: "plus") }
         }
         .safeAreaInset(edge: .bottom) {
             if let ingress = model.webhookIngress, !ingress.available {
-                Text("Ricezione webhook non disponibile: \(ingress.error ?? "porta occupata")")
+                Text(tr("Ricezione webhook non disponibile: %@", ingress.error ?? tr("porta occupata")))
                     .font(.system(size: 11.5)).foregroundStyle(Theme.warning).padding(8)
             }
         }
@@ -326,25 +328,25 @@ private struct WebhookDetail: View {
         let attempts = model.state.webhookAttempts.filter { $0.webhookId == webhook.id }.sorted { $0.receivedAt > $1.receivedAt }
         Form {
             Section {
-                Toggle("Attivo", isOn: Binding(get: { webhook.enabled }, set: { v in Task { await model.update(webhook, ["enabled": v]) } }))
-                LabeledContent("Bot", value: model.state.bot(webhook.botId)?.name ?? "?")
-                LabeledContent("Prompt") { Text(webhook.prompt).textSelection(.enabled) }
+                Toggle(tr("Attivo"), isOn: Binding(get: { webhook.enabled }, set: { v in Task { await model.update(webhook, ["enabled": v]) } }))
+                LabeledContent(tr("Bot"), value: model.state.bot(webhook.botId)?.name ?? "?")
+                LabeledContent(tr("Prompt")) { Text(webhook.prompt).textSelection(.enabled) }
                 if webhook.verificationPending == true {
-                    Text("In attesa del primo evento di verifica.").foregroundStyle(Theme.warning)
+                    Text(tr("In attesa del primo evento di verifica.")).foregroundStyle(Theme.warning)
                 }
             }
             Section {
                 HStack {
-                    Button("Invia test") { Task { await model.test(webhook) } }
-                    Button("Ruota URL privato") {
+                    Button(tr("Invia test")) { Task { await model.test(webhook) } }
+                    Button(tr("Ruota URL privato")) {
                         Task { if let credential = await model.rotate(webhook) { showCredential(credential) } }
                     }
                     Spacer()
-                    Button("Elimina", role: .destructive) { Task { await model.delete(webhook) } }
+                    Button(tr("Elimina"), role: .destructive) { Task { await model.delete(webhook) } }
                 }
             }
-            Section("Consegne recenti") {
-                if attempts.isEmpty { Text("Nessuna").foregroundStyle(.secondary) }
+            Section(tr("Consegne recenti")) {
+                if attempts.isEmpty { Text(tr("Nessuna")).foregroundStyle(.secondary) }
                 ForEach(attempts.prefix(30)) { attempt in
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
@@ -352,7 +354,7 @@ private struct WebhookDetail: View {
                                 .foregroundStyle(attempt.outcome == "rejected" ? Theme.danger : Theme.ink)
                             Text(attempt.eventName ?? "").font(.system(size: 11)).foregroundStyle(.secondary)
                             Spacer()
-                            Text(Date(timeIntervalSince1970: attempt.receivedAt / 1000).formatted(date: .omitted, time: .shortened))
+                            Text(Date(timeIntervalSince1970: attempt.receivedAt / 1000).appFormatted(date: .omitted, time: .shortened))
                                 .font(.system(size: 11)).foregroundStyle(.tertiary)
                         }
                         if let preview = attempt.preview ?? attempt.reason {
@@ -377,18 +379,18 @@ private struct WebhookCreator: View {
 
     var body: some View {
         Form {
-            TextField("Nome", text: $name)
-            Picker("Bot", selection: $botId) { ForEach(model.visibleBots) { Text($0.name).tag($0.id) } }
-            TextField("Compito (il payload ricevuto viene aggiunto sotto)", text: $prompt, axis: .vertical).lineLimit(3...8)
-            TextField("Tipi di evento (facoltativo, separati da virgola)", text: $events)
+            TextField(tr("Nome"), text: $name)
+            Picker(tr("Bot"), selection: $botId) { ForEach(model.visibleBots) { Text($0.name).tag($0.id) } }
+            TextField(tr("Compito (il payload ricevuto viene aggiunto sotto)"), text: $prompt, axis: .vertical).lineLimit(3...8)
+            TextField(tr("Tipi di evento (facoltativo, separati da virgola)"), text: $events)
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 360)
         .onAppear { botId = model.visibleBots.first?.id ?? "" }
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) { Button(tr("Annulla")) { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Crea") {
+                Button(tr("Crea")) {
                     let types = events.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                     let input = WebhookInput(name: name, prompt: prompt, botId: botId, enabled: true, eventTypes: types)
                     Task {
@@ -409,22 +411,22 @@ private struct CredentialSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("URL privato del webhook").font(.headline)
-            Text("Copialo ora: il segreto non verrà mostrato di nuovo.").foregroundStyle(Theme.warning)
+            Text(tr("URL privato del webhook")).font(.headline)
+            Text(tr("Copialo ora: il segreto non verrà mostrato di nuovo.")).foregroundStyle(Theme.warning)
             if let url = credential.url {
                 HStack {
                     Text(url).font(.system(size: 12, design: .monospaced)).textSelection(.enabled).lineLimit(3)
-                    Button("Copia") {
+                    Button(tr("Copia")) {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(url, forType: .string)
                     }
                 }
             }
             if let endpoint = credential.endpointUrl, let secret = credential.secret {
-                Text("Oppure: POST \(endpoint) con header Authorization: Bearer \(secret)")
+                Text(tr("Oppure: POST %@ con header Authorization: Bearer %@", endpoint, secret))
                     .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
             }
-            HStack { Spacer(); Button("Fatto") { dismiss() }.keyboardShortcut(.defaultAction) }
+            HStack { Spacer(); Button(tr("Fatto")) { dismiss() }.keyboardShortcut(.defaultAction) }
         }
         .padding(20)
         .frame(width: 520)

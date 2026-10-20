@@ -392,7 +392,7 @@ extension AppModel {
         guard let client else { return .failure(CancellationError()) }
         do {
             guard let object = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] else {
-                return .failure(APIError.status(code: 400, message: "Non è un JSON valido: incolla un oggetto come {\"mcpServers\": {…}}"))
+                return .failure(APIError.status(code: 400, message: tr("Non è un JSON valido: incolla un oggetto come {\"mcpServers\": {…}}")))
             }
             let result = try await client.importMCPConnectors(object)
             await refreshMCPConnectors()
@@ -433,10 +433,10 @@ extension AppModel {
     public func connectorBlock(_ bot: Bot) -> String? {
         guard let instance = instances.first(where: { $0.instanceId == bot.modelSelection.instanceId }) else { return nil }
         guard (instance.capabilities?.connectors ?? "none") != "none" else {
-            return "Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex, gli agenti ACP e il Local Endpoint."
+            return tr("Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex, gli agenti ACP e il Local Endpoint.")
         }
         if instance.models.options.first(where: { $0.id == bot.modelSelection.model })?.clientTools == false {
-            return "Questo modello è un profilo Hermes: usa i suoi strumenti e ignora i connettori di SwarmeBot."
+            return tr("Questo modello è un profilo Hermes: usa i suoi strumenti e ignora i connettori di SwarmeBot.")
         }
         return nil
     }

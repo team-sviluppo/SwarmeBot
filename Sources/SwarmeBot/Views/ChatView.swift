@@ -47,7 +47,7 @@ struct TranscriptView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 if hiddenLocally > 0 || model.state.hasMore[threadId] == true {
-                    Button(loadingOlder ? "Caricamento…" : "Carica messaggi precedenti") {
+                    Button(loadingOlder ? tr("Caricamento…") : tr("Carica messaggi precedenti")) {
                         if hiddenLocally > 0 {
                             window += TranscriptView.page
                             return
@@ -158,10 +158,10 @@ enum TimeStamp {
         let calendar = Calendar.current
         let date = message.date
         if let previous, calendar.isDate(previous.date, inSameDayAs: date) { return nil }
-        let time = date.formatted(date: .omitted, time: .shortened)
-        if calendar.isDateInToday(date) { return "Oggi \(time)" }
-        if calendar.isDateInYesterday(date) { return "Ieri \(time)" }
-        return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) + " \(time)"
+        let time = date.appFormatted(date: .omitted, time: .shortened)
+        if calendar.isDateInToday(date) { return tr("Oggi %@", time) }
+        if calendar.isDateInYesterday(date) { return tr("Ieri %@", time) }
+        return date.appFormatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) + " \(time)"
     }
 }
 
@@ -225,7 +225,7 @@ struct HoverActions<Content: View>: View {
     }
 
     private var time: some View {
-        Text(message.date.formatted(date: .omitted, time: .shortened))
+        Text(message.date.appFormatted(date: .omitted, time: .shortened))
             .font(.system(size: 11).monospacedDigit())
             .foregroundStyle(Theme.ink.opacity(0.42))
     }
@@ -235,14 +235,14 @@ struct HoverActions<Content: View>: View {
             if let onEdit {
                 Button(action: onEdit) { Image(systemName: "pencil") }
                     .buttonStyle(IconButtonStyle(size: 22, iconSize: 12))
-                    .help("Modifica e reinvia")
+                    .help(tr("Modifica e reinvia"))
             }
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(copyText, forType: .string)
             } label: { Image(systemName: "doc.on.doc") }
                 .buttonStyle(IconButtonStyle(size: 22, iconSize: 12))
-                .help("Copia")
+                .help(tr("Copia"))
         }
     }
 }
@@ -277,7 +277,7 @@ struct MessageRow: View {
                             .contextMenu { messageMenu }
                     }
                     if message.interrupted == true {
-                        Label("Interrotto", systemImage: "stop.circle")
+                        Label(tr("Interrotto"), systemImage: "stop.circle")
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.secondary)
                     }
@@ -296,7 +296,7 @@ struct MessageRow: View {
 
     @ViewBuilder
     private var messageMenu: some View {
-        Button("Copia") {
+        Button(tr("Copia")) {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(message.text ?? "", forType: .string)
         }
@@ -334,7 +334,7 @@ struct UserMessage: View {
                             .onTapGesture { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
                     }
                     if parts.pastes > 0 {
-                        Label("\(parts.pastes) testo incollato", systemImage: "text.alignleft")
+                        Label(tr("%@ testo incollato", String(parts.pastes)), systemImage: "text.alignleft")
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.secondary)
                     }
@@ -349,8 +349,8 @@ struct UserMessage: View {
                         .frame(minHeight: 60, maxHeight: 200)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.inset))
                     HStack {
-                        Button("Annulla") { editing = false }.buttonStyle(PillButtonStyle())
-                        Button("Invia di nuovo") {
+                        Button(tr("Annulla")) { editing = false }.buttonStyle(PillButtonStyle())
+                        Button(tr("Invia di nuovo")) {
                             editing = false
                             Task { await model.edit(message, text: draft) }
                         }
@@ -365,12 +365,12 @@ struct UserMessage: View {
                              copyText: parts.display) {
                 UserBubble(text: parts.display, queued: message.queued == true)
                     .contextMenu {
-                        Button("Copia") {
+                        Button(tr("Copia")) {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(parts.display, forType: .string)
                         }
                         if editable {
-                            Button("Modifica e reinvia") {
+                            Button(tr("Modifica e reinvia")) {
                                 draft = message.text ?? ""
                                 editing = true
                             }
@@ -394,7 +394,7 @@ private struct VersionSwitcher: View {
             HStack(spacing: 6) {
                 Button { Task { await model.switchVersion(to: versions[index - 1]) } } label: { Image(systemName: "chevron.left") }
                     .disabled(index == 0)
-                Text("\(index + 1)/\(versions.count)").font(.system(size: 11, design: .monospaced))
+                Text(verbatim: "\(index + 1)/\(versions.count)").font(.system(size: 11, design: .monospaced))
                 Button { Task { await model.switchVersion(to: versions[index + 1]) } } label: { Image(systemName: "chevron.right") }
                     .disabled(index == versions.count - 1)
             }
@@ -498,13 +498,13 @@ struct UserBubble: View {
                 .background(RoundedRectangle(cornerRadius: Theme.radiusBubble, style: .continuous).fill(Theme.bubbleUser))
                 .opacity(queued ? 0.6 : 1)
             if long {
-                Button(expanded ? "Mostra meno" : "Mostra tutto il messaggio") { expanded.toggle() }
+                Button(expanded ? tr("Mostra meno") : tr("Mostra tutto il messaggio")) { expanded.toggle() }
                     .buttonStyle(.plain)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.secondary)
             }
             if queued {
-                Label("In coda…", systemImage: "clock")
+                Label(tr("In coda…"), systemImage: "clock")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.tertiary)
             }
@@ -617,9 +617,9 @@ struct ReasoningView: View {
             } label: {
                 HStack(spacing: 4) {
                     if live {
-                        ShimmerText(text: "Sta ragionando…")
+                        ShimmerText(text: tr("Sta ragionando…"))
                     } else {
-                        Text("Ragionamento").font(.system(size: 12.5)).foregroundStyle(Theme.secondary)
+                        Text(tr("Ragionamento")).font(.system(size: 12.5)).foregroundStyle(Theme.secondary)
                     }
                     Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Theme.secondary)
@@ -689,7 +689,7 @@ struct TypingIndicator: View {
                         }
                     }
                 }
-                Text("Al lavoro da \(Int(t))s")
+                Text(tr("Al lavoro da %@s", String(Int(t))))
                     .font(.system(size: 12.5).monospacedDigit())
                     .foregroundStyle(Theme.secondary)
             }

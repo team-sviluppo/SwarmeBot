@@ -125,7 +125,7 @@ struct ModelPickerButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("Modello e motore")
+        .help(tr("Modello e motore"))
         .popover(isPresented: $open, arrowEdge: .bottom) {
             ModelPickerPopover(bot: bot) { open = false }
                 .environment(model)
@@ -183,13 +183,13 @@ struct ModelPickerPopover: View {
                         HStack(spacing: 8) {
                             Text(selected.displayName ?? selected.driverKind)
                                 .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
-                            Text(selected.snapshot.isAvailable ? "Connesso" : "Non disponibile")
+                            Text(selected.snapshot.isAvailable ? tr("Connesso") : tr("Non disponibile"))
                                 .font(.system(size: 10.5, weight: .medium))
                                 .foregroundStyle(selected.snapshot.isAvailable ? Theme.success : Theme.warning)
                                 .padding(.horizontal, 8).padding(.vertical, 2)
                                 .background(Capsule().fill((selected.snapshot.isAvailable ? Theme.success : Theme.warning).opacity(0.1)))
                         }
-                        Text(selected.snapshot.isAvailable ? selected.driverKind : (selected.snapshot.reason ?? "Motore non disponibile"))
+                        Text(selected.snapshot.isAvailable ? selected.driverKind : (selected.snapshot.reason ?? tr("Motore non disponibile")))
                             .font(.system(size: 11.5)).foregroundStyle(Theme.secondary).lineLimit(2)
                     }
                     .padding(.horizontal, 16)
@@ -197,7 +197,7 @@ struct ModelPickerPopover: View {
                     .padding(.bottom, 8)
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                        TextField("", text: $filter, prompt: Text("Cerca modelli").foregroundStyle(Theme.secondary))
+                        TextField("", text: $filter, prompt: Text(tr("Cerca modelli")).foregroundStyle(Theme.secondary))
                             .textFieldStyle(.plain).font(.system(size: 12.5))
                     }
                     .padding(.horizontal, 10).padding(.vertical, 6)
@@ -246,7 +246,7 @@ struct ModelPickerPopover: View {
                         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline.opacity(0.4)).frame(height: 1) }
                     }
                 } else {
-                    Text("Nessun motore configurato")
+                    Text(tr("Nessun motore configurato"))
                         .foregroundStyle(Theme.secondary)
                         .padding()
                 }
@@ -280,7 +280,7 @@ struct EffortPicker: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "gauge.with.dots.needle.50percent").font(.system(size: 12))
-                Text("Effort").font(.system(size: 12, weight: .medium))
+                Text(tr("Effort")).font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(Theme.secondary)
             HStack(spacing: 2) {

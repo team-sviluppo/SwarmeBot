@@ -80,13 +80,13 @@ public struct CaddySettings: Equatable, Sendable {
 
     public func validate() throws {
         guard site.range(of: #"^(:[0-9]{1,5}|[a-z0-9.-]+(:[0-9]{1,5})?)$"#, options: [.regularExpression, .caseInsensitive]) != nil else {
-            throw ProcessRunner.Failure(message: "Indirizzo del sito Caddy non valido: un dominio (bot.example.it) o :porta")
+            throw ProcessRunner.Failure(message: tr("Indirizzo del sito Caddy non valido: un dominio (bot.example.it) o :porta"))
         }
         guard !prefix.isEmpty, prefix.range(of: #"^(/[A-Za-z0-9_-]+)+$"#, options: .regularExpression) != nil else {
-            throw ProcessRunner.Failure(message: "Il prefisso deve essere un percorso come /srv1/deploy")
+            throw ProcessRunner.Failure(message: tr("Il prefisso deve essere un percorso come /srv1/deploy"))
         }
         if tls == .public, site.hasPrefix(":") {
-            throw ProcessRunner.Failure(message: "Un certificato pubblico richiede un dominio, non solo una porta")
+            throw ProcessRunner.Failure(message: tr("Un certificato pubblico richiede un dominio, non solo una porta"))
         }
     }
 }
@@ -116,7 +116,7 @@ public struct RemoteAdmin: Sendable {
         try await ssh.runWithPassword(RemoteScripts.command(RemoteScripts.installKey), password: password,
                                       stdin: Data((key.publicKey + "\n").utf8), timeout: 60)
         guard await keyWorks() else {
-            throw ProcessRunner.Failure(message: "La chiave è stata aggiunta, ma il server non la accetta: controlla PubkeyAuthentication in sshd")
+            throw ProcessRunner.Failure(message: tr("La chiave è stata aggiunta, ma il server non la accetta: controlla PubkeyAuthentication in sshd"))
         }
         var installed = identity
         installed.keyInstalledAt = Date()
@@ -134,7 +134,7 @@ public struct RemoteAdmin: Sendable {
     public func probe() async throws -> RemoteProbe {
         let result = try await ssh.run(RemoteScripts.command(RemoteScripts.probe), timeout: 60)
         let values = RemoteScripts.values(result.text)
-        guard values["probe"] == "ok" else { throw ProcessRunner.Failure(message: "Risposta inattesa dal server") }
+        guard values["probe"] == "ok" else { throw ProcessRunner.Failure(message: tr("Risposta inattesa dal server")) }
         return RemoteProbe(values: values)
     }
 
@@ -152,16 +152,16 @@ public struct RemoteAdmin: Sendable {
         case "nopassword":
             return try await ssh.run("sudo -n " + command, timeout: timeout)
         case "password":
-            guard let sudoPassword, !sudoPassword.isEmpty else { throw ProcessRunner.Failure(message: "Serve la password di sudo") }
+            guard let sudoPassword, !sudoPassword.isEmpty else { throw ProcessRunner.Failure(message: tr("Serve la password di sudo")) }
             let line = Data((sudoPassword + "\n").utf8)
             do {
                 try await ssh.run("sudo -k -S -p '' -v", stdin: line, timeout: 30)
             } catch {
-                throw ProcessRunner.Failure(message: "Password di sudo non accettata")
+                throw ProcessRunner.Failure(message: tr("Password di sudo non accettata"))
             }
             return try await ssh.run("sudo -k -S -p '' " + command, stdin: line, timeout: timeout)
         default:
-            throw ProcessRunner.Failure(message: "L'utente \(identity.user) non può usare sudo: serve root una volta per Caddy e il servizio")
+            throw ProcessRunner.Failure(message: tr("L'utente %@ non può usare sudo: serve root una volta per Caddy e il servizio", identity.user))
         }
     }
 
@@ -228,7 +228,7 @@ public struct RemoteAdmin: Sendable {
     @discardableResult
     public func copyPiConfig(from directory: URL = PiConfig.localDirectory) async throws -> [String] {
         let present = PiConfig.files.filter { FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path) }
-        guard !present.isEmpty else { throw ProcessRunner.Failure(message: "Su questo Mac non c'è una configurazione di pi (\(directory.path))") }
+        guard !present.isEmpty else { throw ProcessRunner.Failure(message: tr("Su questo Mac non c'è una configurazione di pi (%@)", directory.path)) }
         for name in present {
             let data = try Data(contentsOf: directory.appendingPathComponent(name))
             try await ssh.run(RemoteScripts.command(RemoteScripts.installPiFile, [name]), stdin: data, timeout: 60)
@@ -246,7 +246,7 @@ public struct RemoteAdmin: Sendable {
     /// omp `version` on the server, the release build for its system.
     public func installOmp(version: String, probe: RemoteProbe) async throws -> String {
         guard let asset = OmpConfig.asset(for: probe) else {
-            throw ProcessRunner.Failure(message: "omp non ha una build per \(probe.os) \(probe.arch)")
+            throw ProcessRunner.Failure(message: tr("omp non ha una build per %@ %@", probe.os, probe.arch))
         }
         let result = try await ssh.run(RemoteScripts.command(RemoteScripts.installOmp, [version, asset]), timeout: 600)
         return RemoteScripts.values(result.text)["omp"] ?? ""
@@ -256,7 +256,7 @@ public struct RemoteAdmin: Sendable {
     @discardableResult
     public func copyOmpConfig(from directory: URL = OmpConfig.localDirectory) async throws -> [String] {
         let present = OmpConfig.files.filter { FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path) }
-        guard present.contains("agent.db") else { throw ProcessRunner.Failure(message: "Su questo Mac non c'è una configurazione di omp (\(directory.path))") }
+        guard present.contains("agent.db") else { throw ProcessRunner.Failure(message: tr("Su questo Mac non c'è una configurazione di omp (%@)", directory.path)) }
         for name in present {
             let data = name == "agent.db" ? try OmpConfig.snapshot(directory.appendingPathComponent(name))
                                           : try Data(contentsOf: directory.appendingPathComponent(name))
@@ -278,11 +278,11 @@ public struct RemoteAdmin: Sendable {
     /// Replace the engine and restart it. Turns running at that moment are cut
     /// short, so the caller checks for them first (AppModel.updateEngine).
     public func updateEngine(probe: RemoteProbe, linux: LinuxEngines = .standard) async throws {
-        guard let arch = probe.engineArch else { throw ProcessRunner.Failure(message: "Architettura \(probe.arch) non supportata") }
+        guard let arch = probe.engineArch else { throw ProcessRunner.Failure(message: tr("Architettura %@ non supportata", probe.arch)) }
         let binary: (url: URL, sha256: String)
         if probe.isMac {
             guard let mac = ServerSetupFlow.macEngine(arch) else {
-                throw ProcessRunner.Failure(message: "Il motore di questa app non è per Mac \(probe.arch)")
+                throw ProcessRunner.Failure(message: tr("Il motore di questa app non è per Mac %@", probe.arch))
             }
             binary = mac
         } else {
@@ -306,7 +306,7 @@ public struct RemoteAdmin: Sendable {
         guard let object = try? JSONSerialization.jsonObject(with: result.stdout) as? [String: Any],
               let token = object["token"] as? String,
               let device = object["device"] as? [String: Any], let id = device["id"] as? String
-        else { throw ProcessRunner.Failure(message: "Il motore non ha restituito un token") }
+        else { throw ProcessRunner.Failure(message: tr("Il motore non ha restituito un token")) }
         return AddedDevice(deviceId: id, token: token)
     }
 }

@@ -35,7 +35,7 @@ extension AppModel {
         return remoteEngines.first { $0.id == id }
     }
 
-    public var engineName: String { activeRemoteEngine?.name ?? "Questo Mac" }
+    public var engineName: String { activeRemoteEngine?.name ?? tr("Questo Mac") }
 
     /// The shown engine is on a server: its paths are the server's, not this Mac's.
     public var isRemote: Bool { activeRemoteEngine != nil }
@@ -59,7 +59,7 @@ extension AppModel {
     /// switching the window to that engine when it is not the one shown.
     public func createBot(on choice: EngineChoice = .local) async {
         guard let target = choice == engineChoice ? client : peerClient(choice) else {
-            lastError = "Motore non raggiungibile: il bot non è stato creato"
+            lastError = tr(tr("Motore non raggiungibile: il bot non è stato creato"))
             return
         }
         do {
@@ -129,17 +129,17 @@ extension AppModel {
         switch engineChoice {
         case .local:
             guard let localPort else {
-                status = .starting("Avvio del motore di questo Mac…")
+                status = .starting(tr("Avvio del motore di questo Mac…"))
                 return
             }
             client = CompanionClient(connection: Connection(name: "Questo Mac", host: "127.0.0.1", port: localPort), token: nil)
         case let .remote(id):
             guard let engine = remoteEngines.first(where: { $0.id == id }), let connection = engine.connection else {
-                status = .failed("Server remoto non configurato correttamente")
+                status = .failed(tr("Server remoto non configurato correttamente"))
                 return
             }
             guard let token = RemoteEngineStore.token(engineId: id) else {
-                status = .failed("Questo Mac non ha un token per \(engine.name): abbinalo di nuovo da Impostazioni › Server remoti")
+                status = .failed(tr("Questo Mac non ha un token per %@: abbinalo di nuovo da Impostazioni › Server remoti", engine.name))
                 return
             }
             let remote = CompanionClient(connection: connection, token: token)
@@ -152,10 +152,10 @@ extension AppModel {
     /// What the banner says when the stream fails, in terms of what to do.
     func offlineReason(_ error: Error) -> String {
         if case let APIError.status(code, _)? = error as? APIError, code == 401, let engine = activeRemoteEngine {
-            return "\(engine.name) non riconosce più questo Mac (dispositivo revocato?): abbinalo di nuovo da Impostazioni › Server remoti"
+            return tr("%@ non riconosce più questo Mac (dispositivo revocato?): abbinalo di nuovo da Impostazioni › Server remoti", engine.name)
         }
         if let engine = activeRemoteEngine {
-            return "\(engine.name) non raggiungibile: \(error.localizedDescription). Il server continua a lavorare; mi ricollego da solo."
+            return tr("%@ non raggiungibile: %@. Il server continua a lavorare; mi ricollego da solo.", engine.name, error.localizedDescription)
         }
         return error.localizedDescription
     }
@@ -193,7 +193,7 @@ public enum RemotePairingError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .badURL: return "L'indirizzo deve essere l'URL https del server, per esempio https://bot.example.it/srv1/deploy"
+        case .badURL: return tr("L'indirizzo deve essere l'URL https del server, per esempio https://bot.example.it/srv1/deploy")
         }
     }
 }
@@ -226,7 +226,7 @@ extension AppModel {
     /// Claude's login on a server this Mac administers: the `claude setup-token` token (§4.2).
     public func setClaudeToken(_ token: String, for engine: RemoteEngine) async throws {
         guard let identity = identity(for: engine) else {
-            throw ProcessRunner.Failure(message: "Questo Mac non amministra \(engine.name): il token si imposta dal Mac che lo ha configurato")
+            throw ProcessRunner.Failure(message: tr("Questo Mac non amministra %@: il token si imposta dal Mac che lo ha configurato", engine.name))
         }
         try await RemoteAdmin(identity: identity, store: identityStore).setClaudeToken(token)
         // the next servers get it in their setup
@@ -261,11 +261,11 @@ public enum EngineUpdateError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case let .busy(names):
-            return "Stanno lavorando: \(names.joined(separator: ", ")). Aggiornare adesso interrompe i loro turni."
+            return tr("Stanno lavorando: %@. Aggiornare adesso interrompe i loro turni.", names.joined(separator: ", "))
         case let .notAdministered(name):
-            return "Questo Mac non amministra \(name): l'aggiornamento si fa dal Mac che lo ha configurato"
+            return tr("Questo Mac non amministra %@: l'aggiornamento si fa dal Mac che lo ha configurato", name)
         case .didNotComeBack:
-            return "Il motore aggiornato non risponde: controlla il server (Apri un terminale sul server)"
+            return tr("Il motore aggiornato non risponde: controlla il server (Apri un terminale sul server)")
         }
     }
 }
@@ -308,7 +308,7 @@ extension AppModel {
             guard let health = try? await client.remoteHealth() else { return }
             guard let self, self.engineChoice == .remote(engine.id), !health.isCompatible else { return }
             self.streamTask?.cancel()
-            self.status = .failed("Il motore su \(engine.name) è di un'altra versione (contratto \(health.contract.map(String.init) ?? "?"), questa app parla \(RemoteHealth.supportedContract)): aggiornalo da Impostazioni › Server remoti")
+            self.status = .failed(tr("Il motore su %@ è di un'altra versione (contratto %@, questa app parla %@): aggiornalo da Impostazioni › Server remoti", engine.name, health.contract.map(String.init) ?? "?", String(RemoteHealth.supportedContract)))
         }
     }
 }

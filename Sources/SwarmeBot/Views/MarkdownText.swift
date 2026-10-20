@@ -12,6 +12,7 @@
 // worse than markdown you did.
 import SwiftUI
 import CompanionCore
+import SwarmeKit
 
 struct MarkdownText: View {
     let source: String
@@ -169,7 +170,7 @@ private struct CodeBlock: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.secondary)
-                .help("Copia")
+                .help(tr("Copia"))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 4)

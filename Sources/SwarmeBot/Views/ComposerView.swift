@@ -46,13 +46,13 @@ struct ComposerView: View {
                     Image(systemName: "plus").font(.system(size: 14, weight: .medium))
                 }
                 .buttonStyle(CircleButtonStyle(fill: .clear, hoverFill: Theme.raised, ink: Theme.secondary))
-                .help("Allega file o immagini (oppure trascinali qui, o incolla)")
+                .help(tr("Allega file o immagini (oppure trascinali qui, o incolla)"))
                 ComposerTextView(
                     text: draft, height: $height, placeholder: placeholder, focusRequest: focusRequest, onSubmit: submit,
-                    onPasteImage: { data, mime in add(.init(name: "Immagine incollata", kind: .image(data, mime: mime))) },
+                    onPasteImage: { data, mime in add(.init(name: tr("Immagine incollata"), kind: .image(data, mime: mime))) },
                     onLongPaste: { text in
                         guard text.utf8.count > pasteChipThreshold else { return false }
-                        add(.init(name: "Testo incollato", kind: .paste(text)))
+                        add(.init(name: tr("Testo incollato"), kind: .paste(text)))
                         return true
                     }
                 )
@@ -67,7 +67,7 @@ struct ComposerView: View {
                     }
                     // red, so a running turn is obvious from the composer alone
                     .buttonStyle(CircleButtonStyle(fill: Theme.danger, hoverFill: Theme.danger, ink: Theme.dangerInk, brighten: true))
-                    .help("Interrompi (⌘.)")
+                    .help(tr("Interrompi (⌘.)"))
                 }
                 if canSend {
                     Button(action: submit) {
@@ -76,7 +76,7 @@ struct ComposerView: View {
                     }
                     .buttonStyle(busy ? CircleButtonStyle(fill: Theme.raised, hoverFill: Theme.raisedHover, ink: Theme.secondary)
                                       : CircleButtonStyle(fill: Theme.accent, hoverFill: Theme.accent, ink: Theme.accentInk, brighten: true))
-                    .help(busy ? "Accoda il messaggio: parte quando il turno finisce" : "Invia (⏎)")
+                    .help(busy ? tr("Accoda il messaggio: parte quando il turno finisce") : tr("Invia (⏎)"))
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
                 }
             }
@@ -92,7 +92,7 @@ struct ComposerView: View {
                 Capsule().stroke(dropTargeted ? Theme.accent : Theme.hairline.opacity(0.3), lineWidth: dropTargeted ? 2 : 1)
             )
             .contextMenu {
-                Button("Allega file o immagini…", action: pickFiles)
+                Button(tr("Allega file o immagini…"), action: pickFiles)
             }
             .onDrop(of: [.fileURL, .image], isTargeted: $dropTargeted, perform: drop)
             if let bot = model.selectedBot {
@@ -113,8 +113,8 @@ struct ComposerView: View {
                         .foregroundStyle(missing ? Theme.warning : Theme.secondary)
                     }
                     .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
-                    .help(missing ? "La cartella \(folder) non esiste più: clicca per sceglierne un'altra"
-                          : model.isRemote ? "Cartella di lavoro sul server: \(folder)" : "Cartella di lavoro: \(folder)")
+                    .help(missing ? tr("La cartella %@ non esiste più: clicca per sceglierne un'altra", folder)
+                          : model.isRemote ? tr("Cartella di lavoro sul server: %@", folder) : tr("Cartella di lavoro: %@", folder))
                     .popover(isPresented: Binding(get: { remoteFolder != nil }, set: { if !$0 { remoteFolder = nil } })) {
                         RemoteFolderEditor(path: remoteFolder ?? folder) { path in
                             remoteFolder = nil
@@ -136,10 +136,10 @@ struct ComposerView: View {
     }
 
     private var placeholder: String {
-        if busy, let bot = model.selectedBot { return "\(bot.name) sta lavorando — invia quando il turno finisce" }
-        if let bot = model.selectedBot { return "Scrivi a \(bot.name)" }
-        if let room = model.selectedRoom { return "Scrivi in #\(room.name) — @nome per chiamare un bot" }
-        return "Scrivi…"
+        if busy, let bot = model.selectedBot { return tr("%@ sta lavorando — invia quando il turno finisce", bot.name) }
+        if let bot = model.selectedBot { return tr("Scrivi a %@", bot.name) }
+        if let room = model.selectedRoom { return tr("Scrivi in #%@ — @nome per chiamare un bot", room.name) }
+        return tr("Scrivi…")
     }
 
     private var canSend: Bool {
@@ -151,11 +151,11 @@ struct ComposerView: View {
         let pending = attachments[threadId] ?? []
         guard canSend else { return }
         if pending.contains(where: { if case .image = $0.kind { return true } else { return false } }), !model.selectedAcceptsImages {
-            model.lastError = "Il motore di questa chat non legge immagini: rimuovile o cambia modello."
+            model.lastError = tr("Il motore di questa chat non legge immagini: rimuovile o cambia modello.")
             return
         }
         if let refused = unreadableForEndpoint(pending) {
-            model.lastError = "Il Local Endpoint riceve i file come testo: \(refused) non si può leggere. Allega testo, codice, CSV, JSON, Markdown, PDF o immagini."
+            model.lastError = tr("Il Local Endpoint riceve i file come testo: %@ non si può leggere. Allega testo, codice, CSV, JSON, Markdown, PDF o immagini.", refused)
             return
         }
         drafts[threadId] = ""
@@ -215,8 +215,8 @@ struct ComposerView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.prompt = "Scegli"
-        panel.message = "Cartella di lavoro"
+        panel.prompt = tr("Scegli")
+        panel.message = tr("Cartella di lavoro")
         let current = URL(fileURLWithPath: workingFolder(bot), isDirectory: true)
         if FileManager.default.fileExists(atPath: current.path) { panel.directoryURL = current }
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -240,7 +240,7 @@ struct ComposerView: View {
             add(.init(name: url.lastPathComponent, kind: .image(data, mime: mime)))
         } else if model.isRemote {
             // a file goes by path, and this Mac's paths do not exist on the server
-            model.lastError = "Su un server remoto si allegano solo immagini: copia \(url.lastPathComponent) sul server e indica il percorso nel messaggio"
+            model.lastError = tr("Su un server remoto si allegano solo immagini: copia %@ sul server e indica il percorso nel messaggio", url.lastPathComponent)
         } else {
             add(.init(name: url.lastPathComponent, kind: .file(url.path)))
         }
@@ -267,7 +267,7 @@ struct ComposerView: View {
                 handled = true
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.png.identifier) { data, _ in
                     guard let data else { return }
-                    DispatchQueue.main.async { add(.init(name: "Immagine", kind: .image(data, mime: "image/png"))) }
+                    DispatchQueue.main.async { add(.init(name: tr("Immagine"), kind: .image(data, mime: "image/png"))) }
                 }
             }
         }
@@ -310,7 +310,7 @@ private struct MentionList: View {
                     HStack(spacing: 8) {
                         BotAvatar(bot: bot, size: 24, animated: false)
                         Text(bot.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
-                        Text(bot.title.isEmpty ? "Agente" : bot.title).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
+                        Text(bot.title.isEmpty ? tr("Agente") : bot.title).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
                         Spacer()
                     }
                     .padding(.horizontal, 10)
@@ -430,12 +430,12 @@ private struct PendingApprovalPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text("RICHIESTA IN ATTESA")
+                    Text(tr("RICHIESTA IN ATTESA"))
                         .font(.system(size: 11))
                         .tracking(1.98)
                         .foregroundStyle(Theme.secondary)
                     if count > 1 {
-                        Text("\(count)")
+                        Text(verbatim: "\(count)")
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.secondary)
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -469,13 +469,13 @@ private struct PendingApprovalPanel: View {
             .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline.opacity(0.5)).frame(height: 1) }
             HStack(spacing: 8) {
                 Spacer()
-                Button("Interrompi turno") { Task { await model.interrupt() } }
+                Button(tr("Interrompi turno")) { Task { await model.interrupt() } }
                     .buttonStyle(ApprovalButtonStyle(kind: .plain))
-                Button("Nega") { answer("Deny") }
+                Button(tr("Nega")) { answer("Deny") }
                     .buttonStyle(ApprovalButtonStyle(kind: .danger))
                     .keyboardShortcut(.escape, modifiers: [])
                 if card.allowKey != nil {
-                    Button("Consenti sempre") {
+                    Button(tr("Consenti sempre")) {
                         sending = true
                         Task {
                             await model.alwaysAllow(threadId: threadId, card: card)
@@ -485,7 +485,7 @@ private struct PendingApprovalPanel: View {
                     .buttonStyle(ApprovalButtonStyle(kind: .outline))
                     .help(card.allowKey ?? "")
                 }
-                Button("Consenti una volta") { answer("Allow") }
+                Button(tr("Consenti una volta")) { answer("Allow") }
                     .buttonStyle(ApprovalButtonStyle(kind: .primary))
                     .keyboardShortcut(.return, modifiers: [])
             }
@@ -736,15 +736,15 @@ private struct RemoteFolderEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Cartella di lavoro sul server").font(.headline)
-            TextField("/home/utente/progetto", text: $path)
+            Text(tr("Cartella di lavoro sul server")).font(.headline)
+            TextField(tr("/home/utente/progetto"), text: $path)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 320)
                 .onSubmit { save(path) }
-            Text("Un percorso del server, non di questo Mac.").font(.caption).foregroundStyle(.secondary)
+            Text(tr("Un percorso del server, non di questo Mac.")).font(.caption).foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button("Usa") { save(path) }.keyboardShortcut(.defaultAction)
+                Button(tr("Usa")) { save(path) }.keyboardShortcut(.defaultAction)
                     .disabled(path.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }

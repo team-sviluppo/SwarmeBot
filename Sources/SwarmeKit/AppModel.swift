@@ -30,7 +30,7 @@ public final class AppModel {
         case failed(String)
     }
 
-    public internal(set) var status: Status = .starting("Avvio…")
+    public internal(set) var status: Status = .starting(tr("Avvio…"))
     public internal(set) var state = CompanionState()
     /// Live reply text, apart from `state` so a delta redraws only the
     /// bubble it belongs to. See LiveText.swift.
@@ -179,7 +179,7 @@ public final class AppModel {
                     if case let .notify(notification) = frame.frame { onNotify?(notification) }
                     onUnreadChange?(state.unreadCount)
                 }
-                status = .offline("Connessione al motore persa.")
+                status = .offline(tr("Connessione al motore persa."))
             } catch {
                 if Task.isCancelled || error is CancellationError { return }
                 log.error("stream failed: \(error.localizedDescription, privacy: .public)")
@@ -288,7 +288,7 @@ public final class AppModel {
     /// The label a bot's model shows in the composer.
     public func modelLabel(for bot: Bot) -> String {
         guard let instance = instance(bot.modelSelection.instanceId) else {
-            return bot.modelSelection.model.isEmpty ? "Nessun modello" : bot.modelSelection.model
+            return bot.modelSelection.model.isEmpty ? tr("Nessun modello") : bot.modelSelection.model
         }
         let model = instance.models.options.first { $0.id == bot.modelSelection.model }?.label ?? bot.modelSelection.model
         return model

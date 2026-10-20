@@ -26,6 +26,14 @@ History you need to read the docs correctly:
 The project language is **Italian** for UI strings, plans and design docs. Code, code comments
 and commit messages are **English**.
 
+The app is localized in English (default) and Italian, chosen in Settings › Generale
+(`SwarmeKit/Localization.swift`). UI strings are written in Italian and wrapped in `tr("…")`; the
+Italian text is the key and its English goes in `SwarmeKit/Translations/Translations+<Area>.swift`.
+Interpolations become `%@` (`tr("Eliminare %@?", name)`), SwiftUI titles take the `tr` String
+(`Button(tr("Salva"))`), words not to translate use `Text(verbatim:)`, dates use `appFormatted`.
+`LocalizationTests` fails on a missing English entry or a bare literal title. Engine text is English
+and stays untranslated.
+
 ## Layout
 
 | Target | Role |

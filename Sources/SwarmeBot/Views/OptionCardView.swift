@@ -86,13 +86,13 @@ struct OptionCardView: View {
     }
 
     private var status: (icon: String, tint: Color, text: String) {
-        if card.isPending { return ("checkmark.shield", Theme.accent, "In attesa della tua risposta qui sotto") }
+        if card.isPending { return ("checkmark.shield", Theme.accent, tr("In attesa della tua risposta qui sotto")) }
         switch card.answered?.lowercased() {
-        case "allow"?: return ("checkmark", Theme.success, "Consentito")
-        case "deny"?: return ("xmark", Theme.secondary, "Negato")
+        case "allow"?: return ("checkmark", Theme.success, tr("Consentito"))
+        case "deny"?: return ("xmark", Theme.secondary, tr("Negato"))
         case let other?: return ("checkmark", Theme.success, other)
         case nil: return ("exclamationmark.triangle", Theme.warning,
-                          card.dismissed == true ? "Ignorata" : "Non disponibile · azione non eseguita")
+                          card.dismissed == true ? tr("Ignorata") : tr("Non disponibile · azione non eseguita"))
         }
     }
 
@@ -146,7 +146,7 @@ struct OptionCardView: View {
                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous).stroke(Theme.hairline.opacity(0.4)))
                 .padding(.top, 12)
                 HStack(spacing: 8) {
-                    TextField("", text: $custom, prompt: Text("Scrivi la tua risposta").foregroundStyle(Theme.secondary))
+                    TextField("", text: $custom, prompt: Text(tr("Scrivi la tua risposta")).foregroundStyle(Theme.secondary))
                         .textFieldStyle(.plain)
                         .font(.system(size: 15))
                         .padding(.horizontal, 12)
@@ -155,7 +155,7 @@ struct OptionCardView: View {
                         .overlay(RoundedRectangle(cornerRadius: Theme.radiusRow).stroke(Theme.hairline.opacity(0.4)))
                         .onSubmit(submitCustom)
                     if card.multiSelect == true || !custom.isEmpty {
-                        Button("Invia", action: submitCustom)
+                        Button(tr("Invia"), action: submitCustom)
                             .buttonStyle(.plain)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(Theme.accentInk)
@@ -171,7 +171,7 @@ struct OptionCardView: View {
                     Image(systemName: card.answered == nil ? "minus.circle" : "checkmark")
                         .font(.system(size: 13))
                         .foregroundStyle(card.answered == nil ? Theme.secondary : Theme.success)
-                    Text(card.dismissed == true ? "Ignorata" : card.answered ?? "Scaduta")
+                    Text(card.dismissed == true ? tr("Ignorata") : card.answered ?? tr("Scaduta"))
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.secondary)
                 }
