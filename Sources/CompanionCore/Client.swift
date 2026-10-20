@@ -21,13 +21,38 @@ public struct Connection: Codable, Hashable, Identifiable, Sendable {
     /// Optional so connections saved before fallbacks existed still decode;
     /// read through `orderedHosts`, which is never empty.
     public var hosts: [String]?
+    /// `https` for a remote engine (bot-remoto §6); nil is the companion's plain `http`.
+    public var scheme: String?
+    /// The proxy's prefix in front of the engine, e.g. `/srv1/deploy`; nil or
+    /// empty for an engine at the root. Optional so older saves still decode.
+    public var basePath: String?
 
-    public init(id: String = UUID().uuidString, name: String, host: String, port: Int, hosts: [String]? = nil) {
+    public init(id: String = UUID().uuidString, name: String, host: String, port: Int, hosts: [String]? = nil,
+                scheme: String? = nil, basePath: String? = nil) {
         self.id = id
         self.name = name
         self.host = Self.urlHost(host)
         self.port = port
         self.hosts = hosts
+        self.scheme = scheme
+        self.basePath = basePath.map(Self.cleanBasePath)
+    }
+
+    /// `/srv1/deploy` from `srv1/deploy/`; empty for the root.
+    public static func cleanBasePath(_ raw: String) -> String {
+        let parts = raw.split(separator: "/").filter { !$0.isEmpty }
+        return parts.isEmpty ? "" : "/" + parts.joined(separator: "/")
+    }
+
+    /// A remote engine's chat URL (`https://bot.example.it/srv1/deploy/`), as
+    /// the pairing QR and the server settings carry it.
+    public static func remote(chatURL text: String, name: String? = nil) -> Connection? {
+        guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let host = url.host, !host.isEmpty, url.query == nil, url.fragment == nil, url.user == nil
+        else { return nil }
+        let port = url.port ?? (scheme == "https" ? 443 : 80)
+        return Connection(name: name ?? host, host: host, port: port, scheme: scheme, basePath: url.path)
     }
 
     /// The representation `URLComponents.host` accepts for a literal IPv6
@@ -118,11 +143,16 @@ public struct Connection: Codable, Hashable, Identifiable, Sendable {
     /// this needs before it could claim otherwise. See `docs/ios-companion.md`.
     public var baseURL: URL? {
         var components = URLComponents()
-        components.scheme = "http"
+        let scheme = scheme ?? "http"
+        components.scheme = scheme
         // Normalize here too so connections saved by older builds with an
         // unbracketed IPv6 host remain usable after an update.
         components.host = Self.urlHost(host)
-        components.port = port
+        // the scheme's own port stays out of the URL (and of the Host header)
+        if !((scheme == "https" && port == 443) || (scheme == "http" && port == 80 && self.scheme != nil)) {
+            components.port = port
+        }
+        components.path = basePath ?? ""
         return components.url
     }
 }
@@ -248,7 +278,8 @@ public struct CompanionClient: Sendable {
         guard let base = connection.baseURL,
               var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
         else { throw APIError.badURL }
-        components.path = path
+        // the proxy's prefix stays in front of every route
+        components.path = (connection.basePath ?? "") + path
         components.queryItems = query.isEmpty ? nil : query
         guard let url = components.url else { throw APIError.badURL }
 
@@ -389,6 +420,12 @@ public struct CompanionClient: Sendable {
 
     public func instances() async throws -> [Instance] {
         try await send(try makeRequest("GET", "/api/instances"), as: InstanceList.self).instances
+    }
+
+    /// The CLI an instance runs (`omp` for the pi driver); "" is the driver's default.
+    /// Reloads that provider, cutting its turns short.
+    public func setInstanceCLI(_ instanceId: String, cli: String) async throws -> [Instance] {
+        try await send(try makeRequest("PATCH", "/api/instances/\(instanceId)", body: ["cli": cli]), as: InstanceList.self).instances
     }
 
     public func config() async throws -> ConfigStatus {

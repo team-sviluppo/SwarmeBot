@@ -18,6 +18,9 @@
 // - only an explicit 403 refusal or a capabilities verdict turns it off, and
 //   a 403 mid-turn is recovered by replaying the full branch without header.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import HarnessCore
 
 public struct LocalEndpointDriver: ProviderDriver {
@@ -197,7 +200,7 @@ final class LocalEndpointInstance: ProviderInstance, ProviderAdapter {
             return Completion(text: message?["content"]?.string ?? "", usage: usage, sessionId: echo, toolCalls: Self.toolCalls(message?["tool_calls"]))
         }
 
-        let (bytes, response) = try await session.bytes(for: request)
+        let (bytes, response) = try await session.streamingBytes(for: request)
         let http = response as? HTTPURLResponse
         let echo = http.flatMap { Self.sessionEcho($0, headerName) }
         guard let http, (200...299).contains(http.statusCode) else {

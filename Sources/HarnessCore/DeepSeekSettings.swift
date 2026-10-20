@@ -12,6 +12,9 @@
 // Host API for a direct connection and through the dsh-remote-web-ui plugin
 // routes (`/api/pair/model-catalog…`) for a paired device.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 // MARK: - Config
 

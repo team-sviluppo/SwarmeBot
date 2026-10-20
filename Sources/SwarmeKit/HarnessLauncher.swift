@@ -59,7 +59,7 @@ public enum HarnessEngine: String, CaseIterable, Sendable {
 
     /// Where the bots, messages and config actually live.
     public static var realDataDir: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".swarmebot", isDirectory: true)
+        AppPaths.home.appendingPathComponent(".swarmebot", isDirectory: true)
     }
 
     /// `Process` will not start if its working directory is missing, and it
@@ -94,7 +94,7 @@ public enum HarnessEngine: String, CaseIterable, Sendable {
         guard fm.fileExists(atPath: source.path) else { return target }
         if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
         try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try fm.copyItem(at: source, to: target)
+        try copyEngineData(from: source, to: target)
         let copied = target.appendingPathComponent("messages.db")
         let wal = target.appendingPathComponent("messages.db-wal")
         let shm = target.appendingPathComponent("messages.db-shm")
@@ -114,6 +114,25 @@ public enum HarnessEngine: String, CaseIterable, Sendable {
         return target
     }
 
+    /// `copyItem`, minus what is not engine data or cannot be copied: the ssh
+    /// identities (private keys, and the control sockets ssh keeps there) and
+    /// any socket or FIFO, which `copyItem` refuses (ENOTSUP) and so stopped
+    /// the engine from starting.
+    static func copyEngineData(from source: URL, to target: URL, skipping skipped: Set<String> = ["ssh"]) throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: target, withIntermediateDirectories: true)
+        for name in try fm.contentsOfDirectory(atPath: source.path) {
+            if skipped.contains(name) { continue }
+            let from = source.appendingPathComponent(name), to = target.appendingPathComponent(name)
+            let type = (try fm.attributesOfItem(atPath: from.path))[.type] as? FileAttributeType
+            switch type {
+            case .typeDirectory?: try copyEngineData(from: from, to: to, skipping: [])
+            case .typeRegular?, .typeSymbolicLink?: try fm.copyItem(at: from, to: to)
+            default: continue
+            }
+        }
+    }
+
     public struct BackupError: Error, CustomStringConvertible {
         public var description: String
         public init(_ description: String) { self.description = description }
@@ -129,12 +148,12 @@ public enum HarnessLocator {
     /// Where SwarmeBot keeps app-scoped data (logs, credentials). The harness
     /// itself keeps its data in `~/.swarmebot` regardless.
     public static var userData: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        AppPaths.home
             .appendingPathComponent("Library/Application Support/SwarmeBot", isDirectory: true)
     }
 
     public static var logDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        AppPaths.home
             .appendingPathComponent("Library/Logs/SwarmeBot", isDirectory: true)
     }
 
@@ -162,7 +181,7 @@ public enum HarnessLocator {
                 ]
                 // Absent unless the person turned it on. The driver still
                 // does not start until a bot's turn asks for this Mac.
-                if UserDefaults.standard.bool(forKey: "localComputerEnabled") { env["OMB_LOCAL_COMPUTER"] = "1" }
+                if AppPaths.defaults.bool(forKey: "localComputerEnabled") { env["OMB_LOCAL_COMPUTER"] = "1" }
                 return env
             }()
         )

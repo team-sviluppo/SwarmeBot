@@ -64,6 +64,8 @@ public enum Frame: Sendable {
     case library(botId: String)
     /// Connectors were added, edited, tested or removed: refetch the list.
     case mcpConnectors
+    /// An instance's session window moved (after a turn on that account).
+    case usageLimit(instanceId: String, limit: UsageLimit)
     case unknown(kind: String)
 }
 
@@ -72,6 +74,7 @@ extension Frame: Decodable {
         case kind, cursor, resumed, threadId, message, activeLeafId
         case bot, botId, group, groupId, notification, png, mime, state, event
         case routine, routineId, run, webhook, webhookId, attempt, held, helpReason
+        case instanceId, usageLimit
     }
 
     public init(from decoder: Decoder) throws {
@@ -144,6 +147,13 @@ extension Frame: Decodable {
             self = (try? container.decode(String.self, forKey: .botId)).map { .library(botId: $0) } ?? .unknown(kind: kind)
         case "mcpConnectors":
             self = .mcpConnectors
+        case "usage-limit":
+            if let id = try? container.decode(String.self, forKey: .instanceId),
+               let limit = try? container.decode(UsageLimit.self, forKey: .usageLimit) {
+                self = .usageLimit(instanceId: id, limit: limit)
+            } else {
+                self = .unknown(kind: kind)
+            }
         case "computer-control":
             if let botId = try? container.decode(String.self, forKey: .botId) {
                 self = .computerControl(

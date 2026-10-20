@@ -299,3 +299,59 @@ final class ACPHarnessTests: XCTestCase {
         XCTAssertEqual(ACPHarnesses.classifyCursor(RPCError(message: "Your subscription has expired", code: nil)), "inactive_subscription")
     }
 }
+
+@MainActor
+final class PiDriverTests: XCTestCase {
+    static let fake = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .appendingPathComponent("../../parity/fake_pi.py").standardized.path
+
+    /// What omp sends when the provider answers 403: the turn fails and says why.
+    func testAProviderErrorFailsTheTurnWithItsReason() async throws {
+        let instance = try PiInstance(input: DriverCreateInput(instanceId: "pi", displayName: nil, environment: ProcessInfo.processInfo.environment,
+                                                               enabled: true, config: ["cli": .string(Self.fake)]))
+        var events: [RuntimeEvent.Body] = []
+        instance.onEvent { events.append($0.body) }
+        _ = try await instance.sendTurn(SendTurnInput(threadId: "t-pi-err", text: "RIFIUTO", model: "fake/uno"))
+        for _ in 0..<250 where !events.contains(where: { if case .turnCompleted = $0 { true } else { false } }) {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(events.contains(.runtimeError(message: "403 The requested model is not available for this API key", setup: nil)), "\(events)")
+        let completed = events.compactMap { if case let .turnCompleted(ok, stopReason, _, _, _) = $0 { (ok, stopReason) } else { nil } }
+        XCTAssertEqual(completed.count, 1, "settled once, not again on agent_end")
+        XCTAssertEqual(completed.first?.0, false)
+        XCTAssertEqual(completed.first?.1, "failed")
+    }
+}
+
+/// Claude's session window, from `rate_limit_event` to `GET /api/instances`.
+@MainActor
+final class UsageLimitTests: XCTestCase {
+    func testSessionWindowFromTheRateLimitEvent() throws {
+        // as claude 2.1.304 prints it
+        let event = try JSON.parse(#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1792517400,"rateLimitType":"five_hour","overageStatus":"rejected","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.42,"resetsAt":1792517400},"seven_day":{"utilization":0.9,"resetsAt":1792998000}}}}"#)
+        let window = try XCTUnwrap(ClaudeInstance.sessionWindow(event["rate_limit_info"]))
+        XCTAssertEqual(window.utilization, 0.42, "the five-hour window, never the weekly one")
+        XCTAssertEqual(window.resetsAt, 1792517400)
+
+        let older = try JSON.parse(#"{"rateLimitType":"five_hour","utilization":0.7,"resetsAt":5}"#)
+        XCTAssertEqual(ClaudeInstance.sessionWindow(older)?.utilization, 0.7)
+        let weekly = try JSON.parse(#"{"rateLimitType":"seven_day","utilization":0.7}"#)
+        XCTAssertNil(ClaudeInstance.sessionWindow(weekly))
+        XCTAssertNil(ClaudeInstance.sessionWindow(try JSON.parse(#"{"status":"allowed"}"#)))
+    }
+
+    func testHarnessKeepsTheWindowPerInstanceAndAnnouncesChanges() throws {
+        let harness = try Harness(paths: temporaryPaths(), environment: ProcessInfo.processInfo.environment, drivers: [])
+        let before = harness.hub.lastSeq
+        var event = RuntimeEvent(provider: "claude", threadId: "t", .usageLimit(window: "five_hour", utilization: 0.3, resetsAt: 100))
+        event.providerInstanceId = "claude"
+        harness.fold(event)
+        XCTAssertEqual(harness.hub.lastSeq, before + 1, "a usage-limit frame, and no runtime frame")
+        harness.fold(event)
+        XCTAssertEqual(harness.hub.lastSeq, before + 1, "the same value is not announced twice")
+
+        let rows = harness.withUsageLimits([["instanceId": "claude", "driverKind": "claude"], ["instanceId": "codex"]])
+        XCTAssertEqual(rows[0]["usageLimit"], ["window": "five_hour", "utilization": 0.3, "resetsAt": 100])
+        XCTAssertNil(rows[1]["usageLimit"])
+    }
+}

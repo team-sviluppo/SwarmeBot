@@ -80,7 +80,7 @@ public enum PermissionProxy {
     }
 
     static func connect(_ path: String) -> Int32 {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        let fd = socket(AF_UNIX, Sys.streamSocket, 0)
         guard fd >= 0 else { return -1 }
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
@@ -91,10 +91,10 @@ public enum PermissionProxy {
             raw[bytes.count] = 0
         }
         let result = withUnsafePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Sys.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
         }
         guard result == 0 else { close(fd); return -1 }
-        _ = fcntl(fd, F_SETNOSIGPIPE, 1)
+        Sys.noSigPipe(fd)
         return fd
     }
 
@@ -159,7 +159,7 @@ public enum PermissionProxy {
             let bytes = Array((frame.serialized() + "\n").utf8)
             var offset = 0
             while offset < bytes.count {
-                let written = bytes.withUnsafeBytes { Darwin.write(fd, $0.baseAddress! + offset, bytes.count - offset) }
+                let written = bytes.withUnsafeBytes { Sys.write(fd, $0.baseAddress! + offset, bytes.count - offset) }
                 if written < 0 {
                     if errno == EINTR { continue }
                     dead()

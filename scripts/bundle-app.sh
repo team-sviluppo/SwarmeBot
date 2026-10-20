@@ -78,6 +78,12 @@ cp -R "$SPARKLE" "$APP/Contents/Frameworks/"
 
 # the very icon the Electron app ships (SwarmeBot/build/icon.icns)
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+# where the Linux engines for remote servers are, and their digests (scripts/linux-engines-manifest.sh)
+if [[ -f "$ROOT/Resources/linux-engines.json" ]]; then
+  cp "$ROOT/Resources/linux-engines.json" "$APP/Contents/Resources/linux-engines.json"
+else
+  echo "warning: no Resources/linux-engines.json — this app cannot set up Linux servers" >&2
+fi
 
 # SwiftPM resources (provider icons); read through Bundle.resources, which
 # looks in Contents/Resources — without it the app traps on the first logo

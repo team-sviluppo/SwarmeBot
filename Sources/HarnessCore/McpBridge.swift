@@ -5,6 +5,9 @@
 // attached to `cua-driver mcp` inside a container. A tools/call is refused
 // while the person holds the desktop; everything else is forwarded as-is.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public enum McpBridge {
     static let refusal = "A person is driving this computer. Call computer_request_help and wait — do not queue actions."

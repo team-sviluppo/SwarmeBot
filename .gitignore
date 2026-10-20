@@ -5,3 +5,4 @@ build/
 .DS_Store
 release/
 .env.mac-release.local
+Resources/linux-engines.json

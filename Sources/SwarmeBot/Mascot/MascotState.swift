@@ -5,21 +5,21 @@
 import CompanionCore
 import Foundation
 
-extension MausState {
+extension SwarmeState {
     /// The desktop's legacy names, kept so an older bot record still resolves.
-    private static let legacy: [String: MausState] = [
+    private static let legacy: [String: SwarmeState] = [
         "deadpan": .idle, "friendly": .happy, "focused": .working, "thinking": .thinking,
         "excited": .excited, "sleepy": .drowsy, "surprised": .surprised, "skeptical": .suspicious,
         "worried": .scared, "mischievous": .playful,
     ]
 
     /// Resolves any stored value — current, legacy or junk — to a real state.
-    static func normalize(_ value: String?) -> MausState? {
+    static func normalize(_ value: String?) -> SwarmeState? {
         guard let value, !value.isEmpty else { return nil }
-        return MausState(rawValue: value) ?? legacy[value]
+        return SwarmeState(rawValue: value) ?? legacy[value]
     }
 
-    static func forBot(_ bot: Bot, last: Message?) -> MausState {
+    static func forBot(_ bot: Bot, last: Message?) -> SwarmeState {
         if let pinned = normalize(bot.mascotExpression) { return pinned }
 
         if last?.kind == .activity, last?.tool?.ok == false { return .alerting }
@@ -49,13 +49,13 @@ extension MausState {
     /// `restingFaceFor`: FNV-1a (32-bit, over UTF-16 code units like JS
     /// `charCodeAt`) of the bot's identity, modulo RESTING_FACES — varied
     /// across a roster, fixed for each bot.
-    static func restingFace(for identity: String) -> MausState {
+    static func restingFace(for identity: String) -> SwarmeState {
         var h: UInt32 = 0x811c9dc5
         for unit in identity.utf16 {
             h ^= UInt32(unit)
             h = h &* 0x01000193
         }
-        let faces = MausFaceData.restingFaces
+        let faces = SwarmeFaceData.restingFaces
         return faces[Int(h % UInt32(faces.count))]
     }
 }

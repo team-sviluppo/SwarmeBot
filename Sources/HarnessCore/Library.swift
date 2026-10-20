@@ -15,11 +15,15 @@
 //
 // Files: `workspaces/<bot>/library/index.json`, and per document the
 // original `<id>.<ext>`, its text `<id>.md`, its passages `<id>.passages.json`.
-import CoreGraphics
 import Foundation
+// PDF text, OCR and embeddings are Apple frameworks: a Linux engine (the
+// remote engine, bot-remoto §3.6) imports text files and ranks by keyword only
+#if canImport(PDFKit)
+import CoreGraphics
 import NaturalLanguage
 import PDFKit
 import Vision
+#endif
 
 public struct LibraryDoc: Codable, Equatable, Sendable {
     public var id: String
@@ -260,6 +264,7 @@ enum LibraryConversion {
         let pages: [String]
         var ocrPages = 0
         if Library.ext(name) == "pdf" {
+            #if canImport(PDFKit)
             guard let pdf = PDFDocument(url: url) else { throw Library.ImportError(status: 400, message: "this PDF cannot be opened (damaged or password protected)") }
             if pdf.isLocked { throw Library.ImportError(status: 400, message: "this PDF is password protected") }
             var read: [String] = []
@@ -271,6 +276,9 @@ enum LibraryConversion {
                 read.append(recognized.count > text.count ? recognized : text)
             }
             pages = read
+            #else
+            throw Library.ImportError(status: 415, message: "PDF files cannot be imported on this engine — convert to text or Markdown first")
+            #endif
         } else {
             let data = try Data(contentsOf: url)
             pages = [String(decoding: data, as: UTF8.self)]
@@ -318,6 +326,9 @@ enum LibraryConversion {
 
     /// One page, rendered at 2× and read by Vision.
     static func ocr(_ url: URL, page number: Int) -> String? {
+        #if !canImport(Vision)
+        return nil
+        #else
         guard let document = CGPDFDocument(url as CFURL), let page = document.page(at: number) else { return nil }
         let box = page.getBoxRect(.mediaBox)
         let scale: CGFloat = 2
@@ -338,11 +349,19 @@ enum LibraryConversion {
         request.recognitionLanguages = ["it-IT", "en-US"]
         try? VNImageRequestHandler(cgImage: image).perform([request])
         return request.results?.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+        #endif
     }
 }
 
 // MARK: - Embeddings
 
+#if !canImport(NaturalLanguage)
+/// No on-device model off Apple platforms: retrieval ranks by keyword alone.
+struct Embedder {
+    init?(sample: String) { return nil }
+    func vector(_ text: String) -> [Float]? { nil }
+}
+#else
 /// Apple's contextual embedding (a BERT on the device), mean-pooled into one
 /// unit vector per text. Nil when the model's assets are not on this Mac.
 struct Embedder {
@@ -374,6 +393,7 @@ struct Embedder {
         return sum.map { Float($0 / norm) }
     }
 }
+#endif
 
 // MARK: - Retrieval
 

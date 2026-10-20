@@ -24,7 +24,7 @@ perché la configurazione, i segreti e il client MCP vivono in SwarmeBot.
 
 ### Verifica Hermes (D5), 2026-10-15
 
-`POST https://hermesagent.hextra.it/swarme/v1/chat/completions` (`default/dgx-default-strong`,
+`POST https://hermes.example.com/swarme/v1/chat/completions` (`default/<modello-hermes>`,
 `stream:false`) con un tool finto `swarme_lookup_order` in `tools`: nessuna `tool_calls`,
 `finish_reason: "stop"`. Il modello ha cercato il tool nel proprio catalogo lato server e ha risposto che
 non esiste. `prompt_tokens: 36642` per una richiesta di una riga.
@@ -364,7 +364,7 @@ Ogni fase si chiude con `swift build`, `swift test`, `parity/all.sh` verdi e un 
 ### Fase 3 — Local Endpoint
 - Loop dei tool (§5), esclusione di Hermes per modello, fallback sul 400, capability `.inline`.
 - **Fatto quando**: con un modello non Hermes il bot chiama un tool, riceve il risultato e risponde; con
-  `default/dgx-default-strong` su Hermes il chip è disattivato e la richiesta non contiene `tools`.
+  `default/<modello-hermes>` su Hermes il chip è disattivato e la richiesta non contiene `tools`.
 
 ### Fase 4 — OAuth
 - Scoperta (401 + `WWW-Authenticate` → `/.well-known/oauth-protected-resource` → metadati del server di

@@ -70,7 +70,7 @@ public enum CredentialStoreError: LocalizedError {
 }
 
 public enum CredentialStore {
-    static let service = "com.swarmebot.mac"
+    static var service: String { "com.swarmebot.mac" + AppPaths.keychainSuffix }
     static let account = "workspace-credentials"
 
     // MARK: Reading and writing
@@ -126,7 +126,7 @@ public enum CredentialStore {
     /// boot, so the key is still there after a restart when the Keychain
     /// item is not visible to the new process.
     private static func writeSecretsFile(_ credential: WorkspaceCredential, _ value: String) throws {
-        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".swarmebot", isDirectory: true)
+        let dir = AppPaths.home.appendingPathComponent(".swarmebot", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent("secrets.json")
         var env = (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] } ?? [:]
@@ -139,7 +139,7 @@ public enum CredentialStore {
     /// The env vars for a harness this app starts. The file fills anything
     /// the Keychain does not return.
     public static var environment: [String: String] {
-        let url = FileManager.default.homeDirectoryForCurrentUser
+        let url = AppPaths.home
             .appendingPathComponent(".swarmebot/secrets.json")
         var env = (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] } ?? [:]
         let values = load()

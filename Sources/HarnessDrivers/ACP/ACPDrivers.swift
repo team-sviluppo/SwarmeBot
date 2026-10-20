@@ -6,6 +6,9 @@
 // Kimi/Grok TOML, Qwen/Droid/OpenCode JSON) before the spawn. Those writers
 // are kept line for line: they edit files the user also edits by hand.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import HarnessCore
 
 enum ACPHarnesses {

@@ -233,7 +233,7 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     public var activity: String?
     public var pinnedMessageId: String?
     public var cwd: String?
-    /// Desktop appearance: body shape id (`MAUS_SILHOUETTES`); unknown or
+    /// Desktop appearance: body shape id (`SwarmeSilhouetteData`); unknown or
     /// absent renders the default.
     public var mascotSilhouette: String?
     /// Desktop appearance: uploaded SVG markup that replaces the mascot.
@@ -441,6 +441,8 @@ public struct Instance: Codable, Hashable, Identifiable, Sendable {
     public var cli: String?
     public var cliDefault: String?
     public var cliCandidates: [String]?
+    /// The subscription's session window, once a turn has reported it.
+    public var usageLimit: UsageLimit?
 
     /// The levels a given model accepts: its own list, else the driver's.
     public func effortLevels(for model: String) -> [String] {
@@ -448,6 +450,30 @@ public struct Instance: Codable, Hashable, Identifiable, Sendable {
     }
 
     public var id: String { instanceId }
+}
+
+/// A subscription's rolling session window (Claude's five hours), as the
+/// last turn on that account reported it.
+public struct UsageLimit: Codable, Hashable, Sendable {
+    public var window: String
+    /// 0…1, past 1 when over the cap.
+    public var utilization: Double
+    /// Epoch seconds.
+    public var resetsAt: Double?
+
+    public init(window: String, utilization: Double, resetsAt: Double?) {
+        self.window = window
+        self.utilization = utilization
+        self.resetsAt = resetsAt
+    }
+
+    public var resetDate: Date? { resetsAt.map { Date(timeIntervalSince1970: $0) } }
+
+    /// Past its reset the number no longer says anything.
+    public func isCurrent(at now: Date = Date()) -> Bool {
+        guard let resetDate else { return true }
+        return resetDate > now
+    }
 }
 
 public struct InstanceList: Codable, Sendable {

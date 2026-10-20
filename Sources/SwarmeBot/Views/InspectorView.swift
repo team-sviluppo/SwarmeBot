@@ -31,7 +31,7 @@ struct InspectorView: View {
             if let bot = model.selectedBot {
                 if ui.inspectorTab != .details {
                     HStack(spacing: 10) {
-                        BotAvatar(bot: bot, size: 32, state: MausState.forBot(bot, last: model.visibleTranscript(bot.threadId).last))
+                        BotAvatar(bot: bot, size: 32, state: SwarmeState.forBot(bot, last: model.visibleTranscript(bot.threadId).last))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(bot.name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
                             if !bot.title.isEmpty {

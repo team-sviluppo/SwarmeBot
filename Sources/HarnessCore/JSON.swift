@@ -387,7 +387,13 @@ extension JSON {
         case let json as JSON: self = json
         case let string as String: self = .string(string)
         case let number as NSNumber:
-            if CFGetTypeID(number) == CFBooleanGetTypeID() { self = .bool(number.boolValue) } else { self = .number(number.doubleValue) }
+            #if canImport(Darwin)
+            let isBool = CFGetTypeID(number) == CFBooleanGetTypeID()
+            #else
+            // swift-corelibs JSONSerialization boxes booleans as char-typed NSNumbers
+            let isBool = String(cString: number.objCType) == "c"
+            #endif
+            if isBool { self = .bool(number.boolValue) } else { self = .number(number.doubleValue) }
         case let array as [Any]: self = .array(array.map { JSON(any: $0) })
         case let dictionary as [String: Any]:
             var object = JSONObject()

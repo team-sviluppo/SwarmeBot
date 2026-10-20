@@ -116,7 +116,7 @@ struct StatusView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            MausAvatar(color: "green", size: 72, state: icon)
+            SwarmeAvatar(color: "green", size: 72, state: icon)
             Text(title)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.ink)
@@ -140,7 +140,7 @@ struct StatusView: View {
         .animation(Theme.appear, value: status)
     }
 
-    private var icon: MausState {
+    private var icon: SwarmeState {
         switch status {
         case .failed: return .scared
         case .offline: return .alerting
@@ -173,7 +173,7 @@ struct EmptyChatView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            MausAvatar(color: "blue", size: 88, state: .happy)
+            SwarmeAvatar(color: "blue", size: 88, state: .happy)
             Text("Nessuna chat selezionata")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.ink)

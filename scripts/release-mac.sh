@@ -9,7 +9,7 @@
 # Credentials, read from .env.mac-release.local in this repo or, failing
 # that, in the Electron checkout (../SwarmeBot/.env.mac-release.local):
 #
-#   MAC_SIGN_IDENTITY="Developer ID Application: Hextra Srl (3UYNX3FBA3)"
+#   MAC_SIGN_IDENTITY="Developer ID Application: Your Company (TEAMID1234)"
 #   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarization
 #   NOTARY_PROFILE      a `xcrun notarytool store-credentials` profile, used
 #                       when the Apple ID trio is not set (default AC_PASSWORD)
@@ -18,6 +18,7 @@
 #                       key generate_keys stored in the login keychain.
 #
 # Other environment: VERSION, BUILD_NUMBER (default: the git commit count),
+# SKIP_LINUX_ENGINES=1 (reuse build/linux, see scripts/linux-engines-manifest.sh),
 # MAC_ARCHES (default arm64,x64), SWARMEBOT_REPO (default ../SwarmeBot),
 # RELEASES_REPO (default team-sviluppo/SwarmeBot).
 #
@@ -129,6 +130,14 @@ ensure_sign_update() {
   fi
   SIGN_UPDATE="$dir/sign_update"
 }
+
+# the Linux engines remote servers download, pinned by digest in the app
+if [[ "${SKIP_LINUX_ENGINES:-0}" == 1 ]]; then
+  "$ROOT/scripts/linux-engines-manifest.sh" "$VERSION" --skip-build
+else
+  "$ROOT/scripts/linux-engines-manifest.sh" "$VERSION"
+fi
+LINUX_ASSETS=("$ROOT"/build/linux/release/swarme-harness-linux-*)
 
 mkdir -p "$OUT"
 IFS=',' read -r -a ARCHES <<<"${MAC_ARCHES:-arm64,x64}"
@@ -268,12 +277,12 @@ EOF
   echo "→ publishing $tag on $RELEASES_REPO"
   if gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
     gh release upload "$tag" --repo "$RELEASES_REPO" --clobber \
-      "${BUILT[@]}" "${ZIPS[@]}" "$appcast"
+      "${BUILT[@]}" "${ZIPS[@]}" "${LINUX_ASSETS[@]}" "$appcast"
   else
     gh release create "$tag" --repo "$RELEASES_REPO" --target "$sha" \
       --title "SwarmeBot ${VERSION}" \
       --notes "SwarmeBot ${VERSION} (${BUILD_NUMBER}) per macOS. Apple silicon: SwarmeBot-${VERSION}-arm64.dmg. Intel: SwarmeBot-${VERSION}-x64.dmg." \
-      "${BUILT[@]}" "${ZIPS[@]}" "$appcast"
+      "${BUILT[@]}" "${ZIPS[@]}" "${LINUX_ASSETS[@]}" "$appcast"
   fi
 fi
 

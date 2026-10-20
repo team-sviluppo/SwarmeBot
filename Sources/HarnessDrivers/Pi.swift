@@ -288,6 +288,13 @@ final class PiTurn {
             let reason = event["message"]?["stopReason"]?.string
             // pi ran a tool and continues on its own: settling now would drop the reply
             if reason == "toolUse" || reason == "tool_use" || reason == "tool_calls" { return }
+            // the provider refused (403, quota, unknown model): no text, the reason only here
+            if reason == "error" {
+                let detail = event["message"]?["errorMessage"]?.string?.split(separator: "\n").first.map(String.init)
+                emit(.runtimeError(message: String((detail ?? "pi reported an error").prefix(400)), setup: nil))
+                settle(ok: false, usage: event["usage"] ?? event["message"]?["usage"])
+                return
+            }
             settle(ok: true, stopReason: reason == "cancelled" ? "cancelled" : "end_turn", usage: event["usage"] ?? event["message"]?["usage"])
         default:
             break

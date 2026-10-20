@@ -68,6 +68,8 @@ public final class Harness {
     var roomStallHandlers: [String: () -> Void] = [:]
     var unattendedBots: [String: Date] = [:]
     var delegationWatch: [String: (channelId: String?, toBotId: String)] = [:]
+    /// Last session window per instance (UsageLimits.swift).
+    var usageLimits: [InstanceID: JSON] = [:]
     /// Base URL of this engine, for the MCP helpers that call back into it.
     public var harnessURL = "http://127.0.0.1:8799"
     /// Guards /api/internal/*; regenerated every boot, handed to the proxies.
@@ -328,6 +330,10 @@ public final class Harness {
     // MARK: - The fold
 
     func fold(_ event: RuntimeEvent) {
+        if case let .usageLimit(window, utilization, resetsAt) = event.body {
+            noteUsageLimit(event.providerInstanceId, window: window, utilization: utilization, resetsAt: resetsAt)
+            return
+        }
         var wire = event.json
         if case .sessionStarted = event.body {
             wire["resumeCursor"] = nil
@@ -470,7 +476,7 @@ public final class Harness {
         case .turnStarted:
             turnStartedAt[threadId] = Date()
             firstTokenAt[threadId] = nil
-        case .sessionExited, .itemUpdated:
+        case .sessionExited, .itemUpdated, .usageLimit:
             break
         }
     }

@@ -51,31 +51,46 @@ public final class AppModel {
 
     @ObservationIgnored private let launcher = HarnessLauncher()
     @ObservationIgnored public internal(set) var client: CompanionClient?
-    @ObservationIgnored private var streamTask: Task<Void, Never>?
+    /// Which engine the window shows: this Mac's, or a remote one (AppModel+Remote.swift).
+    public internal(set) var engineChoice: EngineChoice = .local
+    public internal(set) var remoteEngines: [RemoteEngine] = []
+    /// The engines not shown, streaming for the sidebar (EnginePeer.swift).
+    public internal(set) var peers: [EngineChoice: EnginePeer] = [:]
+    @ObservationIgnored let remoteStore = RemoteEngineStore()
+    @ObservationIgnored let identityStore = SSHIdentityStore()
+    /// The local engine's port once it runs, so switching back needs no restart.
+    @ObservationIgnored var localPort: Int?
+    @ObservationIgnored var streamTask: Task<Void, Never>?
     @ObservationIgnored private var reconnectDelay: UInt64 = 0
     @ObservationIgnored private var screenWatchers = 0
     /// The stream position, kept outside `state` for the same reason as
     /// `live`: it moves on every frame, and nothing on screen shows it.
-    @ObservationIgnored private var cursor: String?
-    @ObservationIgnored private var stateVersion = 0
-    @ObservationIgnored private var visibleCache: [String: (version: Int, messages: [Message])] = [:]
+    @ObservationIgnored var cursor: String?
+    @ObservationIgnored var stateVersion = 0
+    @ObservationIgnored var visibleCache: [String: (version: Int, messages: [Message])] = [:]
     /// Hooks the app layer sets: system notifications and the Dock badge.
     @ObservationIgnored public var onNotify: ((NotificationFrame) -> Void)?
     @ObservationIgnored public var onUnreadChange: ((Int) -> Void)?
 
     public init() {
         launcher.onChange = { [weak self] state in self?.harnessChanged(state) }
+        remoteEngines = remoteStore.all()
+        engineChoice = EngineChoice.restored(from: remoteEngines)
     }
 
     // MARK: - Lifecycle
 
     public func start() {
+        // a remote engine does not wait for the local one to boot
+        if case .remote = engineChoice { connectToChoice() }
+        syncPeers()
         Task { await launcher.start() }
     }
 
     public func shutdown() {
         streamTask?.cancel()
         streamTask = nil
+        for peer in peers.values { peer.stop() }
         launcher.stop()
     }
 
@@ -88,6 +103,14 @@ public final class AppModel {
     }
 
     private func harnessChanged(_ harness: HarnessState) {
+        // the local engine's progress only matters while it is the one shown
+        guard engineChoice == .local else {
+            if case let .running(port, _) = harness {
+                localPort = port
+                syncPeers()
+            }
+            return
+        }
         switch harness {
         case .idle:
             break
@@ -96,13 +119,12 @@ public final class AppModel {
         case let .failed(message):
             status = .failed(message)
         case let .running(port, _):
-            let connection = Connection(name: "Questo Mac", host: "127.0.0.1", port: port)
-            client = CompanionClient(connection: connection, token: nil)
-            connect()
+            localPort = port
+            if engineChoice == .local { connectToChoice() }
         }
     }
 
-    private func connect() {
+    func connect() {
         streamTask?.cancel()
         reconnectDelay = 0
         streamTask = Task { [weak self] in await self?.run() }
@@ -147,6 +169,10 @@ public final class AppModel {
                         Task { await self.refreshInstances() }
                         Task { await self.refreshConfig() }
                     }
+                    if case let .usageLimit(instanceId, limit) = frame.frame,
+                       let index = instances.firstIndex(where: { $0.instanceId == instanceId }) {
+                        instances[index].usageLimit = limit
+                    }
                     if case .mcpConnectors = frame.frame {
                         Task { await self.refreshMCPConnectors() }
                     }
@@ -157,7 +183,7 @@ public final class AppModel {
             } catch {
                 if Task.isCancelled || error is CancellationError { return }
                 log.error("stream failed: \(error.localizedDescription, privacy: .public)")
-                status = .offline(error.localizedDescription)
+                status = .offline(offlineReason(error))
             }
             if Task.isCancelled { return }
             reconnectDelay = reconnectDelay == 0 ? 1 : min(reconnectDelay * 2, 8)
@@ -165,14 +191,18 @@ public final class AppModel {
         }
     }
 
-    private func hydrate() async throws {
+    func hydrate() async throws {
         guard let client else { return }
         // The desktop shows long threads; 200 is a first screenful with room
         // to scroll before the first scrollback fetch.
         let fleet = try await client.fleet(messages: 200)
+        // switched to another engine meanwhile: this fleet is not the one shown
+        try Task.checkCancellation()
         state.hydrate(fleet)
         stateVersion &+= 1
-        if selection == nil { selection = defaultSelection }
+        // a chat this engine does not have (gone, or of another engine) would
+        // leave "Nessuna chat selezionata" with the list full of bots
+        if selection == nil || (selectedBot == nil && selectedRoom == nil) { selection = defaultSelection }
     }
 
     public func refreshInstances() async {
@@ -220,7 +250,9 @@ public final class AppModel {
     }
 
     /// Sidebar sections, in first-seen order; unlabeled bots go last.
-    public var sections: [(name: String?, bots: [Bot])] {
+    public var sections: [(name: String?, bots: [Bot])] { Self.sections(of: visibleBots) }
+
+    public static func sections(of visibleBots: [Bot]) -> [(name: String?, bots: [Bot])] {
         var order: [String?] = []
         var grouped: [String?: [Bot]] = [:]
         for bot in visibleBots {
@@ -319,12 +351,6 @@ public final class AppModel {
         await answer(threadId: threadId, card: card, choice: "Allow")
     }
 
-    public func createBot() async {
-        await perform { client in
-            let bot = try await client.createBot()
-            self.selection = .bot(bot.id)
-        }
-    }
 
     public func patch(_ bot: Bot, _ patch: BotPatch) async {
         await perform { try await $0.patchBot(bot.id, patch) }

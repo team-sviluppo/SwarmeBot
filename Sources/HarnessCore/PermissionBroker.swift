@@ -12,7 +12,11 @@
 // - a duplicate ask id is denied before either ask becomes visible;
 // - after close() every ask — pending or new, on a connection that is still
 //   open — gets a system answer and never a card (the "zombie card", #211).
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
 
 public struct BrokerAsk: Sendable {
@@ -46,7 +50,7 @@ final class BrokerSocket: @unchecked Sendable {
     func listen(on fd: Int32) {
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [weak self] in self?.acceptOne(fd) }
-        source.setCancelHandler { Darwin.close(fd) }
+        source.setCancelHandler { Sys.close(fd) }
         acceptSource = source
         source.resume()
     }
@@ -54,7 +58,7 @@ final class BrokerSocket: @unchecked Sendable {
     private func acceptOne(_ listenFD: Int32) {
         let client = accept(listenFD, nil, nil)
         guard client >= 0 else { return }
-        _ = fcntl(client, F_SETNOSIGPIPE, 1)
+        Sys.noSigPipe(client)
         let source = DispatchSource.makeReadSource(fileDescriptor: client, queue: queue)
         source.setEventHandler { [weak self] in self?.readFrom(client) }
         readers[client] = (source, Data())
@@ -148,7 +152,7 @@ public final class PermissionBroker {
 
     private func listen() {
         unlink(socketPath)
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        let fd = socket(AF_UNIX, Sys.streamSocket, 0)
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         let capacity = MemoryLayout.size(ofValue: address.sun_path)
@@ -156,7 +160,7 @@ public final class PermissionBroker {
         guard fd >= 0, bytes.count < capacity else {
             // fail-closed, but say why: every ask would otherwise time out unexplained
             FileHandle.standardError.write(Data("permission broker unavailable on \(socketPath): socket path unusable\n".utf8))
-            if fd >= 0 { Darwin.close(fd) }
+            if fd >= 0 { Sys.close(fd) }
             return
         }
         withUnsafeMutableBytes(of: &address.sun_path) { raw in
@@ -166,9 +170,9 @@ public final class PermissionBroker {
         let bound = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
         }
-        guard bound == 0, Darwin.listen(fd, 16) == 0 else {
+        guard bound == 0, Sys.listen(fd, 16) == 0 else {
             FileHandle.standardError.write(Data("permission broker unavailable on \(socketPath): \(String(cString: strerror(errno)))\n".utf8))
-            Darwin.close(fd)
+            Sys.close(fd)
             return
         }
         chmod(socketPath, 0o600)
@@ -181,7 +185,7 @@ public final class PermissionBroker {
                 case let .opened(client): self.open.insert(client)
                 case let .line(client, line): self.handle(line, fd: client)
                 case let .ended(client):
-                    if self.open.remove(client) != nil { Darwin.close(client) }
+                    if self.open.remove(client) != nil { Sys.close(client) }
                 }
             }
         }
@@ -192,7 +196,7 @@ public final class PermissionBroker {
         let bytes = Array((message.serialized() + "\n").utf8)
         var offset = 0
         while offset < bytes.count {
-            let written = bytes.withUnsafeBytes { Darwin.write(fd, $0.baseAddress! + offset, bytes.count - offset) }
+            let written = bytes.withUnsafeBytes { Sys.write(fd, $0.baseAddress! + offset, bytes.count - offset) }
             if written < 0 { if errno == EINTR || errno == EAGAIN { continue }; return }
             offset += written
         }

@@ -8,6 +8,7 @@ struct SettingsView: View {
         TabView {
             GeneralPane().tabItem { Label("Generale", systemImage: "person.crop.circle") }
             EnginesPane().tabItem { Label("Motori", systemImage: "cpu") }
+            RemoteServersPane().tabItem { Label("Server remoti", systemImage: "server.rack") }
             ConnectorsPane().tabItem { Label("Connettori", systemImage: "puzzlepiece.extension") }
             MacControlPane().tabItem { Label("Controllo Mac", systemImage: "macbook.and.iphone") }
             KeysPane().tabItem { Label("Chiavi e servizi", systemImage: "key") }
@@ -362,14 +363,14 @@ private struct UpdatesPane: View {
 /// Whether bots may drive this Mac (Cua). Off by default.
 private struct MacControlPane: View {
     @Environment(AppModel.self) private var model
-    @State private var localComputer = UserDefaults.standard.bool(forKey: "localComputerEnabled")
+    @State private var localComputer = AppPaths.defaults.bool(forKey: "localComputerEnabled")
 
     var body: some View {
         Form {
             Section {
                 Toggle("Consenti ai bot di usare questo Mac", isOn: $localComputer)
                     .onChange(of: localComputer) { _, on in
-                        UserDefaults.standard.set(on, forKey: "localComputerEnabled")
+                        AppPaths.defaults.set(on, forKey: "localComputerEnabled")
                         model.retry()
                     }
             } footer: {

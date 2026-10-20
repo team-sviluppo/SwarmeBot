@@ -9,6 +9,9 @@
 // here too (the Node driver hard-codes it), so the driver can be tested
 // against a stub like the rest of the Box code.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import HarnessCore
 
 public struct BoxAgentDriver: ProviderDriver {

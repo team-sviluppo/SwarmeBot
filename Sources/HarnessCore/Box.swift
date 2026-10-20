@@ -4,8 +4,15 @@
 // billing while the disk survives; Join always mints a FRESH desktop URL
 // (stream tokens rotate on every state change — never persist one). REST
 // only: shell runs synchronously through POST /boxes/{id}/commands.
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct BoxError: LocalizedError {
     public var message: String

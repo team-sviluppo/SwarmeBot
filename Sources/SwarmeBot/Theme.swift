@@ -135,25 +135,29 @@ struct IconButtonStyle: ButtonStyle {
 struct ChipButtonStyle: ButtonStyle {
     var filled = false
     var size: CGFloat = 12.5
+    /// Solid fill with white ink, brighter on hover (Stop is `Theme.danger`).
+    var tint: Color? = nil
 
     func makeBody(configuration: Configuration) -> some View {
-        ChipBody(configuration: configuration, filled: filled, size: size)
+        ChipBody(configuration: configuration, filled: filled, size: size, tint: tint)
     }
 
     private struct ChipBody: View {
         let configuration: Configuration
         let filled: Bool
         let size: CGFloat
+        let tint: Color?
         @State private var hovering = false
 
         var body: some View {
             configuration.label
-                .font(.system(size: size))
-                .foregroundStyle(hovering ? Theme.ink : Theme.secondary)
+                .font(.system(size: size, weight: tint == nil ? .regular : .medium))
+                .foregroundStyle(tint != nil ? Theme.dangerInk : hovering ? Theme.ink : Theme.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(Capsule().fill(hovering ? Theme.raised : filled ? Theme.raised.opacity(0.6) : .clear))
-                .overlay(Capsule().stroke(Theme.hairline.opacity(0.4), lineWidth: 1))
+                .background(Capsule().fill(tint ?? (hovering ? Theme.raised : filled ? Theme.raised.opacity(0.6) : .clear)))
+                .brightness(tint != nil && hovering ? 0.1 : 0)
+                .overlay(Capsule().stroke(tint == nil ? Theme.hairline.opacity(0.4) : .clear, lineWidth: 1))
                 .contentShape(Capsule())
                 .onHover { hovering = $0 }
                 .animation(Theme.quick, value: hovering)

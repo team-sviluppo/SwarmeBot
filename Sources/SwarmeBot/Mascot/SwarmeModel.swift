@@ -1,14 +1,12 @@
-// The hand-written half of the mascot data: the types the generated
-// `MausFaceData.swift` fills in, the SVG path parser that turns the
-// desktop's path data into `Path`s, and the palette rules.
-//
-// Regenerate the data with `node scripts/gen-mascot-data.mjs`.
+// The mascot's types: what `SwarmeFaceData.swift` fills in, the silhouette
+// registry, the palette rules, and an SVG path parser for the "!" and "?"
+// glyphs.
 import SwiftUI
 #if canImport(AppKit)
 import AppKit
 #endif
 
-struct MausBodyMotion {
+struct SwarmeBodyMotion {
     var bob: (CGFloat, CGFloat)? = nil
     var sway: (CGFloat, CGFloat)? = nil
     var pulse: (CGFloat, CGFloat)? = nil
@@ -20,82 +18,64 @@ struct MausBodyMotion {
     var settle: CGFloat? = nil
 }
 
-struct MausConfettiSpec { let count: Int; let period: CGFloat; let life: CGFloat; let origin: CGFloat; let spread: CGFloat }
-struct MausTrailSpec { let count: Int; let period: CGFloat; let radius: CGFloat }
-struct MausGlyphSpec {
+struct SwarmeConfettiSpec { let count: Int; let period: CGFloat; let life: CGFloat; let origin: CGFloat; let spread: CGFloat }
+struct SwarmeTrailSpec { let count: Int; let period: CGFloat; let radius: CGFloat }
+struct SwarmeGlyphSpec {
     enum Kind { case bang, query }
     let kind: Kind
     let period: CGFloat
     let hold: CGFloat
 }
-struct MausEffects {
-    var confetti: MausConfettiSpec? = nil
-    var trails: MausTrailSpec? = nil
-    var glyph: MausGlyphSpec? = nil
+struct SwarmeEffects {
+    var confetti: SwarmeConfettiSpec? = nil
+    var trails: SwarmeTrailSpec? = nil
+    var glyph: SwarmeGlyphSpec? = nil
 }
 
-struct MausSilhouettePath {
-    let d: String
-    let transform: CGAffineTransform
-}
-
-struct MausSilhouetteSpec {
+struct SwarmeSilhouetteSpec {
     let id: String
-    let paths: [MausSilhouettePath]
-    let anchor: (x: CGFloat, y: CGFloat, scale: CGFloat)
+    /// The outline in face-box units, and where the face sits on it.
+    let build: () -> (path: Path, anchor: (x: CGFloat, y: CGFloat, scale: CGFloat))
 }
 
-extension MausFaceData {
-    static func ring(_ expression: Int, eye: Int) -> [CGPoint] {
-        let base = (expression * 2 + eye) * pointsPerRing * 2
-        return (0..<pointsPerRing).map { i in CGPoint(x: expressionsFlat[base + i * 2], y: expressionsFlat[base + i * 2 + 1]) }
-    }
-    static func gaze(_ expression: Int) -> CGPoint { CGPoint(x: gazeFlat[expression * 2], y: gazeFlat[expression * 2 + 1]) }
-    /// [halfWidth, curve, gap, skew]
-    static func mouth(_ expression: Int) -> [CGFloat] { Array(mouthsFlat[(expression * 4)..<(expression * 4 + 4)]) }
-}
-
-/// A body shape, parsed once into the 228.541-unit face box.
-final class MausSilhouette {
+/// A body shape, built once in the face box.
+final class SwarmeSilhouette {
     let id: String
     /// The silhouette in face-box units (fit already applied).
     let path: Path
     let bounds: CGRect
     let anchor: (x: CGFloat, y: CGFloat, scale: CGFloat)
 
-    private init(_ spec: MausSilhouetteSpec) {
+    private init(_ spec: SwarmeSilhouetteSpec) {
         id = spec.id
-        var combined = Path()
-        for part in spec.paths {
-            combined.addPath(SVGPath.parse(part.d), transform: part.transform)
-        }
-        path = combined
-        bounds = combined.boundingRect
-        anchor = spec.anchor
+        let built = spec.build()
+        path = built.path
+        bounds = built.path.boundingRect
+        anchor = built.anchor
     }
 
-    /// Parsed lazily, each at most once: a sidebar is hundreds of avatars.
-    private static let registry: [String: MausSilhouette] = {
-        var out: [String: MausSilhouette] = [:]
-        for spec in MausSilhouetteData.all { out[spec.id] = MausSilhouette(spec) }
+    /// Built lazily, each at most once: a sidebar is hundreds of avatars.
+    private static let registry: [String: SwarmeSilhouette] = {
+        var out: [String: SwarmeSilhouette] = [:]
+        for spec in SwarmeSilhouetteData.all { out[spec.id] = SwarmeSilhouette(spec) }
         return out
     }()
 
-    static let ids: [String] = MausSilhouetteData.all.map(\.id)
+    static let ids: [String] = SwarmeSilhouetteData.all.map(\.id)
 
-    /// Unknown or absent ids resolve to the default (`circle`), like the desktop.
-    static func named(_ id: String?) -> MausSilhouette {
+    /// Retired ids resolve to their replacement, unknown or absent ones to the default (`circle`).
+    static func named(_ id: String?) -> SwarmeSilhouette {
+        let id = id.map { SwarmeSilhouetteData.aliases[$0] ?? $0 }
         if let id, let known = registry[id] { return known }
-        return registry[MausSilhouetteData.defaultId]!
+        return registry[SwarmeSilhouetteData.defaultId]!
     }
 
-    /// The face box with the desktop's 15-unit margin around it (viewBox
-    /// `-15 -15 258.541 258.541`) — room for the body to bob and sway.
+    /// A 15-unit margin around the face box: room for the body to bob and sway.
     static let margin: CGFloat = 15
 
     /// The transform that puts the margined face box into `rect`.
     static func fit(_ rect: CGRect) -> CGAffineTransform {
-        let side = MausFaceData.faceBox + margin * 2
+        let side = SwarmeFaceData.faceBox + margin * 2
         let k = min(rect.width, rect.height) / side
         return CGAffineTransform(translationX: margin, y: margin)
             .concatenating(CGAffineTransform(scaleX: k, y: k))
@@ -106,42 +86,50 @@ final class MausSilhouette {
     }
 }
 
-enum MausPalette {
+enum SwarmePalette {
     static func hex(_ name: String) -> String {
-        MausPaletteData.hex[name] ?? MausPaletteData.hex["green"]!
+        SwarmePaletteData.hex[name] ?? SwarmePaletteData.hex["green"]!
     }
 
-    /// Unknown colours fall back to green, like `gradientFor`.
+    /// Unknown colours fall back to green.
     static func color(_ name: String) -> Color { Color(hex: hex(name)) }
 
-    /// `eyeInkFor`: Rec. 709 luma > 0.72 → dark ink, else white.
+    /// Dark eyes on every body, white only on a very dark one.
     static func eyeInk(_ name: String) -> Color {
         let v = rgb(hex(name))
         let luma = (0.2126 * v.r + 0.7152 * v.g + 0.0722 * v.b) / 255
-        return luma > 0.72 ? Color(hex: "#2A2A30") : .white
+        return luma < 0.3 ? .white : Color(hex: "#17171C")
     }
 
-    /// The gradient as raw stops: [mix(fill,#fff,.55), fill, mix(fill,#000,.42)]
-    /// at 0 / 55% / 100%, channel-wise and rounded like the desktop's `mix`.
-    static func gradientStops(_ name: String) -> [Gradient.Stop] {
-        cachedStops(name)
+    /// The bot's reply bubble: its own colour, darkened (hue kept) just
+    /// enough for `Theme.ink` on it to reach WCAG AA, 4.5:1. Every shade but
+    /// the darkest needs some: white comes out mid grey, yellow olive.
+    static func bubble(_ name: String) -> Color {
+        let shade = bubbleShades[name] ?? bubbleShades["green"]!
+        return Color(.sRGB, red: shade.r, green: shade.g, blue: shade.b, opacity: 1)
     }
 
-    private static var stopCache: [String: [Gradient.Stop]] = [:]
-    private static func cachedStops(_ name: String) -> [Gradient.Stop] {
-        if let hit = stopCache[name] { return hit }
-        let v = rgb(hex(name))
-        func mix(_ to: CGFloat, _ t: CGFloat) -> Color {
-            func c(_ a: CGFloat) -> Double { Double((a + (to - a) * t).rounded()) / 255 }
-            return Color(.sRGB, red: c(v.r), green: c(v.g), blue: c(v.b), opacity: 1)
+    private static let bubbleShades: [String: (r: Double, g: Double, b: Double)] = {
+        let ink = luminance(rgb("#FCFCFC"))
+        return SwarmePaletteData.hex.mapValues { hex in
+            let v = rgb(hex)
+            var k = 1.0
+            while k > 0, contrast(ink, luminance((v.r * k, v.g * k, v.b * k))) < 4.5 { k -= 0.01 }
+            return (v.r * k / 255, v.g * k / 255, v.b * k / 255)
         }
-        let stops: [Gradient.Stop] = [
-            .init(color: mix(255, 0.55), location: 0),
-            .init(color: Color(hex: hex(name)), location: 0.55),
-            .init(color: mix(0, 0.42), location: 1),
-        ]
-        stopCache[name] = stops
-        return stops
+    }()
+
+    /// WCAG relative luminance of 0–255 sRGB.
+    private static func luminance(_ v: (r: CGFloat, g: CGFloat, b: CGFloat)) -> Double {
+        func linear(_ c: CGFloat) -> Double {
+            let s = Double(c) / 255
+            return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(v.r) + 0.7152 * linear(v.g) + 0.0722 * linear(v.b)
+    }
+
+    private static func contrast(_ a: Double, _ b: Double) -> Double {
+        (max(a, b) + 0.05) / (min(a, b) + 0.05)
     }
 
     private static func rgb(_ hex: String) -> (r: CGFloat, g: CGFloat, b: CGFloat) {

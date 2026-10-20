@@ -8,8 +8,10 @@
 // so a long chat does not resend every file on every turn.
 import Foundation
 import HarnessCore
+#if canImport(UniformTypeIdentifiers)
 import PDFKit
 import UniformTypeIdentifiers
+#endif
 
 enum AttachmentInliner {
     /// Plain text, code, CSV, JSON…: bytes read from disk.
@@ -83,12 +85,19 @@ enum AttachmentInliner {
     /// Whether this file can travel as text (or PDF text) to a remote model.
     static func isInlinable(_ path: String) -> Bool {
         let url = URL(fileURLWithPath: path)
+        #if !canImport(UniformTypeIdentifiers)
+        let ext = url.pathExtension.lowercased()
+        if LinuxFileTypes.text.contains(ext) { return true }
+        if LinuxFileTypes.binary.contains(ext) || LinuxFileTypes.images[ext] != nil || ext == "pdf" { return false }
+        return looksLikeText(url)
+        #else
         guard let type = UTType(filenameExtension: url.pathExtension) else { return looksLikeText(url) }
         if type.conforms(to: .pdf) || type.conforms(to: .text) || type.conforms(to: .sourceCode)
             || type.conforms(to: .json) || type.conforms(to: .xml) || type.conforms(to: .commaSeparatedText) { return true }
         if type.conforms(to: .image) || type.conforms(to: .audiovisualContent) || type.conforms(to: .archive)
             || type.conforms(to: .executable) { return false }
         return looksLikeText(url)
+        #endif
     }
 
     // MARK: Pieces
@@ -96,7 +105,11 @@ enum AttachmentInliner {
     private static func imageDataURL(_ path: String) -> String? {
         let url = URL(fileURLWithPath: path)
         guard let data = try? Data(contentsOf: url), !data.isEmpty, data.count <= imageLimit else { return nil }
+        #if canImport(UniformTypeIdentifiers)
         let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "image/png"
+        #else
+        let mime = LinuxFileTypes.images[url.pathExtension.lowercased()] ?? "image/png"
+        #endif
         return "data:\(mime);base64,\(data.base64EncodedString())"
     }
 
@@ -110,6 +123,7 @@ enum AttachmentInliner {
         if isDirectory.boolValue { return "[cartella allegata: \(name) — questo modello non può aprire cartelle]" }
         let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
 
+        #if canImport(UniformTypeIdentifiers)
         if UTType(filenameExtension: url.pathExtension)?.conforms(to: .pdf) == true {
             guard size <= pdfFileLimit else { return "[PDF allegato troppo grande: \(name), oltre \(pdfFileLimit / 1024 / 1024) MB]" }
             guard let text = PDFDocument(url: url)?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
@@ -117,6 +131,12 @@ enum AttachmentInliner {
             }
             return block(name, text, limit: pdfTextLimit)
         }
+        #else
+        if url.pathExtension.lowercased() == "pdf" {
+            _ = size
+            return "[PDF allegato: su questo motore il testo dei PDF non si estrae — \(name)]"
+        }
+        #endif
         guard isInlinable(path), let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
             return "[file allegato in un formato che questo modello non può leggere: \(name)]"
         }
@@ -148,3 +168,16 @@ enum AttachmentInliner {
             .replacingOccurrences(of: "&amp;", with: "&")
     }
 }
+
+#if !canImport(UniformTypeIdentifiers)
+/// What UTType answers on a Mac, by extension, for a Linux engine.
+enum LinuxFileTypes {
+    static let text: Set<String> = ["txt", "md", "markdown", "csv", "tsv", "json", "xml", "yaml", "yml", "toml", "ini", "log",
+                                    "html", "htm", "css", "js", "ts", "tsx", "jsx", "swift", "py", "rb", "go", "rs", "java",
+                                    "kt", "c", "h", "cpp", "hpp", "cs", "php", "sh", "zsh", "sql", "vue", "svelte"]
+    static let binary: Set<String> = ["zip", "gz", "tgz", "bz2", "xz", "7z", "rar", "tar", "dmg", "pkg", "exe", "bin", "so",
+                                      "dylib", "mp3", "mp4", "mov", "m4a", "wav", "aac", "avi", "mkv"]
+    static let images: [String: String] = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
+                                           "webp": "image/webp", "heic": "image/heic", "bmp": "image/bmp", "tiff": "image/tiff"]
+}
+#endif

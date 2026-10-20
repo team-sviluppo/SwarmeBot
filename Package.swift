@@ -29,6 +29,8 @@ let package = Package(
     dependencies: [
         // Updates: signed appcast, EdDSA-verified archives.
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+        // Linux only: CryptoKit's API for the remote engine (docs/plans/2026-10-16-bot-remoto.md §3.6)
+        .package(url: "https://github.com/apple/swift-crypto", "3.0.0"..<"5.0.0"),
     ],
     targets: [
         .target(
@@ -48,8 +50,14 @@ let package = Package(
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         // Phase 2: the harness in Swift (docs/plans/fase-2-architettura.md).
+        // the system libsqlite3 on Linux; macOS has the SQLite3 module built in
+        .systemLibrary(name: "CSQLite3", path: "Sources/CSQLite3", providers: [.apt(["libsqlite3-dev"])]),
         .target(
             name: "HarnessCore",
+            dependencies: [
+                .target(name: "CSQLite3", condition: .when(platforms: [.linux])),
+                .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .target(

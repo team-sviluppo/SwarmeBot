@@ -1,4 +1,4 @@
-// How one bot looks, wherever it is drawn — `MausAvatar` in Avatar.tsx with
+// How one bot looks, wherever it is drawn — `SwarmeAvatar` in Avatar.tsx with
 // a `look`: an uploaded picture (still image, 9×8 sprite sheet or SVG)
 // replaces the mascot; otherwise the mascot wears the bot's silhouette and
 // plays the bot's motion beats.
@@ -11,8 +11,8 @@ import SwiftUI
 struct BotAvatar: View {
     let bot: Bot
     var size: CGFloat = 32
-    /// nil derives it from the bot (`MausState.forBot`) without a transcript.
-    var state: MausState? = nil
+    /// nil derives it from the bot (`SwarmeState.forBot`) without a transcript.
+    var state: SwarmeState? = nil
     var animated: Bool = true
     var priority: Bool = false
     var trackPointer: Bool = true
@@ -27,8 +27,8 @@ struct BotAvatar: View {
         } else if let svg = bot.mascotAvatarSvg, !svg.isEmpty {
             PictureAvatar(source: .svg(svg), size: size)
         } else {
-            MausAvatar(
-                color: bot.color, size: size, state: state ?? MausState.forBot(bot, last: nil),
+            SwarmeAvatar(
+                color: bot.color, size: size, state: state ?? SwarmeState.forBot(bot, last: nil),
                 silhouette: bot.mascotSilhouette, animated: animated, priority: priority,
                 beat: MascotBeats.shared.events[bot.id], trackPointer: trackPointer
             )

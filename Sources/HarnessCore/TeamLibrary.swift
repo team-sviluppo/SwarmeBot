@@ -6,6 +6,9 @@
 // does this one. Only public GitHub JSON files are ever fetched: any other
 // host is refused before a request is made.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public enum TeamLibrary {
     public static let repository = "https://github.com/milind-soni/swarmebot-teams"

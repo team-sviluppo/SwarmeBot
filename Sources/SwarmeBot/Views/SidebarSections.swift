@@ -6,6 +6,7 @@
 import CompanionCore
 import Foundation
 import Observation
+import SwarmeKit
 
 @MainActor
 @Observable
@@ -17,7 +18,7 @@ final class SectionLayout {
     private(set) var order: [String]
 
     private init() {
-        order = UserDefaults.standard.stringArray(forKey: Self.key) ?? []
+        order = AppPaths.defaults.stringArray(forKey: Self.key) ?? []
     }
 
     /// The bots' sections in the saved order, with empty saved sections kept
@@ -79,6 +80,6 @@ final class SectionLayout {
 
     private func save(_ next: [String]) {
         order = next
-        UserDefaults.standard.set(next, forKey: Self.key)
+        AppPaths.defaults.set(next, forKey: Self.key)
     }
 }

@@ -12,6 +12,9 @@
 // OMB_HARNESS_URL, OMB_BOT_ID, OMB_THREAD_ID, OMB_COMMS_TOKEN, OMB_TURN_DEPTH.
 // stdout is the MCP channel: nothing else may be printed on it.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public enum AgentsProxy {
     static let tools: JSON = [

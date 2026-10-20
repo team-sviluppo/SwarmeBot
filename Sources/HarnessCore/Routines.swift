@@ -28,6 +28,8 @@ public final class RoutineManager {
 
     private let file: URL
     private let host: Host
+    /// Why a run more than 12 h late was skipped; the remote engine says "engine", not "computer".
+    public var missedReason = "This computer was offline for more than 12 hours after the scheduled time"
     private(set) var routines: [JSONObject] = []
     private(set) var runs: [JSONObject] = []
     private var timer: Task<Void, Never>?
@@ -73,18 +75,27 @@ public final class RoutineManager {
         case "daily":
             let time = schedule?["time"].flatMap(Harness.text) ?? ""
             guard time.range(of: #"^([01]\d|2[0-3]):[0-5]\d$"#, options: .regularExpression) != nil else { throw InputError(message: "Time must use HH:MM") }
-            return ["type": "daily", "time": .string(time), "weekdays": .array(cleanDays(schedule?["weekdays"]).map { .number(Double($0)) })]
+            var daily: JSONObject = ["type": "daily", "time": .string(time), "weekdays": .array(cleanDays(schedule?["weekdays"]).map { .number(Double($0)) })]
+            // the client's zone: a server's clock is often UTC (bot-remoto §8.1)
+            if let zone = schedule?["timeZone"]?.string, !zone.isEmpty {
+                guard TimeZone(identifier: zone) != nil else { throw InputError(message: "Unknown time zone \(zone)") }
+                daily["timeZone"] = .string(zone)
+            }
+            return .object(daily)
         default:
             throw InputError(message: "Choose a supported schedule")
         }
     }
 
-    /// Next wall-clock occurrence in this computer's timezone, strictly after `after`.
-    public static func nextOccurrence(_ schedule: JSON, after: Double, calendar: Calendar = .current) -> Double? {
+    /// Next wall-clock occurrence, strictly after `after`: in the schedule's
+    /// `timeZone` when it has one, else in this computer's.
+    public static func nextOccurrence(_ schedule: JSON, after: Double, calendar base: Calendar = .current) -> Double? {
         if schedule["type"]?.string == "once" {
             let at = schedule["at"]?.double ?? 0
             return at > after ? at : nil
         }
+        var calendar = base
+        if let zone = schedule["timeZone"]?.string.flatMap(TimeZone.init(identifier:)) { calendar.timeZone = zone }
         let parts = (schedule["time"]?.string ?? "").split(separator: ":").compactMap { Int($0) }
         guard parts.count == 2 else { return nil }
         let weekdays = Set(cleanDays(schedule["weekdays"]))
@@ -308,7 +319,7 @@ public final class RoutineManager {
                 var missed = newRun(routine, scheduledFor: scheduledFor, manual: false)
                 missed["status"] = "missed"
                 missed["finishedAt"] = .number(now)
-                missed["error"] = "This computer was offline for more than 12 hours after the scheduled time"
+                missed["error"] = .string(missedReason)
                 replaceRun(missed)
                 emitRun(missed)
             } else {

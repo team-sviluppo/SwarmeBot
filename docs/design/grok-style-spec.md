@@ -1,6 +1,6 @@
 # Spec visiva "Grok style": Electron/React → SwiftUI macOS
 
-Fonte di verità: il codice React in `/Users/cristiano/Sviluppo/SwarmeBot` (commit `1cd755d`).
+Fonte di verità: il codice React della versione precedente di SwarmeBot (commit `1cd755d`).
 Unità: 1 px CSS = 1 pt macOS. Spaziature Tailwind v4: 1 unità = 4 pt (`px-3.5` = 14 pt).
 Raggi Tailwind (skin Midnight): `rounded` 4, `rounded-md` 6, `rounded-lg` 8 (`--radius-lg`), `rounded-xl` 12, `rounded-2xl` 16, `rounded-full` capsula.
 Opacità Tailwind `x/NN` = colore x con alpha NN% (es. `bg-raised/70` = `#2F2F2F` al 70%).

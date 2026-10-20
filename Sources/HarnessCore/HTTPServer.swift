@@ -1,12 +1,16 @@
-// A small HTTP/1.1 server on Network.framework, for loopback only.
+// A small HTTP/1.1 server: Network.framework on loopback TCP for the local
+// engine, POSIX sockets for unix sockets and Linux (HTTPTransport.swift).
 //
 // The harness API is JSON in, JSON out, plus one long-lived event stream —
 // a few hundred lines of HTTP, not a framework. What it does carefully:
 // requests split across packets, keep-alive, body limits enforced while
-// reading, and the two gates every route sits behind in the Node engine:
-// a loopback Host (DNS rebinding) and a loopback Origin when one is sent.
+// reading, and the gate every route sits behind. The local engine keeps the
+// Node engine's two: a loopback Host (DNS rebinding) and a loopback Origin
+// when one is sent. The remote engine supplies its own (RemoteAccess.swift).
 import Foundation
+#if canImport(Network)
 import Network
+#endif
 
 public struct HTTPRequest {
     public var method: String
@@ -15,6 +19,8 @@ public struct HTTPRequest {
     /// Lower-cased names.
     public var headers: [String: String]
     public var body: Data
+    /// The paired device the remote gate authenticated, if any.
+    public var deviceId: String? = nil
 
     public func header(_ name: String) -> String? { headers[name.lowercased()] }
 
@@ -63,12 +69,12 @@ public struct HTTPResponse {
 
 /// A response whose body keeps flowing: the SSE stream.
 public final class StreamWriter: @unchecked Sendable {
-    private let connection: NWConnection
+    private let connection: HTTPConnection
     private let queue: DispatchQueue
     public private(set) var closed = false
     var onClose: (() -> Void)?
 
-    init(connection: NWConnection, queue: DispatchQueue) {
+    init(connection: HTTPConnection, queue: DispatchQueue) {
         self.connection = connection
         self.queue = queue
     }
@@ -76,9 +82,9 @@ public final class StreamWriter: @unchecked Sendable {
     public func write(_ text: String) {
         queue.async { [self] in
             guard !closed else { return }
-            connection.send(content: Data(text.utf8), completion: .contentProcessed { [weak self] error in
+            connection.send(Data(text.utf8)) { [weak self] error in
                 if error != nil { self?.close() }
-            })
+            }
         }
     }
 
@@ -102,24 +108,62 @@ public enum RouteResult {
 
 public final class HTTPServer: @unchecked Sendable {
     public typealias Handler = @MainActor (HTTPRequest) async -> RouteResult
+    /// Runs before any route: a result refuses the request; otherwise it may
+    /// annotate the request (the authenticated device) and let it through.
+    public typealias Gate = @MainActor (inout HTTPRequest) -> RouteResult?
 
     private let queue = DispatchQueue(label: "swarme.http")
+    #if canImport(Network)
     private var listener: NWListener?
+    #endif
+    private var posix: POSIXListener?
     private let handler: Handler
+    private let gate: Gate
     /// JSON bodies; raw uploads declare their own larger limit per route.
     public var maxBody = 12 * 1024 * 1024
 
+    /// The local engine's loopback gates.
     public init(handler: @escaping Handler) {
         self.handler = handler
+        gate = { request in HTTPServer.gate(request) }
+    }
+
+    public init(gate: @escaping Gate, handler: @escaping Handler) {
+        self.handler = handler
+        self.gate = gate
+    }
+
+    /// A unix socket; the file is created with `mode` (the remote engine's front door).
+    public func start(unixSocket path: String, mode: mode_t) throws {
+        posix = try POSIXListener.unix(path: path, mode: mode, queue: queue) { [weak self] fd in
+            guard let self else { close(fd); return }
+            self.accept(POSIXHTTPConnection(fd: fd, queue: self.queue))
+        }
+    }
+
+    /// TCP on 127.0.0.1 over POSIX sockets; port 0 picks a free one. Returns the port.
+    @discardableResult
+    public func startLoopback(port: UInt16) throws -> UInt16 {
+        let listener = try POSIXListener.loopback(port: port, queue: queue) { [weak self] fd in
+            guard let self else { close(fd); return }
+            self.accept(POSIXHTTPConnection(fd: fd, queue: self.queue))
+        }
+        posix = listener
+        return listener.port ?? port
     }
 
     public func start(host: String = "127.0.0.1", port: UInt16) async throws {
+        #if canImport(Network)
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
         parameters.allowLocalEndpointReuse = true
         let listener = try NWListener(using: parameters)
         self.listener = listener
-        listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+        listener.newConnectionHandler = { [weak self] connection in
+            guard let self else { return }
+            connection.start(queue: self.queue)
+            self.accept(NWHTTPConnection(connection))
+        }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var resumed = false
             listener.stateUpdateHandler = { state in
@@ -140,20 +184,26 @@ public final class HTTPServer: @unchecked Sendable {
             }
             listener.start(queue: queue)
         }
+        #else
+        guard host == "127.0.0.1" else { throw HTTPError(500, "only 127.0.0.1 is supported here") }
+        try startLoopback(port: port)
+        #endif
     }
 
     public func stop() {
+        #if canImport(Network)
         listener?.cancel()
+        #endif
+        posix?.stop()
     }
 
-    private func accept(_ connection: NWConnection) {
-        connection.start(queue: queue)
+    private func accept(_ connection: HTTPConnection) {
         receive(connection, buffer: Data())
     }
 
     /// Read more bytes, then try to parse.
-    private func receive(_ connection: NWConnection, buffer: Data) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 256 * 1024) { [weak self] data, _, complete, error in
+    private func receive(_ connection: HTTPConnection, buffer: Data) {
+        connection.receive(maximumLength: 256 * 1024) { [weak self] data, complete, error in
             guard let self else { return }
             if error != nil { connection.cancel(); return }
             var next = buffer
@@ -164,7 +214,7 @@ public final class HTTPServer: @unchecked Sendable {
 
     /// Parse what is buffered before reading again: a keep-alive client may
     /// already have sent the next request.
-    private func process(_ connection: NWConnection, buffer: Data, peerClosed: Bool = false) {
+    private func process(_ connection: HTTPConnection, buffer: Data, peerClosed: Bool = false) {
         var buffer = buffer
         switch parse(&buffer) {
         case .needMore:
@@ -172,12 +222,14 @@ public final class HTTPServer: @unchecked Sendable {
             receive(connection, buffer: buffer)
         case let .failed(status, message):
             send(connection, .error(status, message), keepAlive: false)
-        case let .request(request, keepAlive):
+        case let .request(parsed, keepAlive):
             let rest = buffer
             let handler = self.handler
+            let gate = self.gate
             Task { @MainActor in
+                var request = parsed
                 let result: RouteResult
-                if let refused = Self.gate(request) { result = refused } else { result = await handler(request) }
+                if let refused = gate(&request) { result = refused } else { result = await handler(request) }
                 switch result {
                 case let .response(response):
                     self.queue.async {
@@ -198,8 +250,8 @@ public final class HTTPServer: @unchecked Sendable {
         }
     }
 
-    private func watchClose(_ connection: NWConnection, _ writer: StreamWriter) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] _, _, complete, error in
+    private func watchClose(_ connection: HTTPConnection, _ writer: StreamWriter) {
+        connection.receive(maximumLength: 4096) { [weak self] _, complete, error in
             if complete || error != nil { writer.close() } else { self?.watchClose(connection, writer) }
         }
     }
@@ -242,19 +294,19 @@ public final class HTTPServer: @unchecked Sendable {
         let request = HTTPRequest(
             method: String(requestLine[0]).uppercased(),
             path: components?.percentEncodedPath ?? target,
-            query: query, headers: headers, body: Data(body)
+            query: query, headers: headers, body: Data(body), deviceId: nil
         )
         return .request(request, keepAlive: keepAlive)
     }
 
-    private func send(_ connection: NWConnection, _ response: HTTPResponse, keepAlive: Bool) {
+    private func send(_ connection: HTTPConnection, _ response: HTTPResponse, keepAlive: Bool) {
         var head = "HTTP/1.1 \(response.status) \(Self.reason(response.status))\r\n"
         for (name, value) in response.headers { head += "\(name): \(value)\r\n" }
         head += "Content-Length: \(response.body.count)\r\n"
         head += keepAlive ? "Connection: keep-alive\r\n\r\n" : "Connection: close\r\n\r\n"
-        connection.send(content: Data(head.utf8) + response.body, completion: .contentProcessed { _ in
+        connection.send(Data(head.utf8) + response.body) { _ in
             if !keepAlive { connection.cancel() }
-        })
+        }
     }
 
     /// The loopback gates, before any route.
@@ -301,6 +353,7 @@ public final class HTTPServer: @unchecked Sendable {
         case 411: return "Length Required"
         case 413: return "Payload Too Large"
         case 415: return "Unsupported Media Type"
+        case 429: return "Too Many Requests"
         case 431: return "Request Header Fields Too Large"
         case 500: return "Internal Server Error"
         case 501: return "Not Implemented"

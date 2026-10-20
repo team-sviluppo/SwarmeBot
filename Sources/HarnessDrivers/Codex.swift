@@ -11,6 +11,9 @@
 // Picker ids are `provider::model` for anything but the official rows, since
 // thread/start takes model and modelProvider separately.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import HarnessCore
 
 public struct CodexDriver: ProviderDriver {

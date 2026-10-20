@@ -118,6 +118,11 @@ public struct RuntimeEvent: Sendable {
         case requestResolved(behavior: String, source: String, approvalScope: String?)
         case tokenUsage(input: Double, output: Double)
         case runtimeError(message: String, setup: Bool?)
+        /// The subscription's rolling session window (Claude's five hours):
+        /// `utilization` 0…1 (past 1 when over the cap), `resetsAt` in epoch
+        /// seconds. Per account, not per thread: the harness keeps it on the
+        /// instance and sends a `usage-limit` frame, never a `runtime` one.
+        case usageLimit(window: String, utilization: Double, resetsAt: Double?)
     }
 
     public struct TokenUsage: Sendable, Equatable {
@@ -176,6 +181,7 @@ public struct RuntimeEvent: Sendable {
         case .requestResolved: return "request.resolved"
         case .tokenUsage: return "thread.token-usage.updated"
         case .runtimeError: return "runtime.error"
+        case .usageLimit: return "usage-limit.updated"
         }
     }
 
@@ -239,6 +245,10 @@ public struct RuntimeEvent: Sendable {
         case let .runtimeError(message, setup):
             o["message"] = .string(message)
             if let setup { o["setup"] = .bool(setup) }
+        case let .usageLimit(window, utilization, resetsAt):
+            o["window"] = .string(window)
+            o["utilization"] = .number(utilization)
+            o["resetsAt"] = .from(resetsAt)
         }
         return .object(o)
     }

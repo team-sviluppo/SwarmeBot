@@ -4,7 +4,11 @@
 // One row per message, the message itself as JSON in `json` (the columns
 // beside it exist for search). WAL, owner-only permissions.
 import Foundation
+#if canImport(SQLite3)
 import SQLite3
+#else
+import CSQLite3
+#endif
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 

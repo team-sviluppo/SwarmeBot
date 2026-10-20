@@ -5,6 +5,9 @@
 // appear in the picker as `host::model`; a pick decodes back into a host
 // and the API id to send.
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct LocalHost: Sendable, Equatable {
     public var id: String

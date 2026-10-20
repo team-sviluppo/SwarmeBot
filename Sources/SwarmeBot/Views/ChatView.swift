@@ -177,8 +177,8 @@ extension EnvironmentValues {
     }
 }
 
-/// Copy (and edit) plus the time, revealed on hover under the bubble, on
-/// the bubble's own side (`transition-opacity` 150 ms).
+/// Copy (and edit) plus the time, revealed on hover beside the bubble's
+/// bottom edge, towards the middle of the column (`transition-opacity` 150 ms).
 struct HoverActions<Content: View>: View {
     let message: Message
     let threadId: String
@@ -191,25 +191,28 @@ struct HoverActions<Content: View>: View {
 
     @State private var hideToken = 0
 
-    /// The meta row is in the layout, under the bubble. An overlay aligned to
-    /// the bubble's bottom draws on top of the last line.
+    /// The meta row sits beside the bubble and is always in the layout, only
+    /// faded: under the bubble it pushed every message below down on hover.
     var body: some View {
         HStack(spacing: 0) {
             if isUser { Spacer(minLength: 0) }
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                content
-                if hovering {
-                    HStack(alignment: .center, spacing: 4) {
-                        if isUser { time; actions } else { actions; time }
-                    }
-                    .padding(.horizontal, 2)
-                    .transition(.opacity.animation(Theme.quick))
-                }
+            HStack(alignment: .bottom, spacing: 6) {
+                if isUser { meta; content } else { content; meta }
             }
-            .animation(Theme.quick, value: hovering)
             .onHover(perform: hover)
             if !isUser { Spacer(minLength: 0) }
         }
+    }
+
+    private var meta: some View {
+        HStack(alignment: .center, spacing: 4) {
+            if isUser { time; actions } else { actions; time }
+        }
+        .fixedSize()
+        .padding(.bottom, 2)
+        .opacity(hovering ? 1 : 0)
+        .allowsHitTesting(hovering)
+        .animation(Theme.quick, value: hovering)
     }
 
     private func hover(_ inside: Bool) {
@@ -225,7 +228,6 @@ struct HoverActions<Content: View>: View {
         Text(message.date.formatted(date: .omitted, time: .shortened))
             .font(.system(size: 11).monospacedDigit())
             .foregroundStyle(Theme.ink.opacity(0.42))
-            .transition(.opacity.animation(Theme.quick))
     }
 
     private var actions: some View {
@@ -242,7 +244,6 @@ struct HoverActions<Content: View>: View {
                 .buttonStyle(IconButtonStyle(size: 22, iconSize: 12))
                 .help("Copia")
         }
-        .transition(.opacity.animation(Theme.quick))
     }
 }
 
@@ -264,13 +265,15 @@ struct MessageRow: View {
                             if let bot = model.state.bot(from.botId) {
                                 BotAvatar(bot: bot, size: 24, animated: false)
                             } else {
-                                MausAvatar(color: from.color, size: 24, animated: false)
+                                SwarmeAvatar(color: from.color, size: 24, animated: false)
                             }
                             Text(from.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.secondary)
                         }
                     }
                     HoverActions(message: message, threadId: threadId, isUser: false, copyText: message.text ?? "") {
-                        BotBubble { MarkdownText(source: message.text ?? "") }
+                        BotBubble(color: isRoom ? message.from?.color : model.selectedBot?.color) {
+                            MarkdownText(source: message.text ?? "")
+                        }
                             .contextMenu { messageMenu }
                     }
                     if message.interrupted == true {
@@ -506,12 +509,43 @@ struct UserBubble: View {
                     .foregroundStyle(Theme.tertiary)
             }
         }
-        .frame(maxWidth: column * 0.7, alignment: .trailing)
+        .modifier(WidthCap(cap: column * 0.7))
     }
 }
 
-/// `bg-card`, radius 16, 16/10, at most 88% of the column.
+/// At most `cap` wide, but never wider than the content: a short bubble
+/// stays short, so what sits beside it (time, copy) stays next to it.
+/// `.frame(maxWidth:)` would grow to the cap and push those away.
+struct WidthCap: ViewModifier {
+    let cap: CGFloat
+
+    func body(content: Content) -> some View {
+        CapLayout(cap: cap) { content }
+    }
+
+    private struct CapLayout: Layout {
+        let cap: CGFloat
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            guard let child = subviews.first else { return .zero }
+            return child.sizeThatFits(capped(proposal))
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            subviews.first?.place(at: bounds.origin, proposal: capped(ProposedViewSize(bounds.size)))
+        }
+
+        private func capped(_ proposal: ProposedViewSize) -> ProposedViewSize {
+            ProposedViewSize(width: min(proposal.width ?? cap, cap), height: proposal.height)
+        }
+    }
+}
+
+/// The bot's colour (darkened for contrast, see `SwarmePalette.bubble`),
+/// radius 14, 12/9, at most 88% of the column.
 struct BotBubble<Content: View>: View {
+    /// Palette name; nil (a sender no longer known) keeps the neutral grey.
+    let color: String?
     @ViewBuilder let content: Content
     @Environment(\.transcriptColumn) private var column
 
@@ -521,8 +555,8 @@ struct BotBubble<Content: View>: View {
             .textSelection(.enabled)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
-            .background(RoundedRectangle(cornerRadius: Theme.radiusBubble, style: .continuous).fill(Theme.bubbleBot))
-            .frame(maxWidth: column * 0.88, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: Theme.radiusBubble, style: .continuous).fill(color.map(SwarmePalette.bubble) ?? Theme.bubbleBot))
+            .modifier(WidthCap(cap: column * 0.88))
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -630,21 +664,29 @@ struct ShimmerText: View {
     }
 }
 
-/// "Working": `raised` bubble, three 6 pt dots bouncing (Tailwind
-/// `animate-bounce`, delays 0/150/300 ms) and "Al lavoro da Ns".
+/// "Working": `raised` bubble, the working bot's mascot pacing left and
+/// right, and "Al lavoro da Ns". Three bouncing dots when nobody is known.
 struct TypingIndicator: View {
+    var bot: Bot?
     @State private var start = Date()
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
             let t = timeline.date.timeIntervalSince(start)
             HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    ForEach(0..<3) { i in
-                        Circle()
-                            .fill(Theme.secondary)
-                            .frame(width: 6, height: 6)
-                            .offset(y: Self.bounce((t + 1 - Double(i) * 0.15).truncatingRemainder(dividingBy: 1)))
+                if let bot {
+                    // 1.6 s there and back over 24 pt, eased at the ends
+                    BotAvatar(bot: bot, size: 22, state: .working, priority: true, trackPointer: false)
+                        .offset(x: 12 * CGFloat(sin(t * .pi / 0.8)))
+                        .frame(width: 46)
+                } else {
+                    HStack(spacing: 6) {
+                        ForEach(0..<3) { i in
+                            Circle()
+                                .fill(Theme.secondary)
+                                .frame(width: 6, height: 6)
+                                .offset(y: Self.bounce((t + 1 - Double(i) * 0.15).truncatingRemainder(dividingBy: 1)))
+                        }
                     }
                 }
                 Text("Al lavoro da \(Int(t))s")
@@ -652,7 +694,7 @@ struct TypingIndicator: View {
                     .foregroundStyle(Theme.secondary)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, bot == nil ? 12 : 7)
             .background(RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous).fill(Theme.raised))
         }
     }
@@ -715,9 +757,18 @@ private struct LiveTail: View {
             ReasoningView(text: reasoning, live: model.live.text[threadId]?.isEmpty ?? true)
         }
         if let streaming = model.live.text[threadId], !streaming.isEmpty {
-            BotBubble { MarkdownText(source: streaming, caret: true) }
-        } else if working {
-            TypingIndicator()
+            BotBubble(color: speaker?.color) { MarkdownText(source: streaming, caret: true) }
         }
+        // under the streaming reply too: text arriving does not mean the
+        // turn is over, and the indicator keeps one identity (and its clock)
+        if working {
+            TypingIndicator(bot: speaker)
+        }
+    }
+
+    /// Who is typing: the selected bot, or the room's busy member.
+    private var speaker: Bot? {
+        if let bot = model.selectedBot { return bot }
+        return model.selectedRoom?.busyBotId.flatMap { model.state.bot($0) }
     }
 }
