@@ -383,6 +383,10 @@ extension AppModel {
         }
     }
 
+    public func oauthRedirect() async -> String? {
+        try? await client?.mcpOAuthRedirect()
+    }
+
     public func oauthLogout(_ connector: MCPConnector) async {
         await perform { client in self.upsert(try await client.logoutMCPOAuth(connector.id)) }
     }

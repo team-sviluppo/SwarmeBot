@@ -539,8 +539,13 @@ cambiano. Per il resto si verifica con:
   - un connettore che cambia URL, client ID o modo di autenticazione perde login e client registrato;
     il client secret inserito a mano resta;
   - rotte: `POST /api/mcp-connectors/:id/oauth/start` (→ `authorizationUrl`, `redirectUri`),
-    `POST …/oauth/logout`; il connettore espone `oauthState` (`connected` / `expired` /
-    `disconnected`) e `oauthClient` (client e issuer, niente segreti).
+    `POST …/oauth/logout`, `GET /api/mcp-connectors/oauth-redirect` (→ `redirectUri`, per
+    registrarlo a mano prima di qualsiasi login); il connettore espone `oauthState` (`connected` /
+    `expired` / `disconnected`) e `oauthClient` (client e issuer, niente segreti);
+  - un server che rifiuta la registrazione dinamica (Meta, `mcp.facebook.com/ads`: la permette solo ai
+    client che ha in elenco, cioè Claude, ChatGPT e Perplexity) risponde con l'errore del server più cosa
+    fare e il redirect da registrare; con l'App ID inserito come Client ID il login parte (verificato
+    fino all'URL del dialogo di Facebook, non fino al token: serve un'app Meta).
 - App: autenticazione «Nessuna o header» / «OAuth» nei connettori HTTP; sezione OAuth con stato,
   «Accedi…» (salva, poi apre il browser), «Esci», client registrato a mano (ID, secret, scope, redirect
   URI da registrare); nell'elenco, «da collegare» finché manca il login.

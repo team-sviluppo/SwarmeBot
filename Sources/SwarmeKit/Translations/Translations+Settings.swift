@@ -308,5 +308,6 @@ extension Translations {
         "Copia": "Copy",
         "Oppure: POST %@ con header Authorization: Bearer %@": "Or: POST %@ with header Authorization: Bearer %@",
         "Fatto": "Done",
+        "Per i servizi che non accettano la registrazione automatica (per esempio Meta): crea un'app sul loro portale sviluppatori, aggiungi questo Redirect URI e incolla qui il suo Client ID (per Meta, l'App ID).": "For services that don't accept automatic registration (Meta, for example): create an app on their developer portal, add this redirect URI and paste its client ID here (for Meta, the app ID).",
     ]
 }

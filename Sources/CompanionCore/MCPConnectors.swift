@@ -274,6 +274,13 @@ extension CompanionClient {
         return (url, started.redirectUri)
     }
 
+    /// The redirect URI to register by hand with a provider that does not
+    /// let SwarmeBot register itself.
+    public func mcpOAuthRedirect() async throws -> String {
+        struct Answer: Decodable { var redirectUri: String }
+        return try await send(try makeRequest("GET", "/api/mcp-connectors/oauth-redirect"), as: Answer.self).redirectUri
+    }
+
     @discardableResult
     public func logoutMCPOAuth(_ id: String) async throws -> MCPConnector {
         try await send(try makeRequest("POST", "/api/mcp-connectors/\(id)/oauth/logout"), as: MCPConnectorResponse.self).connector

@@ -427,8 +427,20 @@ private struct OAuthSection: View {
                 TextField(tr("Scope"), text: $input.oauthScope, prompt: Text(tr("vuoto = quelli che chiede il server")))
                     .font(.system(size: 12, design: .monospaced))
                 if let redirect {
-                    LabeledContent(tr("Redirect URI")) { Text(redirect).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled) }
+                    LabeledContent(tr("Redirect URI")) {
+                        HStack(spacing: 6) {
+                            Text(redirect).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
+                            Button(tr("Copia")) {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(redirect, forType: .string)
+                            }
+                            .controlSize(.small)
+                        }
+                    }
                 }
+                Text(tr("Per i servizi che non accettano la registrazione automatica (per esempio Meta): crea un'app sul loro portale sviluppatori, aggiungi questo Redirect URI e incolla qui il suo Client ID (per Meta, l'App ID)."))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         } header: {
             Text(verbatim: "OAuth")
@@ -437,6 +449,8 @@ private struct OAuthSection: View {
                 .font(.system(size: 11)).foregroundStyle(.tertiary)
         }
         .onAppear { manual = !input.oauthClientId.isEmpty }
+        // shown before any login: a provider's app needs it registered first
+        .task { if redirect == nil { redirect = await model.oauthRedirect() } }
     }
 
     private func login() async {
@@ -450,6 +464,8 @@ private struct OAuthSection: View {
             openURL(started.url)
         case let .failure(error):
             note = error.localizedDescription
+            // the usual way out is a client registered by hand: show where it goes
+            if input.oauthClientId.isEmpty { manual = true }
         }
     }
 }

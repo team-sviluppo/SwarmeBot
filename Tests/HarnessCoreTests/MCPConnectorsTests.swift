@@ -278,6 +278,9 @@ final class MCPConnectorsTests: XCTestCase {
 
         (status, _) = try await call("DELETE", "/api/mcp-connectors/altro", json: false)
         XCTAssertEqual(status, 200)
+        (status, body) = try await call("GET", "/api/mcp-connectors/oauth-redirect")
+        XCTAssertEqual(status, 200)
+        XCTAssertEqual(body["redirectUri"]?.string?.hasSuffix("/oauth/mcp/callback"), true)
         (status, _) = try await call("GET", "/api/mcp-connectors/altro")
         XCTAssertEqual(status, 404)
         harness.mcpPool.stopAll()
