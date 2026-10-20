@@ -163,8 +163,8 @@ list honestly what was verified live and what was not.
 
 ## Git
 
-- Work happens on feature branches (current: `feat/remote-engine`); PRs target `main` on
-  `team-sviluppo/SwarmeBot`.
+- Work happens on feature branches off `main` (none open at the moment: `feat/remote-engine`
+  was merged in PR #4); PRs target `main` on `team-sviluppo/SwarmeBot`.
 - Commit messages follow the recent `git log`: an English subject in plain words describing the
   effect ("Copy a connector to a remote engine, with its secrets"), a body explaining what changed
   and how it was tested, then the co-author trailer.
