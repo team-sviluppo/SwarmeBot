@@ -746,12 +746,14 @@ enum ACPHarnesses {
             }
             return cursorModels
         },
-        // best effort: argv --model is the reliable pin, a missing method is fine
+        // best effort: argv --model is the reliable pin, a missing method is fine. Newer CLIs only accept
+        // their ACP ids here ("grok-4.7[context=256k,…]") and answer -32602 to the `cursor-agent models` slug
+        // already applied through argv; an unknown model fails the spawn itself, so nothing is hidden.
         configureSession: { session, _, model in
             guard let model else { return }
             do {
                 _ = try await session.request("session/set_model", ["sessionId": .string(session.sessionId), "modelId": .string(model)])
-            } catch let error as RPCError where error.code?.double == -32601 {
+            } catch let error as RPCError where error.code?.double == -32601 || error.code?.double == -32602 {
                 return
             } catch {
                 throw RPCError(message: "Cursor rejected model \"\(model)\" via session/set_model: \(error.localizedDescription). "
