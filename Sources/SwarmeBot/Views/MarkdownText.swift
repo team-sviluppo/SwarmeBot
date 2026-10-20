@@ -75,7 +75,60 @@ struct MarkdownText: View {
 
         case .rule:
             Rectangle().fill(Theme.ink.opacity(0.3)).frame(height: 1).padding(.vertical, 2)
+
+        case let .table(header, alignments, rows):
+            // At its natural width when it fits; otherwise long cells wrap,
+            // at narrower and narrower caps, and only a table that still
+            // does not fit scrolls sideways, like a code block.
+            ViewThatFits(in: .horizontal) {
+                table(header: header, alignments: alignments, rows: rows, tail: tail, cap: nil)
+                table(header: header, alignments: alignments, rows: rows, tail: tail, cap: 220)
+                table(header: header, alignments: alignments, rows: rows, tail: tail, cap: 150)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    table(header: header, alignments: alignments, rows: rows, tail: tail, cap: 150)
+                }
+            }
         }
+    }
+
+    private func table(header: [String], alignments: [MarkdownAlignment], rows: [[String]], tail: Bool, cap: CGFloat?) -> some View {
+        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+            GridRow {
+                ForEach(Array(header.enumerated()), id: \.offset) { column, text in
+                    cell(text, alignment: alignments[column], cap: cap, tail: tail && rows.isEmpty && column == header.count - 1)
+                        .fontWeight(.semibold)
+                        .background(Theme.ink.opacity(0.08))
+                        .gridColumnAlignment(alignments[column].horizontal)
+                }
+            }
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                Rectangle().fill(Theme.ink.opacity(0.25)).frame(height: 1)
+                GridRow {
+                    ForEach(Array(row.enumerated()), id: \.offset) { column, text in
+                        cell(text, alignment: alignments[column], cap: cap,
+                             tail: tail && index == rows.count - 1 && column == row.count - 1)
+                    }
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous).stroke(Theme.ink.opacity(0.3)))
+        .fixedSize()
+    }
+
+    /// Every cell fills its column and its row, so the header's tint and
+    /// the alignment cover the whole cell, not just its text.
+    private func cell(_ text: String, alignment: MarkdownAlignment, cap: CGFloat?, tail: Bool) -> some View {
+        CappedWidth(cap: cap ?? .infinity) {
+            inline(text, tail: tail)
+                .font(.system(size: Theme.bodySize))
+                .lineSpacing(Theme.bodyLineSpacing)
+                .multilineTextAlignment(alignment.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Alignment(horizontal: alignment.horizontal, vertical: .top))
     }
 
     private func marker(_ symbol: String, indent: Int, text: String, tail: Bool) -> some View {
@@ -142,6 +195,41 @@ struct MarkdownText: View {
 
     private func caretText(_ tail: Bool) -> Text {
         tail ? Text("\u{2007}▍").foregroundStyle(Color.secondary) : Text("")
+    }
+}
+
+/// Proposes its content the width it is offered, but never more than `cap`,
+/// and takes the content's own size: a short cell stays short, a long one
+/// wraps at the cap. A `frame(maxWidth:)` cannot do this inside a sideways
+/// scroll view, which offers no width at all.
+private struct CappedWidth: Layout {
+    let cap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        return content.sizeThatFits(ProposedViewSize(width: min(proposal.width ?? cap, cap), height: proposal.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+
+private extension MarkdownAlignment {
+    var horizontal: HorizontalAlignment {
+        switch self {
+        case .none, .left: .leading
+        case .center: .center
+        case .right: .trailing
+        }
+    }
+
+    var text: TextAlignment {
+        switch self {
+        case .none, .left: .leading
+        case .center: .center
+        case .right: .trailing
+        }
     }
 }
 

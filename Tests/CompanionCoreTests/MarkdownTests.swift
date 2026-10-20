@@ -154,6 +154,76 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(Markdown.blocks("-- dashes --"), [.paragraph("-- dashes --")])
     }
 
+    // MARK: - Tables
+
+    /// The reply that showed up as one paragraph of pipes and dashes.
+    func testTableWithParagraphsAround() {
+        XCTAssertEqual(
+            Markdown.blocks("Una campagna attiva.\n\n| Campagna | Spesa |\n|---|---|\n| Promo MKT | 41,27 € |\n\nAltro testo."),
+            [
+                .paragraph("Una campagna attiva."),
+                .table(header: ["Campagna", "Spesa"], alignments: [.none, .none], rows: [["Promo MKT", "41,27 €"]]),
+                .paragraph("Altro testo."),
+            ]
+        )
+    }
+
+    func testTableAlignmentsAndOptionalOuterPipes() {
+        XCTAssertEqual(
+            Markdown.blocks("a | b | c | d\n:-- | :-: | --: | -\n1 | 2 | 3 | 4"),
+            [.table(header: ["a", "b", "c", "d"], alignments: [.left, .center, .right, .none], rows: [["1", "2", "3", "4"]])]
+        )
+    }
+
+    /// GFM pads a short row and drops the extra cells of a long one.
+    func testRowsAreFittedToTheHeader() {
+        XCTAssertEqual(
+            Markdown.blocks("| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |"),
+            [.table(header: ["a", "b"], alignments: [.none, .none], rows: [["1", ""], ["1", "2"]])]
+        )
+    }
+
+    func testEscapedPipeStaysInTheCell() {
+        XCTAssertEqual(
+            Markdown.blocks("| expr | note |\n|---|---|\n| `a \\| b` | \\*kept\\* |"),
+            [.table(header: ["expr", "note"], alignments: [.none, .none], rows: [["`a | b`", "\\*kept\\*"]])]
+        )
+    }
+
+    /// GFM lets a table follow a paragraph line directly, and ends it at the
+    /// first line without a pipe.
+    func testTableEndsAParagraphAndALineWithoutPipesEndsTheTable() {
+        XCTAssertEqual(
+            Markdown.blocks("Ecco:\n| a | b |\n|---|---|\n| 1 | 2 |\nfine"),
+            [
+                .paragraph("Ecco:"),
+                .table(header: ["a", "b"], alignments: [.none, .none], rows: [["1", "2"]]),
+                .paragraph("fine"),
+            ]
+        )
+    }
+
+    /// Without the delimiter row, or with one that does not match the
+    /// header, a line with pipes is just text.
+    func testPipesWithoutADelimiterRowAreText() {
+        XCTAssertEqual(Markdown.blocks("a | b\nc | d"), [.paragraph("a | b c | d")])
+        XCTAssertEqual(Markdown.blocks("| a | b |\n|---|\n| 1 | 2 |"), [.paragraph("| a | b | |---| | 1 | 2 |")])
+        XCTAssertEqual(Markdown.blocks("| a | b |\n|---|x|"), [.paragraph("| a | b | |---|x|")])
+    }
+
+    /// While the delimiter row streams in the table is already drawn, so the
+    /// bubble does not flash a line of dashes first.
+    func testStreamingDelimiterRowAlreadyMakesATable() {
+        let header = MarkdownBlock.table(header: ["a", "b", "c"], alignments: [.none, .none, .none], rows: [])
+        for partial in ["|", "|-", "|---|", "|---|---|-"] {
+            XCTAssertEqual(Markdown.blocks("| a | b | c |\n" + partial), [header], partial)
+        }
+        XCTAssertEqual(Markdown.blocks("| a | b | c |\n|---|:"),
+                       [.table(header: ["a", "b", "c"], alignments: [.none, .left, .none], rows: [])])
+        XCTAssertEqual(Markdown.blocks("| a | b | c |\n|---|---|---|\n| 1 | 2"),
+                       [.table(header: ["a", "b", "c"], alignments: [.none, .none, .none], rows: [["1", "2", ""]])])
+    }
+
     // MARK: - Streaming
 
     /// The invariant that keeps the bubble from flickering: whatever arrives,
@@ -192,6 +262,7 @@ final class MarkdownTests: XCTestCase {
         case let .code(language, text): return (language ?? "") + text
         case let .quote(text): return text
         case .rule: return ""
+        case let .table(header, _, rows): return (header + rows.flatMap { $0 }).joined()
         }
     }
 }

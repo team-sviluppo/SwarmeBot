@@ -14,7 +14,7 @@
 //
 // Deliberately not a full CommonMark implementation. It covers what a model
 // actually emits into a chat bubble — paragraphs, lists, headings, fences,
-// quotes, rules — and treats anything it does not recognise as text, which is
+// quotes, rules, GFM tables — and treats anything it does not recognise as text, which is
 // the failure mode that loses nothing.
 import Foundation
 
@@ -28,6 +28,14 @@ public enum MarkdownBlock: Equatable, Sendable {
     case code(language: String?, text: String)
     case quote(String)
     case rule
+    /// A GFM table. Every row has exactly `header.count` cells, padded with
+    /// "" or cut, and `alignments` has one entry per column.
+    case table(header: [String], alignments: [MarkdownAlignment], rows: [[String]])
+}
+
+/// A table column's alignment, from the colons of its delimiter cell.
+public enum MarkdownAlignment: Equatable, Sendable {
+    case none, left, center, right
 }
 
 public enum Markdown {
@@ -84,6 +92,23 @@ public enum Markdown {
                 continue
             }
 
+            // A row of cells, then the delimiter row: a table, running to the
+            // first line that is blank or has no pipe. GFM lets it follow a
+            // paragraph line directly, so it ends the paragraph.
+            if let next = lines.first,
+               let header = tableCells(trimmed),
+               let alignments = delimiterRow(next, columns: header.count, last: lines.count == 1) {
+                flushParagraph()
+                lines = lines.dropFirst()
+                var rows: [[String]] = []
+                while let row = lines.first, let cells = tableCells(row.trimmingCharacters(in: .whitespaces)) {
+                    lines = lines.dropFirst()
+                    rows.append((cells + Array(repeating: "", count: max(0, header.count - cells.count))).prefix(header.count).map { $0 })
+                }
+                blocks.append(.table(header: header, alignments: alignments, rows: rows))
+                continue
+            }
+
             // --- or *** or ___, three or more, nothing else on the line
             if trimmed.count >= 3, "-*_".contains(trimmed.first!),
                trimmed.allSatisfy({ $0 == trimmed.first! }) {
@@ -114,6 +139,53 @@ public enum Markdown {
         }
         flushParagraph()
         return blocks
+    }
+
+    /// The cells of a table line, nil when it has no pipe. Outer pipes are
+    /// optional, `\|` is a literal pipe inside a cell.
+    private static func tableCells(_ trimmed: String) -> [String]? {
+        guard trimmed.contains("|") else { return nil }
+        var body = Substring(trimmed)
+        if body.hasPrefix("|") { body = body.dropFirst() }
+        if body.hasSuffix("|") && !body.hasSuffix("\\|") { body = body.dropLast() }
+        var cells: [String] = []
+        var cell = ""
+        var escaped = false
+        for char in body {
+            if escaped {
+                if char != "|" { cell.append("\\") }
+                cell.append(char)
+                escaped = false
+            } else if char == "\\" {
+                escaped = true
+            } else if char == "|" {
+                cells.append(cell.trimmingCharacters(in: .whitespaces))
+                cell = ""
+            } else {
+                cell.append(char)
+            }
+        }
+        if escaped { cell.append("\\") }
+        cells.append(cell.trimmingCharacters(in: .whitespaces))
+        return cells
+    }
+
+    /// `|---|:--:|--:|`, one cell per column. When it is the last line of the
+    /// source it may be short: a reply still streaming has sent only part of
+    /// it, and drawing the table already beats a flash of pipes and dashes.
+    private static func delimiterRow(_ line: String, columns: Int, last: Bool) -> [MarkdownAlignment]? {
+        guard let cells = tableCells(line.trimmingCharacters(in: .whitespaces)),
+              cells.count == columns || (last && cells.count < columns) else { return nil }
+        var alignments: [MarkdownAlignment] = []
+        for cell in cells {
+            let left = cell.hasPrefix(":"), right = cell.hasSuffix(":") && cell.count > 1
+            let dashes = cell.dropFirst(left ? 1 : 0).dropLast(right ? 1 : 0)
+            // streaming: the cell being typed may still be empty or a lone colon
+            let typing = last && alignments.count == cells.count - 1
+            guard !dashes.isEmpty ? dashes.allSatisfy({ $0 == "-" }) : typing else { return nil }
+            alignments.append(left && right ? .center : right ? .right : left ? .left : .none)
+        }
+        return alignments + Array(repeating: .none, count: columns - alignments.count)
     }
 
     private static func heading(_ trimmed: String) -> MarkdownBlock? {
