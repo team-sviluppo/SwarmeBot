@@ -165,8 +165,15 @@ public final class AppModel {
                     default:
                         break
                     }
+                    // a run that just started: show its chat (read before the frame lands)
+                    var started: RoutineRun?
+                    if case let .routineRun(run) = frame.frame, run.status == "running", run.threadId != nil,
+                       state.routineRuns.first(where: { $0.id == run.id })?.status != "running" {
+                        started = run
+                    }
                     state.apply(frame)
                     stateVersion &+= 1
+                    if let started { Task { await self.show(run: started) } }
                     if case .config = frame.frame {
                         Task { await self.refreshInstances() }
                         Task { await self.refreshConfig() }
