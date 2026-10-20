@@ -169,6 +169,10 @@ public final class AppModel {
                         Task { await self.refreshInstances() }
                         Task { await self.refreshConfig() }
                     }
+                    if case let .usageLimit(instanceId, limit) = frame.frame,
+                       let index = instances.firstIndex(where: { $0.instanceId == instanceId }) {
+                        instances[index].usageLimit = limit
+                    }
                     if case .mcpConnectors = frame.frame {
                         Task { await self.refreshMCPConnectors() }
                     }

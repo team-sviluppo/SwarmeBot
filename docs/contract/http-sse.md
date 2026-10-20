@@ -309,6 +309,7 @@ CompanionCore copre **25** route dell'harness (+ `POST /api/pair` del sidecar).
 | `webhook` | `webhook: WebhookTrigger` | WebhookManager | ❌ |
 | `webhook.deleted` | `webhookId` | WebhookManager | ❌ |
 | `webhook.attempt` | `attempt: WebhookAttempt` | WebhookManager | ❌ |
+| `usage-limit` | `instanceId`, `usageLimit:{window:"five_hour", utilization (0–1, oltre 1 se sopra il tetto), resetsAt? (epoch s)}` | **solo Swift** (2026-10-20): `rate_limit_event` di Claude, solo quando il valore cambia; mai come `runtime` | ✅ |
 
 ### 3.4 Eventi runtime rilanciati (`kind:"runtime"`)
 
@@ -380,6 +381,8 @@ Mancanti: **`cwd?`**, **`pinnedCwd?: string|null`**, **`pinnedMessageId?`**.
 (le istanze shadow/non caricate hanno solo `computerMcp, agentsMcp, localComputerMcp:false`),
 **`access:"subscription"|"custom"`**, **`install?{command?{darwin,win32,linux}, docsUrl?, signInCommand?, needsNode?}`**,
 **`cli?`**, **`cliDefault?`**, **`cliCandidates: string[]`**, **`pickerVisible?`** (solo se c'è un override esplicito).
+**Solo Swift:** **`usageLimit?`** = l'ultimo `usage-limit` di quell'istanza (finestra di sessione
+dell'abbonamento), assente finché un turno non l'ha riportato; in memoria, si perde al riavvio.
 
 Livelli effort ammessi per un bot = `effortLevelsForModel(models.options, model, capabilities.effortLevels)`
 (`src/lib/model-effort.ts`): l'opzione modello vince, altrimenti i livelli del driver; assente = nessun controllo.

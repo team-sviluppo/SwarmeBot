@@ -289,6 +289,20 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         events.emit(event)
     }
 
+    /// The five-hour window of a `rate_limit_event`: `unifiedWindows.five_hour`,
+    /// else the top-level fields when they are about that window. Utilization
+    /// is a fraction (0.1 = 10%).
+    static func sessionWindow(_ info: JSON?) -> (utilization: Double, resetsAt: Double?)? {
+        guard let info else { return nil }
+        if let window = info["unifiedWindows"]?["five_hour"], let utilization = window["utilization"]?.double {
+            return (utilization, window["resetsAt"]?.double)
+        }
+        if info["rateLimitType"]?.string == "five_hour", let utilization = info["utilization"]?.double {
+            return (utilization, info["resetsAt"]?.double)
+        }
+        return nil
+    }
+
     struct TurnError: LocalizedError {
         let message: String
         var errorDescription: String? { message }
@@ -435,6 +449,10 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
                         input: (usage["input_tokens"]?.double ?? 0) + (usage["cache_read_input_tokens"]?.double ?? 0),
                         output: usage["output_tokens"]?.double ?? 0
                     ))
+                }
+            case "rate_limit_event":
+                if let limit = Self.sessionWindow(o["rate_limit_info"]) {
+                    self.emit(threadId, turnId, .usageLimit(window: "five_hour", utilization: limit.utilization, resetsAt: limit.resetsAt))
                 }
             case "user":
                 for block in o["message"]?["content"]?.array ?? [] where block["type"]?.string == "tool_result" {

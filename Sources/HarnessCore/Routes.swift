@@ -384,7 +384,7 @@ public final class Routes {
         // MARK: engines and config
         if method == "GET", path == "/api/instances" {
             EnvPath.reset()
-            return ok(["instances": .array(await harness.fleet.describe(pickerVisibility: harness.config.pickerVisibility))])
+            return ok(["instances": .array(harness.withUsageLimits(await harness.fleet.describe(pickerVisibility: harness.config.pickerVisibility)))])
         }
         if let m = match(#"^/api/instances/([\w.-]+)$"#, path), method == "PATCH" {
             let body = try r.json()
@@ -397,7 +397,7 @@ public final class Routes {
                 guard try harness.config.setInstanceCli(m[0], cli) else { return fail(404, "no such instance") }
                 await harness.reloadProviders()
             }
-            return ok(["instances": .array(await harness.fleet.describe(pickerVisibility: harness.config.pickerVisibility, refresh: !visibilityOnly))])
+            return ok(["instances": .array(harness.withUsageLimits(await harness.fleet.describe(pickerVisibility: harness.config.pickerVisibility, refresh: !visibilityOnly)))])
         }
         if method == "GET", path == "/api/cli-candidates" {
             EnvPath.reset()

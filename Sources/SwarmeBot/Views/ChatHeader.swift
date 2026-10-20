@@ -65,6 +65,9 @@ struct ChatHeader: View {
                         .overlay(Capsule().stroke(Theme.hairline.opacity(0.4)))
                         .help(chip.help)
                 }
+                if let limit = model.instance(bot.modelSelection.instanceId)?.usageLimit, limit.isCurrent() {
+                    SessionLimitChip(limit: limit)
+                }
                 Button { toggle(.computer) } label: { Image(systemName: "display") }
                     .buttonStyle(IconButtonStyle(size: 30, iconSize: 16, active: ui.showInspector && ui.inspectorTab == .computer))
                     .help("Computer")
@@ -436,5 +439,39 @@ struct NewRoomSheet: View {
                 .disabled(members.isEmpty)
             }
         }
+    }
+}
+
+/// How much of the subscription's session window (five hours) is used:
+/// green under 50%, yellow up to 80%, red past it.
+private struct SessionLimitChip: View {
+    let limit: UsageLimit
+    /// Theme.warning is orange; this reads as yellow on the dark header.
+    private static let yellow = Color(hex: "#F5C842")
+
+    var body: some View {
+        let percent = Int((limit.utilization * 100).rounded())
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text("\(percent)%")
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .foregroundStyle(color)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 4)
+        .background(Capsule().fill(color.opacity(0.12)))
+        .overlay(Capsule().stroke(color.opacity(0.35)))
+        .help(help(percent))
+    }
+
+    private var color: Color {
+        limit.utilization < 0.5 ? Theme.success : limit.utilization <= 0.8 ? Self.yellow : Theme.danger
+    }
+
+    private func help(_ percent: Int) -> String {
+        var text = "Sessione di 5 ore dell'abbonamento: \(percent)% usato"
+        if let reset = limit.resetDate {
+            text += ", si azzera alle \(reset.formatted(date: .omitted, time: .shortened))"
+        }
+        return text
     }
 }

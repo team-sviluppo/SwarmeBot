@@ -57,3 +57,16 @@ final class DesktopFrameTests: XCTestCase {
         XCTAssertEqual(body["section"] as? String, "", "an empty section is how the label is cleared")
     }
 }
+
+final class UsageLimitFrameTests: XCTestCase {
+    func testUsageLimitFrameAndInstanceField() throws {
+        let frame = try JSONDecoder().decode(StreamFrame.self, from: Data(#"{"kind":"usage-limit","seq":9,"instanceId":"claude","usageLimit":{"window":"five_hour","utilization":0.55,"resetsAt":1792517400}}"#.utf8))
+        guard case let .usageLimit(id, limit) = frame.frame else { return XCTFail("\(frame.frame)") }
+        XCTAssertEqual(id, "claude")
+        XCTAssertEqual(limit.utilization, 0.55)
+        XCTAssertFalse(limit.isCurrent(at: Date(timeIntervalSince1970: 1792517401)), "past its reset it says nothing")
+
+        let odd = try JSONDecoder().decode(StreamFrame.self, from: Data(#"{"kind":"usage-limit","seq":10,"instanceId":"claude"}"#.utf8))
+        guard case .unknown = odd.frame else { return XCTFail("a frame without a window degrades to unknown") }
+    }
+}
