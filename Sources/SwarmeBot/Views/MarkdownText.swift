@@ -38,6 +38,7 @@ struct MarkdownText: View {
                 .font(.system(size: Theme.bodySize))
                 .lineSpacing(Theme.bodyLineSpacing)
                 .fixedSize(horizontal: false, vertical: true)
+                .linkCursor(Self.parsed(text), size: Theme.bodySize, lineSpacing: Theme.bodyLineSpacing)
 
         case let .heading(level, text):
             // Three sizes, not six. A chat bubble is not a document, and an
@@ -46,6 +47,7 @@ struct MarkdownText: View {
                 .font(.system(size: [16, 15, 14.5, 14, 14, 13.5, 13][min(level, 6)], weight: .semibold))
                 .foregroundStyle(level >= 6 ? Theme.ink.opacity(0.85) : Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
+                .linkCursor(Self.parsed(text), size: [16, 15, 14.5, 14, 14, 13.5, 13][min(level, 6)], weight: .semibold, lineSpacing: 0)
                 .padding(.top, level <= 2 ? 8 : 6)
 
         case let .bullet(indent, text):
@@ -63,6 +65,7 @@ struct MarkdownText: View {
                     .font(.system(size: Theme.bodySize))
                     .lineSpacing(Theme.bodyLineSpacing)
                     .foregroundStyle(Theme.ink.opacity(0.85))
+                    .linkCursor(Self.parsed(text), size: Theme.bodySize, lineSpacing: Theme.bodyLineSpacing)
             }
             .fixedSize(horizontal: false, vertical: true)
 
@@ -83,6 +86,7 @@ struct MarkdownText: View {
             inline(text, tail: tail)
                 .font(.system(size: Theme.bodySize))
                 .lineSpacing(Theme.bodyLineSpacing)
+                .linkCursor(Self.parsed(text), size: Theme.bodySize, lineSpacing: Theme.bodyLineSpacing)
         }
         .padding(.leading, CGFloat(indent) * 20)
         .fixedSize(horizontal: false, vertical: true)
@@ -97,15 +101,17 @@ struct MarkdownText: View {
     /// sent so far, not vanish until it closes the bracket.
     private func inline(_ text: String, tail: Bool = false) -> Text {
         let rendered: Text
-        if let attributed = try? AttributedString(
-            markdown: text,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            rendered = Text(Self.styled(attributed))
+        if let attributed = Self.parsed(text) {
+            rendered = Text(attributed)
         } else {
             rendered = Text(text)
         }
         return rendered + caretText(tail)
+    }
+
+    /// The inline run as drawn, nil when it does not parse (yet).
+    private static func parsed(_ text: String) -> AttributedString? {
+        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))).map(styled)
     }
 
     /// A figure space then a block, so the caret sits off the last glyph
@@ -179,5 +185,100 @@ private struct CodeBlock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous).fill(Theme.inset))
         .overlay(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous).stroke(Theme.hairline.opacity(0.4)))
+    }
+}
+
+// MARK: - The hand over links
+
+/// SwiftUI makes links in a `Text` clickable but keeps the arrow over them,
+/// and a `Text` cannot tell which characters are under the pointer. This lays
+/// the same run out again with TextKit, at the width SwiftUI gave it, and
+/// shows the pointing hand while the pointer is on a link.
+private struct LinkCursor: ViewModifier {
+    let layout: LinkLayout
+    @State private var width: CGFloat = 0
+    @State private var onLink = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { width = geo.size.width }
+                    .onChange(of: geo.size.width) { _, new in width = new }
+            })
+            .onContinuousHover { phase in
+                // set, not push/pop: rows come and go while the transcript
+                // scrolls, and an unbalanced push would keep the hand forever
+                switch phase {
+                case let .active(point):
+                    let hit = layout.isLink(at: point, width: width)
+                    if hit {
+                        NSCursor.pointingHand.set()
+                    } else if onLink {
+                        NSCursor.arrow.set()
+                    }
+                    onLink = hit
+                case .ended:
+                    if onLink { NSCursor.arrow.set() }
+                    onLink = false
+                }
+            }
+    }
+}
+
+/// The run as TextKit sees it: the characters, the font they are drawn in
+/// (bold where the markdown says so) and which ranges are links.
+private struct LinkLayout {
+    let string: NSAttributedString
+    let links: [NSRange]
+
+    init?(_ attributed: AttributedString, size: CGFloat, weight: NSFont.Weight, lineSpacing: CGFloat) {
+        let out = NSMutableAttributedString()
+        var links: [NSRange] = []
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = lineSpacing
+        for run in attributed.runs {
+            let text = String(attributed[run.range].characters)
+            let strong = run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true
+            var font = NSFont.systemFont(ofSize: size, weight: strong ? .bold : weight)
+            if run.inlinePresentationIntent?.contains(.emphasized) == true {
+                font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+            }
+            let start = (out.string as NSString).length
+            out.append(NSAttributedString(string: text, attributes: [.font: font, .paragraphStyle: paragraph]))
+            if run.link != nil { links.append(NSRange(location: start, length: (text as NSString).length)) }
+        }
+        guard !links.isEmpty else { return nil }
+        string = out
+        self.links = links
+    }
+
+    func isLink(at point: CGPoint, width: CGFloat) -> Bool {
+        guard width > 0 else { return false }
+        let storage = NSTextStorage(attributedString: string)
+        let manager = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        manager.addTextContainer(container)
+        storage.addLayoutManager(manager)
+        let glyph = manager.glyphIndex(for: point, in: container)
+        // glyphIndex answers the nearest glyph: only a hit inside its box counts
+        guard manager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container).insetBy(dx: -1, dy: -1).contains(point) else {
+            return false
+        }
+        let index = manager.characterIndexForGlyph(at: glyph)
+        return links.contains { NSLocationInRange(index, $0) }
+    }
+}
+
+extension View {
+    /// The pointing hand over the links of this markdown run; nothing when it has none.
+    @ViewBuilder
+    func linkCursor(_ attributed: AttributedString?, size: CGFloat, weight: NSFont.Weight = .regular, lineSpacing: CGFloat) -> some View {
+        if let attributed, let layout = LinkLayout(attributed, size: size, weight: weight, lineSpacing: lineSpacing) {
+            modifier(LinkCursor(layout: layout))
+        } else {
+            self
+        }
     }
 }
