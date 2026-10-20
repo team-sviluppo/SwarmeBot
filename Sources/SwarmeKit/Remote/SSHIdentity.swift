@@ -46,9 +46,9 @@ public enum SSHInputError: LocalizedError, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .host: return "Indirizzo del server non valido"
-        case .port: return "La porta ssh deve essere tra 1 e 65535"
-        case .user: return "Nome utente non valido"
+        case .host: return tr("Indirizzo del server non valido")
+        case .port: return tr("La porta ssh deve essere tra 1 e 65535")
+        case .user: return tr("Nome utente non valido")
         }
     }
 }

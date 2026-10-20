@@ -20,7 +20,7 @@ struct ChatHeader: View {
                         .padding(2)
                     Text(bot.name).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink).lineLimit(1)
                     if bot.chiefOfStaff == true {
-                        Label("Chief of Staff", systemImage: "crown.fill")
+                        Label(tr("Chief of Staff"), systemImage: "crown.fill")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.accent)
                             .padding(.horizontal, 8).padding(.vertical, 2)
@@ -30,7 +30,7 @@ struct ChatHeader: View {
                 } else if let room = model.selectedRoom {
                     Image(systemName: "number").font(.system(size: 14)).foregroundStyle(Theme.secondary)
                     Text(room.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
-                    Text("\(room.memberIds.count) membri").font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                    Text(tr("%@ membri", String(room.memberIds.count))).font(.system(size: 12)).foregroundStyle(Theme.secondary)
                     if room.busyBotId != nil { ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 14, height: 14) }
                 }
             }
@@ -39,22 +39,22 @@ struct ChatHeader: View {
             Spacer(minLength: 8)
             if busy {
                 Button { Task { await model.interrupt() } } label: {
-                    Label { Text("Stop") } icon: { Image(systemName: "stop.fill").font(.system(size: 10)) }
+                    Label { Text(tr("Stop")) } icon: { Image(systemName: "stop.fill").font(.system(size: 10)) }
                 }
                 .buttonStyle(ChipButtonStyle(filled: true, size: 13, tint: Theme.danger))
-                .help("Interrompi (⌘.)")
+                .help(tr("Interrompi (⌘.)"))
             }
             if let bot = model.selectedBot {
-                Button("Nuova chat") { Task { await model.createTask(title: nil) } }
+                Button(tr("Nuova chat")) { Task { await model.createTask(title: nil) } }
                     .buttonStyle(ChipButtonStyle(filled: false, size: 13))
                     .disabled(model.isBusy(bot))
-                    .help("Apri una chat nuova")
+                    .help(tr("Apri una chat nuova"))
                 taskMenu(bot)
                 Button {
                     Task { await model.patch(bot, BotPatch(pinned: !(bot.pinned ?? false))) }
                 } label: { Image(systemName: bot.pinned == true ? "pin.fill" : "pin") }
                     .buttonStyle(IconButtonStyle(size: 28, iconSize: 14, active: bot.pinned == true))
-                    .help(bot.pinned == true ? "Rimuovi dai fissati" : "Fissa in alto")
+                    .help(bot.pinned == true ? tr("Rimuovi dai fissati") : tr("Fissa in alto"))
                 exportButton(bot.threadId)
                 if let chip = usageChip(currentTask(bot)?.usage) {
                     Text(chip.text)
@@ -70,27 +70,27 @@ struct ChatHeader: View {
                 }
                 Button { toggle(.computer) } label: { Image(systemName: "display") }
                     .buttonStyle(IconButtonStyle(size: 30, iconSize: 16, active: ui.showInspector && ui.inspectorTab == .computer))
-                    .help("Computer")
+                    .help(tr("Computer"))
             } else if let room = model.selectedRoom {
                 Button { showRoomSettings = true } label: { Image(systemName: "slider.horizontal.3") }
                     .buttonStyle(IconButtonStyle(size: 28, iconSize: 15))
-                    .help("Impostazioni canale")
+                    .help(tr("Impostazioni canale"))
                     .sheet(isPresented: $showRoomSettings) { RoomSettingsSheet(room: room) }
                 exportButton(room.threadId)
             }
             Button { toggle(nil) } label: { Image(systemName: "sidebar.right") }
                 .buttonStyle(IconButtonStyle(size: 30, iconSize: 16, active: ui.showInspector && ui.inspectorTab != .computer))
-                .help("Pannello (⌥⌘I)")
+                .help(tr("Pannello (⌥⌘I)"))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(height: 50)
-        .alert("Rinomina task", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Titolo", text: $title)
-            Button("Salva") {
+        .alert(tr("Rinomina task"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(tr("Titolo"), text: $title)
+            Button(tr("Salva")) {
                 if let task = renaming { Task { await model.renameTask(task, title: title) } }
             }
-            Button("Annulla", role: .cancel) {}
+            Button(tr("Annulla"), role: .cancel) {}
         }
     }
 
@@ -120,18 +120,18 @@ struct ChatHeader: View {
         var notes: [String] = []
         if let cost = usage.costUsd, cost > 0 {
             parts.append(String(format: "$%.2f", cost))
-            notes.append("Costo del task")
+            notes.append(tr("Costo del task"))
         }
         if let rate = usage.tokensPerSecond {
             parts.append(Self.formatRate(rate))
             let estimated = usage.estimatedOutput ?? 0
             let timed = usage.timedOutput ?? 0
             if estimated <= 0 {
-                notes.append("Velocità media di risposta")
+                notes.append(tr("Velocità media di risposta"))
             } else if timed > 0, estimated >= timed - 0.01 {
-                notes.append("Velocità stimata dal testo")
+                notes.append(tr("Velocità stimata dal testo"))
             } else {
-                notes.append("Velocità media di risposta, in parte stimata")
+                notes.append(tr("Velocità media di risposta, in parte stimata"))
             }
         }
         guard !parts.isEmpty else { return nil }
@@ -154,7 +154,7 @@ struct ChatHeader: View {
             }
         } label: { Image(systemName: "square.and.arrow.up") }
             .buttonStyle(IconButtonStyle(size: 28, iconSize: 14))
-            .help("Esporta conversazione")
+            .help(tr("Esporta conversazione"))
     }
 
     /// The current chat's title; opens the list of this bot's chats.
@@ -177,8 +177,8 @@ private struct TaskPickerButton: View {
         let current = tasks.first { $0.threadId == bot.threadId }
         Button { open.toggle() } label: {
             HStack(spacing: 5) {
-                Text(current?.title ?? "Chat").lineLimit(1).frame(maxWidth: 160)
-                if tasks.count > 1 { Text("\(tasks.count)").opacity(0.6) }
+                Text(current?.title ?? tr("Chat")).lineLimit(1).frame(maxWidth: 160)
+                if tasks.count > 1 { Text(verbatim: "\(tasks.count)").opacity(0.6) }
                 if current?.pinned == true { Image(systemName: "pin.fill").font(.system(size: 10)).foregroundStyle(Theme.accent) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
                     .rotationEffect(.degrees(open ? 180 : 0))
@@ -194,7 +194,7 @@ private struct TaskPickerButton: View {
         .buttonStyle(.plain)
         .fixedSize()
         .onHover { hovering = $0 }
-        .help("Chat di questo bot")
+        .help(tr("Chat di questo bot"))
         .popover(isPresented: $open, arrowEdge: .bottom) {
             TaskList(bot: bot, close: { open = false }, rename: { task in
                 open = false
@@ -217,14 +217,14 @@ private struct TaskList: View {
         let tasks = (bot.tasks ?? []).sorted { ($0.pinned == true ? 1 : 0, $0.createdAt) > ($1.pinned == true ? 1 : 0, $1.createdAt) }
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Chat").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
-                Text("\(tasks.count)").font(.system(size: 12)).foregroundStyle(Theme.tertiary)
+                Text(tr("Chat")).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
+                Text(verbatim: "\(tasks.count)").font(.system(size: 12)).foregroundStyle(Theme.tertiary)
                 Spacer()
                 Button {
                     close()
                     Task { await model.createTask(title: nil) }
                 } label: {
-                    Label("Nuova", systemImage: "plus").font(.system(size: 12))
+                    Label(tr("Nuova"), systemImage: "plus").font(.system(size: 12))
                 }
                 .buttonStyle(ChipButtonStyle(filled: true))
                 .disabled(model.isBusy(bot))
@@ -292,12 +292,12 @@ private struct TaskRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(task.title).font(.system(size: 13, weight: current ? .medium : .regular))
                     .foregroundStyle(Theme.ink).lineLimit(1)
-                Text(Date(timeIntervalSince1970: task.createdAt / 1000).formatted(.relative(presentation: .named)))
+                Text(Date(timeIntervalSince1970: task.createdAt / 1000).appRelative())
                     .font(.system(size: 11)).foregroundStyle(Theme.tertiary)
             }
             Spacer(minLength: 4)
             if confirming {
-                Button("Elimina", action: delete)
+                Button(tr("Elimina"), action: delete)
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.dangerInk)
@@ -306,15 +306,15 @@ private struct TaskRow: View {
             } else if hovering {
                 Button(action: rename) { Image(systemName: "pencil") }
                     .buttonStyle(IconButtonStyle(size: 24, iconSize: 12))
-                    .help("Rinomina")
+                    .help(tr("Rinomina"))
                 Button(action: pin) { Image(systemName: task.pinned == true ? "pin.slash" : "pin") }
                     .buttonStyle(IconButtonStyle(size: 24, iconSize: 12))
-                    .help(task.pinned == true ? "Sblocca" : "Fissa: non si può eliminare")
+                    .help(task.pinned == true ? tr("Sblocca") : tr("Fissa: non si può eliminare"))
                 Button(action: delete) { Image(systemName: "trash") }
                     .buttonStyle(IconButtonStyle(size: 24, iconSize: 12))
                     .disabled(!canDelete)
                     .opacity(canDelete ? 1 : 0.35)
-                    .help(canDelete ? "Elimina chat" : "Le chat fissate, l'ultima rimasta e quella in corso non si eliminano")
+                    .help(canDelete ? tr("Elimina chat") : tr("Le chat fissate, l'ultima rimasta e quella in corso non si eliminano"))
             } else if task.pinned == true {
                 Image(systemName: "pin.fill").font(.system(size: 10)).foregroundStyle(Theme.secondary)
             }
@@ -342,20 +342,20 @@ struct RoomSettingsSheet: View {
 
     var body: some View {
         Form {
-            TextField("Nome", text: $name)
-            TextField("Bacheca (visibile a tutti i membri)", text: $bulletin, axis: .vertical)
+            TextField(tr("Nome"), text: $name)
+            TextField(tr("Bacheca (visibile a tutti i membri)"), text: $bulletin, axis: .vertical)
                 .lineLimit(2...5)
-            Picker("Risponde", selection: $responder) {
-                Text("Solo chi è @menzionato").tag("mentions")
-                Text("Tutti").tag("everyone")
-                Text("Un membro").tag("member")
+            Picker(tr("Risponde"), selection: $responder) {
+                Text(tr("Solo chi è @menzionato")).tag("mentions")
+                Text(tr("Tutti")).tag("everyone")
+                Text(tr("Un membro")).tag("member")
             }
             if responder == "member" {
-                Picker("Membro", selection: $responderBot) {
+                Picker(tr("Membro"), selection: $responderBot) {
                     ForEach(memberBots) { Text($0.name).tag($0.id) }
                 }
             }
-            Section("Membri") {
+            Section(tr("Membri")) {
                 ForEach(model.state.bots.filter { $0.hidden != true }) { bot in
                     Toggle(bot.name, isOn: Binding(
                         get: { members.contains(bot.id) },
@@ -368,11 +368,11 @@ struct RoomSettingsSheet: View {
         .frame(width: 420, height: 520)
         .toolbar {
             ToolbarItem(placement: .destructiveAction) {
-                Button("Elimina canale", role: .destructive) { confirmDelete = true }
+                Button(tr("Elimina canale"), role: .destructive) { confirmDelete = true }
             }
-            ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) { Button(tr("Annulla")) { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Salva") {
+                Button(tr("Salva")) {
                     let patch = RoomPatch(
                         name: name, bulletin: bulletin, memberIds: Array(members),
                         responder: responder, responderBotId: responder == "member" ? responderBot : nil
@@ -383,8 +383,8 @@ struct RoomSettingsSheet: View {
                 .disabled(members.isEmpty || (responder == "member" && !members.contains(responderBot)))
             }
         }
-        .confirmationDialog("Eliminare #\(room.name)?", isPresented: $confirmDelete) {
-            Button("Elimina", role: .destructive) {
+        .confirmationDialog(tr("Eliminare #%@?", room.name), isPresented: $confirmDelete) {
+            Button(tr("Elimina"), role: .destructive) {
                 Task { await model.delete(room) }
                 dismiss()
             }
@@ -411,8 +411,8 @@ struct NewRoomSheet: View {
 
     var body: some View {
         Form {
-            TextField("Nome (facoltativo)", text: $name)
-            Section("Membri") {
+            TextField(tr("Nome (facoltativo)"), text: $name)
+            Section(tr("Membri")) {
                 ForEach(model.state.bots.filter { $0.hidden != true }) { bot in
                     Toggle(isOn: Binding(
                         get: { members.contains(bot.id) },
@@ -429,9 +429,9 @@ struct NewRoomSheet: View {
         .formStyle(.grouped)
         .frame(width: 380, height: 460)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) { Button(tr("Annulla")) { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Crea") {
+                Button(tr("Crea")) {
                     let ordered = model.state.bots.map(\.id).filter(members.contains)
                     Task { await model.createRoom(name: name, memberIds: ordered) }
                     dismiss()
@@ -453,7 +453,7 @@ private struct SessionLimitChip: View {
         let percent = Int((limit.utilization * 100).rounded())
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 7, height: 7)
-            Text("\(percent)%")
+            Text(verbatim: "\(percent)%")
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(color)
         }
@@ -468,9 +468,9 @@ private struct SessionLimitChip: View {
     }
 
     private func help(_ percent: Int) -> String {
-        var text = "Sessione di 5 ore dell'abbonamento: \(percent)% usato"
+        var text = tr("Sessione di 5 ore dell'abbonamento: %@% usato", String(percent))
         if let reset = limit.resetDate {
-            text += ", si azzera alle \(reset.formatted(date: .omitted, time: .shortened))"
+            text += tr(", si azzera alle %@", reset.appFormatted(date: .omitted, time: .shortened))
         }
         return text
     }

@@ -33,15 +33,15 @@ public enum LinuxEngineError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .noManifest:
-            return "Questa build dell'app non dice dove scaricare il motore Linux (manca linux-engines.json)"
+            return tr("Questa build dell'app non dice dove scaricare il motore Linux (manca linux-engines.json)")
         case let .noEngine(arch):
-            return "Non c'è un motore Linux per l'architettura \(arch)"
+            return tr("Non c'è un motore Linux per l'architettura %@", arch)
         case let .digestMismatch(expected, got):
-            return "Il motore Linux scaricato non è quello atteso (SHA-256 \(got.prefix(12))…, atteso \(expected.prefix(12))…): scartato"
+            return tr("Il motore Linux scaricato non è quello atteso (SHA-256 %@…, atteso %@…): scartato", String(got.prefix(12)), String(expected.prefix(12)))
         case let .sizeMismatch(expected, got):
-            return "Il motore Linux scaricato è incompleto (\(got) byte invece di \(expected)): scartato"
+            return tr("Il motore Linux scaricato è incompleto (%@ byte invece di %@): scartato", String(got), String(expected))
         case let .download(detail):
-            return "Download del motore Linux non riuscito: \(detail)"
+            return tr("Download del motore Linux non riuscito: %@", detail)
         }
     }
 }
@@ -103,7 +103,7 @@ public struct LinuxEngines: Sendable {
             if (try? Self.digest(of: cached)) == expected { return (cached, expected) }
             try? FileManager.default.removeItem(at: cached)
         }
-        guard let source = URL(string: entry.url) else { throw LinuxEngineError.download("URL non valido") }
+        guard let source = URL(string: entry.url) else { throw LinuxEngineError.download(tr("URL non valido")) }
         let downloaded: URL
         do {
             let (file, response) = try await session.download(from: source)

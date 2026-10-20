@@ -41,10 +41,10 @@ public enum WorkspaceCredential: String, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .xaiApiKey: return "Chiave API xAI"
-        case .boxToken: return "Token Box (computer cloud)"
-        case .opencodeGoApiKey: return "Chiave OpenCode Go"
-        case .localEndpointApiKey: return "Chiave Local Endpoint"
+        case .xaiApiKey: return tr("Chiave API xAI")
+        case .boxToken: return tr("Token Box (computer cloud)")
+        case .opencodeGoApiKey: return tr("Chiave OpenCode Go")
+        case .localEndpointApiKey: return tr("Chiave Local Endpoint")
         }
     }
 }
@@ -58,13 +58,13 @@ public enum CredentialStoreError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case let .keychain(status):
-            return "Portachiavi: \(SecCopyErrorMessageString(status, nil) as String? ?? "errore \(status)")"
+            return tr("Portachiavi: %@", SecCopyErrorMessageString(status, nil) as String? ?? tr("errore %@", String(status)))
         case .electronStoreMissing:
-            return "Nessun archivio credenziali dell'app Electron trovato."
+            return tr("Nessun archivio credenziali dell'app Electron trovato.")
         case let .electronKeyUnavailable(status):
-            return "Chiave 'SwarmeBot Safe Storage' non leggibile dal Portachiavi (\(status))."
+            return tr("Chiave 'SwarmeBot Safe Storage' non leggibile dal Portachiavi (%@).", String(status))
         case let .electronFormat(detail):
-            return "Archivio Electron in un formato non riconosciuto: \(detail)"
+            return tr("Archivio Electron in un formato non riconosciuto: %@", detail)
         }
     }
 }
@@ -168,7 +168,7 @@ public enum CredentialStore {
         let password = try electronPassword()
         let plaintext = try decryptOSCrypt(blob, password: password)
         guard let object = try JSONSerialization.jsonObject(with: plaintext) as? [String: Any] else {
-            throw CredentialStoreError.electronFormat("JSON non valido")
+            throw CredentialStoreError.electronFormat(tr("JSON non valido"))
         }
         var values = load()
         var imported: [String] = []
@@ -201,7 +201,7 @@ public enum CredentialStore {
     /// known password and a blob encrypted the same way.
     public static func decryptOSCrypt(_ blob: Data, password: Data) throws -> Data {
         let prefix = Data("v10".utf8)
-        guard blob.starts(with: prefix) else { throw CredentialStoreError.electronFormat("prefisso mancante") }
+        guard blob.starts(with: prefix) else { throw CredentialStoreError.electronFormat(tr("prefisso mancante")) }
         let ciphertext = blob.dropFirst(prefix.count)
         let key = try deriveKey(password)
         let iv = Data(repeating: 0x20, count: kCCBlockSizeAES128)

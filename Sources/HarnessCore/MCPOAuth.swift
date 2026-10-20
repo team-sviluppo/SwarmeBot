@@ -96,7 +96,15 @@ public final class MCPOAuth {
                 guard let endpoint = discovery.endpoints.registration else {
                     throw MCPOAuthError("il server non permette la registrazione automatica: inserisci un Client ID nelle impostazioni del connettore (redirect: \(redirect))")
                 }
-                let registered = try await register(endpoint, redirect: redirect, scope: discovery.scope)
+                let registered: (clientId: String, clientSecret: String?)
+                do {
+                    registered = try await register(endpoint, redirect: redirect, scope: discovery.scope)
+                } catch let error as MCPOAuthError {
+                    // some providers (Meta) keep registration for clients they list:
+                    // say what to do, not only what the server answered
+                    let reason = error.message.hasSuffix(".") ? String(error.message.dropLast()) : error.message
+                    throw MCPOAuthError("\(reason). Crea un'app presso il servizio, registra questo redirect e inserisci il suo Client ID in \"Client registrato a mano\" (redirect: \(redirect))")
+                }
                 clientId = registered.clientId
                 clientSecret = registered.clientSecret
                 registry.setOAuthClient(id, ["clientId": .string(registered.clientId), "issuer": .string(discovery.endpoints.issuer),

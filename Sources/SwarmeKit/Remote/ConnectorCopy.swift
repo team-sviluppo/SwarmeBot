@@ -16,9 +16,9 @@ public enum ConnectorCopyError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case let .oauth(name):
-            return "\(name) usa OAuth: sui server remoti si configura a parte (i token OAuth non si copiano)"
+            return tr("%@ usa OAuth: sui server remoti si configura a parte (i token OAuth non si copiano)", name)
         case let .missingSecret(connector, name):
-            return "\(connector): il segreto \(name) non è salvato su questo Mac, quindi non si può copiare"
+            return tr("%@: il segreto %@ non è salvato su questo Mac, quindi non si può copiare", connector, name)
         }
     }
 }

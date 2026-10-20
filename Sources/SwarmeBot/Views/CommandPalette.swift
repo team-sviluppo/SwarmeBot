@@ -14,7 +14,7 @@ struct CommandPalette: View {
     @FocusState private var focused: Bool
 
     struct Item: Identifiable {
-        var section = "Chat"
+        var section = tr("Chat")
         let id: String
         let icon: String
         let title: String
@@ -29,12 +29,12 @@ struct CommandPalette: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(Theme.secondary)
-                TextField("Cerca chat, comandi e messaggi", text: $query)
+                TextField(tr("Cerca chat, comandi e messaggi"), text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
                     .focused($focused)
                     .onSubmit { run(items) }
-                Text("esc")
+                Text(verbatim: "esc")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.secondary)
                     .padding(.horizontal, 6).padding(.vertical, 2)
@@ -120,30 +120,30 @@ struct CommandPalette: View {
             })
         }
         for room in model.state.rooms where room.dm != true && matches(room.name) {
-            out.append(Item(section: "Canali", id: "room-\(room.id)", icon: "number", title: room.name, detail: "Canale") {
+            out.append(Item(section: tr("Canali"), id: "room-\(room.id)", icon: "number", title: room.name, detail: tr("Canale")) {
                 model.selection = .room(room.id)
             })
         }
         let remoteBots = model.remoteEngines.map { engine in
-            Item(section: "Comandi", id: "cmd-new-bot-\(engine.id)", icon: "server.rack", title: "Nuovo bot su \(engine.name)", detail: "Server remoto") {
+            Item(section: tr("Comandi"), id: "cmd-new-bot-\(engine.id)", icon: "server.rack", title: tr("Nuovo bot su %@", engine.name), detail: tr("Server remoto")) {
                 Task { await model.createBot(on: .remote(engine.id)) }
             }
         }
         let commands: [Item] = [
-            Item(section: "Comandi", id: "cmd-new-bot", icon: "plus", title: "Nuovo bot", detail: "⌘N") { Task { await model.createBot() } },
+            Item(section: tr("Comandi"), id: "cmd-new-bot", icon: "plus", title: tr("Nuovo bot"), detail: "⌘N") { Task { await model.createBot() } },
         ] + remoteBots + [
-            Item(section: "Comandi", id: "cmd-new-room", icon: "person.3", title: "Nuovo canale", detail: "") { model.showNewRoom = true },
-            Item(section: "Comandi", id: "cmd-automations", icon: "clock.arrow.circlepath", title: "Automazioni", detail: "Routine e webhook") {
+            Item(section: tr("Comandi"), id: "cmd-new-room", icon: "person.3", title: tr("Nuovo canale"), detail: "") { model.showNewRoom = true },
+            Item(section: tr("Comandi"), id: "cmd-automations", icon: "clock.arrow.circlepath", title: tr("Automazioni"), detail: tr("Routine e webhook")) {
                 openWindow(id: "automations")
             },
-            Item(section: "Comandi", id: "cmd-teams", icon: "books.vertical", title: "Libreria team", detail: "Importa o esporta un team") {
+            Item(section: tr("Comandi"), id: "cmd-teams", icon: "books.vertical", title: tr("Libreria team"), detail: tr("Importa o esporta un team")) {
                 openWindow(id: "teams")
             },
-            Item(section: "Comandi", id: "cmd-settings", icon: "gearshape", title: "Impostazioni", detail: "⌘,") { openSettings() },
+            Item(section: tr("Comandi"), id: "cmd-settings", icon: "gearshape", title: tr("Impostazioni"), detail: "⌘,") { openSettings() },
         ]
         out += commands.filter { matches($0.title) }
         for hit in hits {
-            out.append(Item(section: "Messaggi", id: "hit-\(hit.id)", icon: "text.magnifyingglass", title: hit.name + (hit.task.map { " · \($0)" } ?? ""), detail: hit.snippet) {
+            out.append(Item(section: tr("Messaggi"), id: "hit-\(hit.id)", icon: "text.magnifyingglass", title: hit.name + (hit.task.map { " · \($0)" } ?? ""), detail: hit.snippet) {
                 Task { await model.open(hit) }
             })
         }

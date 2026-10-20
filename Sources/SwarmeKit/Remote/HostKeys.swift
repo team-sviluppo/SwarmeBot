@@ -50,7 +50,7 @@ public enum HostKeys {
         }
         guard !keys.isEmpty else {
             let detail = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw SSHFailure.unreachable(detail.isEmpty ? "nessuna risposta ssh da \(host):\(port)" : detail)
+            throw SSHFailure.unreachable(detail.isEmpty ? tr("nessuna risposta ssh da %@:%@", host, String(port)) : detail)
         }
         return keys.sorted { (preference.firstIndex(of: $0.type) ?? 99) < (preference.firstIndex(of: $1.type) ?? 99) }
     }

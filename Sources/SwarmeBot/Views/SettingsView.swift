@@ -6,14 +6,14 @@ import SwiftUI
 struct SettingsView: View {
     var body: some View {
         TabView {
-            GeneralPane().tabItem { Label("Generale", systemImage: "person.crop.circle") }
-            EnginesPane().tabItem { Label("Motori", systemImage: "cpu") }
-            RemoteServersPane().tabItem { Label("Server remoti", systemImage: "server.rack") }
-            ConnectorsPane().tabItem { Label("Connettori", systemImage: "puzzlepiece.extension") }
-            MacControlPane().tabItem { Label("Controllo Mac", systemImage: "macbook.and.iphone") }
-            KeysPane().tabItem { Label("Chiavi e servizi", systemImage: "key") }
-            DeepSeekPane().tabItem { Label("DeepSeek", systemImage: "network") }
-            UpdatesPane().tabItem { Label("Aggiornamenti", systemImage: "arrow.down.circle") }
+            GeneralPane().tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }
+            EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }
+            RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }
+            ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }
+            MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }
+            KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }
+            DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }
+            UpdatesPane().tabItem { Label(tr("Aggiornamenti"), systemImage: "arrow.down.circle") }
         }
         .frame(width: 920, height: 560)
     }
@@ -23,27 +23,36 @@ struct SettingsView: View {
 
 private struct GeneralPane: View {
     @Environment(AppModel.self) private var model
+    @State private var localizer = Localizer.shared
     @State private var name = ""
     @State private var email = ""
     @State private var timeout = 30
 
     var body: some View {
         Form {
-            Section("Profilo") {
-                TextField("Nome", text: $name)
-                TextField("Email", text: $email)
-                Button("Salva profilo") {
+            Section(tr("Lingua")) {
+                // each language named in itself, so it can be found whichever is shown
+                Picker(tr("Lingua dell'app"), selection: $localizer.language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(verbatim: language.nativeName).tag(language)
+                    }
+                }
+            }
+            Section(tr("Profilo")) {
+                TextField(tr("Nome"), text: $name)
+                TextField(tr("Email"), text: $email)
+                Button(tr("Salva profilo")) {
                     Task { await model.saveConfig(["profile": ["name": name, "email": email]]) }
                 }
             }
-            Section("Canali") {
-                Stepper("Tempo massimo per turno di un membro: \(timeout) min", value: $timeout, in: 1...1440)
-                Button("Salva") { Task { await model.saveConfig(["rooms": ["turnTimeoutMinutes": timeout]]) } }
+            Section(tr("Canali")) {
+                Stepper(tr("Tempo massimo per turno di un membro: %@ min", String(timeout)), value: $timeout, in: 1...1440)
+                Button(tr("Salva")) { Task { await model.saveConfig(["rooms": ["turnTimeoutMinutes": timeout]]) } }
             }
-            Section("Dati") {
-                LabeledContent("Dati del motore", value: "~/.swarmebot")
-                LabeledContent("Log", value: "~/Library/Logs/SwarmeBot/server.log")
-                Button("Mostra i log nel Finder") {
+            Section(tr("Dati")) {
+                LabeledContent(tr("Dati del motore"), value: "~/.swarmebot")
+                LabeledContent(tr("Log"), value: "~/Library/Logs/SwarmeBot/server.log")
+                Button(tr("Mostra i log nel Finder")) {
                     NSWorkspace.shared.activateFileViewerSelecting([HarnessLocator.logDirectory.appendingPathComponent("server.log")])
                 }
             }
@@ -83,12 +92,12 @@ private struct EnginesPane: View {
                 if let id = selected, let instance = model.instance(id) {
                     EngineDetail(instance: instance)
                 } else {
-                    Text("Seleziona un motore").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Text(tr("Seleziona un motore")).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
         .task { await model.refreshInstances() }
-        .toolbar { Button("Ricontrolla") { Task { await model.refreshInstances() } } }
+        .toolbar { Button(tr("Ricontrolla")) { Task { await model.refreshInstances() } } }
     }
 }
 
@@ -104,13 +113,13 @@ private struct EngineDetail: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("Stato", value: instance.snapshot.isAvailable ? "Disponibile" : "Non disponibile")
+                LabeledContent(tr("Stato"), value: instance.snapshot.isAvailable ? tr("Disponibile") : tr("Non disponibile"))
                 if let reason = instance.snapshot.reason, !instance.snapshot.isAvailable {
                     Text(reason).font(.system(size: 12)).foregroundStyle(Theme.warning).textSelection(.enabled)
                 }
-                if let version = instance.snapshot.version { LabeledContent("Versione", value: version) }
-                LabeledContent("Modelli", value: "\(instance.models.options.count)")
-                Toggle("Mostra nel selettore modelli", isOn: Binding(
+                if let version = instance.snapshot.version { LabeledContent(tr("Versione"), value: version) }
+                LabeledContent(tr("Modelli"), value: String(instance.models.options.count))
+                Toggle(tr("Mostra nel selettore modelli"), isOn: Binding(
                     get: { visibleOverride ?? (instance.pickerVisible ?? true) },
                     set: { value in
                         visibleOverride = value
@@ -123,44 +132,44 @@ private struct EngineDetail: View {
                 .disabled(!instance.snapshot.isAvailable)
             }
             if instance.cliDefault != nil {
-                Section("Eseguibile") {
-                    TextField("Percorso (vuoto = \(instance.cliDefault ?? "predefinito"))", text: $cli)
+                Section(tr("Eseguibile")) {
+                    TextField(tr("Percorso (vuoto = %@)", instance.cliDefault ?? tr("predefinito")), text: $cli)
                         .font(.system(size: 12, design: .monospaced))
                     if let candidates = instance.cliCandidates, !candidates.isEmpty {
-                        Picker("Trovati nel PATH", selection: $cli) {
-                            Text("Predefinito").tag("")
+                        Picker(tr("Trovati nel PATH"), selection: $cli) {
+                            Text(tr("Predefinito")).tag("")
                             ForEach(candidates, id: \.self) { Text($0).tag($0) }
                         }
                     }
                     HStack {
-                        Button("Prova") {
+                        Button(tr("Prova")) {
                             testing = true
                             Task {
                                 test = await model.testCLI(cli.isEmpty ? (instance.cliDefault ?? "") : cli, driver: instance.driverKind)
                                 testing = false
                             }
                         }
-                        Button("Salva") { Task { await model.patchInstance(instance, cli: cli) } }
-                            .help("Salvare ricarica il motore: i turni in corso vengono interrotti.")
+                        Button(tr("Salva")) { Task { await model.patchInstance(instance, cli: cli) } }
+                            .help(tr("Salvare ricarica il motore: i turni in corso vengono interrotti."))
                         if testing { ProgressView().controlSize(.small) }
                     }
                     if let test {
-                        Text(test.ok ? "✓ \(test.version ?? "funziona")" : "✕ \(test.message ?? "non parte")")
+                        Text(verbatim: test.ok ? "✓ " + (test.version ?? tr("funziona")) : "✕ " + (test.message ?? tr("non parte")))
                             .font(.system(size: 12))
                             .foregroundStyle(test.ok ? Theme.success : Theme.danger)
                     }
                 }
             }
             if let install = instance.install {
-                Section("Installazione e accesso") {
+                Section(tr("Installazione e accesso")) {
                     if let command = install.command?.darwin {
-                        CommandRow(command: command, label: "Installa")
+                        CommandRow(command: command, label: tr("Installa"))
                     }
                     if let signIn = install.signInCommand {
-                        CommandRow(command: signIn, label: "Accedi")
+                        CommandRow(command: signIn, label: tr("Accedi"))
                     }
                     if let docs = install.docsUrl, let url = URL(string: docs) {
-                        Link("Documentazione", destination: url)
+                        Link(tr("Documentazione"), destination: url)
                     }
                 }
             }
@@ -195,7 +204,8 @@ enum TerminalLauncher {
     /// needed, and the user sees exactly what runs.
     static func run(_ command: String) {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("swarmebot-\(UUID().uuidString).command")
-        let script = "#!/bin/zsh -l\n\(command)\necho\necho 'Fatto. Puoi chiudere questa finestra.'\n"
+        let done = tr("Fatto. Puoi chiudere questa finestra.")
+        let script = "#!/bin/zsh -l\n\(command)\necho\necho '\(done)'\n"
         do {
             try script.write(to: file, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path)
@@ -219,39 +229,39 @@ private struct KeysPane: View {
     var body: some View {
         Form {
             Section {
-                Text("Le chiavi restano nel Portachiavi di macOS e arrivano al motore all'avvio; non vengono scritte in config.json.")
+                Text(tr("Le chiavi restano nel Portachiavi di macOS e arrivano al motore all'avvio; non vengono scritte in config.json."))
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             }
-            Section("Chiavi") {
+            Section(tr("Chiavi")) {
                 ForEach(WorkspaceCredential.allCases, id: \.self) { credential in
                     HStack {
                         SecureField(credential.label, text: Binding(get: { values[credential] ?? "" }, set: { values[credential] = $0 }))
                         if configured(credential) {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.success).help("Configurata")
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.success).help(tr("Configurata"))
                         }
-                        Button("Salva") { Task { await model.saveCredential(credential, values[credential] ?? "") } }
+                        Button(tr("Salva")) { Task { await model.saveCredential(credential, values[credential] ?? "") } }
                     }
                 }
             }
-            Section("Local Endpoint (LiteLLM, vLLM, OpenAI-compatibile)") {
+            Section(tr("Local Endpoint (LiteLLM, vLLM, OpenAI-compatibile)")) {
                 HStack {
-                    TextField("URL base, es. http://127.0.0.1:4000/v1", text: $endpointURL)
-                    Button("Salva") { Task { await model.saveConfig(["localEndpoint": ["baseUrl": endpointURL]]) } }
+                    TextField(tr("URL base, es. http://127.0.0.1:4000/v1"), text: $endpointURL)
+                    Button(tr("Salva")) { Task { await model.saveConfig(["localEndpoint": ["baseUrl": endpointURL]]) } }
                 }
             }
-            Section("VPS") {
+            Section(tr("VPS")) {
                 HStack {
-                    TextField("Alias SSH (da ~/.ssh/config)", text: $vpsAlias)
-                    Button("Salva") { Task { await model.saveConfig(["vps": ["sshAlias": vpsAlias]]) } }
+                    TextField(tr("Alias SSH (da ~/.ssh/config)"), text: $vpsAlias)
+                    Button(tr("Salva")) { Task { await model.saveConfig(["vps": ["sshAlias": vpsAlias]]) } }
                 }
             }
-            Section("Dall'app Electron") {
-                Text("Importa le chiavi salvate dalla versione Electron. macOS chiederà il permesso di leggere la voce \"SwarmeBot Safe Storage\" del Portachiavi.")
+            Section(tr("Dall'app Electron")) {
+                Text(tr("Importa le chiavi salvate dalla versione Electron. macOS chiederà il permesso di leggere la voce \"SwarmeBot Safe Storage\" del Portachiavi."))
                     .font(.system(size: 12)).foregroundStyle(.secondary)
-                Button("Importa credenziali") {
+                Button(tr("Importa credenziali")) {
                     do {
                         let imported = try CredentialStore.importFromElectron()
-                        importResult = imported.isEmpty ? "Nessuna chiave da importare." : "Importate: \(imported.joined(separator: ", ")). Riavvia SwarmeBot per usarle."
+                        importResult = imported.isEmpty ? tr("Nessuna chiave da importare.") : tr("Importate: %@. Riavvia SwarmeBot per usarle.", imported.joined(separator: ", "))
                     } catch {
                         importResult = error.localizedDescription
                     }
@@ -292,30 +302,30 @@ private struct DeepSeekPane: View {
     var body: some View {
         Form {
             if let instance {
-                Section("Connessione") {
-                    TextField("URL base", text: $baseUrl)
-                    Picker("Trasporto", selection: $transport) {
-                        Text("Diretto").tag("direct")
-                        Text("Abbinato").tag("paired")
+                Section(tr("Connessione")) {
+                    TextField(tr("URL base"), text: $baseUrl)
+                    Picker(tr("Trasporto"), selection: $transport) {
+                        Text(tr("Diretto")).tag("direct")
+                        Text(tr("Abbinato")).tag("paired")
                     }
-                    TextField("Preset agente (facoltativo)", text: $preset)
-                    Button("Salva") {
+                    TextField(tr("Preset agente (facoltativo)"), text: $preset)
+                    Button(tr("Salva")) {
                         Task {
                             do {
                                 try await model.client?.saveDeepSeekHarness(instanceId: instance.instanceId, baseUrl: baseUrl, transport: transport, agentPreset: preset)
-                                message = "Salvato."
+                                message = tr("Salvato.")
                             } catch { message = error.localizedDescription }
                         }
                     }
                 }
-                Section("Abbinamento") {
-                    LabeledContent("Abbinato", value: settings?.connection.paired == true ? "Sì" : "No")
-                    TextField("Link di abbinamento", text: $pairing)
-                    Button("Abbina") {
+                Section(tr("Abbinamento")) {
+                    LabeledContent(tr("Abbinato"), value: settings?.connection.paired == true ? tr("Sì") : tr("No"))
+                    TextField(tr("Link di abbinamento"), text: $pairing)
+                    Button(tr("Abbina")) {
                         Task {
                             do {
                                 try await model.client?.pairDeepSeekHarness(instanceId: instance.instanceId, pairingLink: pairing)
-                                message = "Abbinato."
+                                message = tr("Abbinato.")
                                 await load(instance)
                             } catch { message = error.localizedDescription }
                         }
@@ -324,7 +334,7 @@ private struct DeepSeekPane: View {
                 }
                 if let message { Text(message).font(.system(size: 12)) }
             } else {
-                Text("Nessun motore DeepSeek Harness configurato.").foregroundStyle(.secondary)
+                Text(tr("Nessun motore DeepSeek Harness configurato.")).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -347,12 +357,12 @@ private struct UpdatesPane: View {
 
     var body: some View {
         Form {
-            LabeledContent("Versione", value: updater.version)
+            LabeledContent(tr("Versione"), value: updater.version)
             if updater.available {
-                Toggle("Controlla automaticamente", isOn: $updater.automaticChecks)
-                Button("Controlla ora") { updater.checkForUpdates() }
+                Toggle(tr("Controlla automaticamente"), isOn: $updater.automaticChecks)
+                Button(tr("Controlla ora")) { updater.checkForUpdates() }
             } else {
-                Text("Gli aggiornamenti automatici sono attivi solo nell'app pacchettizzata e firmata (scripts/bundle-app.sh con SPARKLE_PUBLIC_KEY).")
+                Text(tr("Gli aggiornamenti automatici sono attivi solo nell'app pacchettizzata e firmata (scripts/bundle-app.sh con SPARKLE_PUBLIC_KEY)."))
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             }
         }
@@ -368,13 +378,13 @@ private struct MacControlPane: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Consenti ai bot di usare questo Mac", isOn: $localComputer)
+                Toggle(tr("Consenti ai bot di usare questo Mac"), isOn: $localComputer)
                     .onChange(of: localComputer) { _, on in
                         AppPaths.defaults.set(on, forKey: "localComputerEnabled")
                         model.retry()
                     }
             } footer: {
-                Text("Spento di default: Cua non parte all'avvio e non cattura lo schermo. Accendilo solo se un bot deve usare questo Mac. Il driver nasce col turno, non prima.")
+                Text(tr("Spento di default: Cua non parte all'avvio e non cattura lo schermo. Accendilo solo se un bot deve usare questo Mac. Il driver nasce col turno, non prima."))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)

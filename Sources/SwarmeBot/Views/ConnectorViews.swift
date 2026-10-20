@@ -13,11 +13,11 @@ struct BotConnectorsCard: View {
     private var assigned: [BotConnector] { bot.connectors ?? [] }
 
     var body: some View {
-        SettingsCard("Connettori") {
+        SettingsCard(tr("Connettori")) {
             if model.mcpConnectors.isEmpty {
-                SettingRow(icon: "puzzlepiece.extension", tint: Theme.accentText, title: "Nessun connettore",
-                           subtitle: "Aggiungili in Impostazioni › Connettori, poi scegli qui quali usa questo bot.") {
-                    SettingsLink { Text("Apri") }
+                SettingRow(icon: "puzzlepiece.extension", tint: Theme.accentText, title: tr("Nessun connettore"),
+                           subtitle: tr("Aggiungili in Impostazioni › Connettori, poi scegli qui quali usa questo bot.")) {
+                    SettingsLink { Text(tr("Apri")) }
                 }
             } else {
                 if let block = model.connectorBlock(bot) {
@@ -40,12 +40,12 @@ struct BotConnectorsCard: View {
                           title: connector.name, subtitle: subtitle(connector)) {
             HStack(spacing: 10) {
                 if let entry {
-                    Toggle("Acceso nelle nuove chat", isOn: Binding(get: { entry.defaultOn }, set: { on in
+                    Toggle(tr("Acceso nelle nuove chat"), isOn: Binding(get: { entry.defaultOn }, set: { on in
                         save(assigned.map { $0.id == connector.id ? BotConnector(id: $0.id, defaultOn: on) : $0 })
                     }))
                     .toggleStyle(.checkbox)
                     .font(.system(size: 11.5))
-                    .help("Se spento, il bot lo ha a disposizione ma va acceso chat per chat: risparmia contesto.")
+                    .help(tr("Se spento, il bot lo ha a disposizione ma va acceso chat per chat: risparmia contesto."))
                 }
                 Toggle("", isOn: Binding(get: { entry != nil }, set: { use in
                     save(use ? assigned + [BotConnector(id: connector.id, defaultOn: true)] : assigned.filter { $0.id != connector.id })
@@ -56,10 +56,10 @@ struct BotConnectorsCard: View {
     }
 
     private func subtitle(_ connector: MCPConnector) -> String {
-        if !connector.isEnabled { return "Disattivato nelle impostazioni" }
+        if !connector.isEnabled { return tr("Disattivato nelle impostazioni") }
         var parts: [String] = [connector.transport == "http" ? "HTTP" : "stdio"]
-        if let tokens = connector.estimatedTokens { parts.append("~\(tokens) token") }
-        if connector.lastCheck?.ok == false { parts.append("ultima prova non riuscita") }
+        if let tokens = connector.estimatedTokens { parts.append(tr("~%@ token", String(tokens))) }
+        if connector.lastCheck?.ok == false { parts.append(tr("ultima prova non riuscita")) }
         return parts.joined(separator: " · ")
     }
 
@@ -89,7 +89,7 @@ struct ConnectorsChip: View {
             Button { open.toggle() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "puzzlepiece.extension").font(.system(size: 12))
-                    Text("\(supported ? active.count : 0)/\(connectors.count)")
+                    Text(verbatim: "\(supported ? active.count : 0)/\(connectors.count)")
                         .font(.system(size: Theme.uiSize, weight: .medium)).monospacedDigit()
                 }
                 .fixedSize()
@@ -97,14 +97,14 @@ struct ConnectorsChip: View {
                 .foregroundStyle(!supported || active.isEmpty ? Theme.tertiary : Theme.secondary)
             }
             .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
-            .help(block ?? "Connettori in questa chat")
+            .help(block ?? tr("Connettori in questa chat"))
             .popover(isPresented: $open, arrowEdge: .top) { popover }
         }
     }
 
     private var popover: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Connettori in questa chat").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary)
+            Text(tr("Connettori in questa chat")).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary)
             if let block {
                 Text(block)
                     .font(.system(size: 11)).foregroundStyle(Theme.warning).fixedSize(horizontal: false, vertical: true)
@@ -129,25 +129,25 @@ struct ConnectorsChip: View {
             HStack {
                 let tokens = active.compactMap(\.estimatedTokens).reduce(0, +)
                 if supported, tokens > 0 {
-                    Text("~\(tokens) token di strumenti per turno").font(.system(size: 11)).foregroundStyle(Theme.tertiary)
+                    Text(tr("~%@ token di strumenti per turno", String(tokens))).font(.system(size: 11)).foregroundStyle(Theme.tertiary)
                 }
                 Spacer()
                 if hasOverrides {
-                    Button("Ripristina predefiniti") { Task { await model.resetConnectors(bot) } }
+                    Button(tr("Ripristina predefiniti")) { Task { await model.resetConnectors(bot) } }
                         .buttonStyle(.borderless).font(.system(size: 11))
                 }
             }
-            Text("Valgono dal prossimo messaggio.").font(.system(size: 10.5)).foregroundStyle(Theme.tertiary)
+            Text(tr("Valgono dal prossimo messaggio.")).font(.system(size: 10.5)).foregroundStyle(Theme.tertiary)
         }
         .padding(14)
         .frame(width: 320)
     }
 
     private func detail(_ connector: MCPConnector) -> String {
-        if !connector.isEnabled { return "disattivato nelle impostazioni" }
+        if !connector.isEnabled { return tr("disattivato nelle impostazioni") }
         let fallback = bot.connectors?.first { $0.id == connector.id }?.defaultOn ?? false
-        var parts = [fallback ? "acceso di default" : "spento di default"]
-        if let tokens = connector.estimatedTokens { parts.append("~\(tokens) token") }
+        var parts = [fallback ? tr("acceso di default") : tr("spento di default")]
+        if let tokens = connector.estimatedTokens { parts.append(tr("~%@ token", String(tokens))) }
         return parts.joined(separator: " · ")
     }
 }

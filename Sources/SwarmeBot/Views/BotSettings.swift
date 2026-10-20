@@ -140,7 +140,7 @@ struct BotDetails: View {
             BotAvatar(bot: bot, size: 84, state: SwarmeState.forBot(bot, last: model.visibleTranscript(bot.threadId).last), priority: true)
             VStack(spacing: 2) {
                 Text(bot.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
-                Text(bot.title.isEmpty ? "Nessun ruolo" : bot.title)
+                Text(bot.title.isEmpty ? tr("Nessun ruolo") : bot.title)
                     .font(.system(size: 12.5)).foregroundStyle(bot.title.isEmpty ? Theme.tertiary : Theme.secondary).lineLimit(1)
             }
         }
@@ -151,18 +151,18 @@ struct BotDetails: View {
     // MARK: Profilo
 
     private var profile: some View {
-        SettingsCard("Profilo") {
+        SettingsCard(tr("Profilo")) {
             VStack(alignment: .leading, spacing: 12) {
-                input("Nome", text: $name, field: .name, prompt: "Nome del bot")
-                input("Ruolo", text: $title, field: .title, prompt: "Che cosa fa, in poche parole")
+                input(tr("Nome"), text: $name, field: .name, prompt: tr("Nome del bot"))
+                input(tr("Ruolo"), text: $title, field: .title, prompt: tr("Che cosa fa, in poche parole"))
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
-                        caption("Istruzioni")
+                        caption(tr("Istruzioni"))
                         Spacer()
                         if about != bot.description {
-                            Button("Annulla") { about = bot.description }
+                            Button(tr("Annulla")) { about = bot.description }
                                 .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Theme.secondary)
-                            Button("Salva") { commit(.about) }
+                            Button(tr("Salva")) { commit(.about) }
                                 .buttonStyle(PillButtonStyle(prominent: true)).controlSize(.small)
                         }
                     }
@@ -209,14 +209,14 @@ struct BotDetails: View {
     // MARK: Comportamento
 
     private var behaviour: some View {
-        SettingsCard("Comportamento") {
-            toggle("checkmark.shield", tint: Theme.success, "Approva da solo",
-                   "Esegue gli strumenti senza chiederti conferma.", value: bot.autoApprove ?? false) { BotPatch(autoApprove: $0) }
+        SettingsCard(tr("Comportamento")) {
+            toggle("checkmark.shield", tint: Theme.success, tr("Approva da solo"),
+                   tr("Esegue gli strumenti senza chiederti conferma."), value: bot.autoApprove ?? false) { BotPatch(autoApprove: $0) }
             CardDivider(leading: 48)
-            toggle("bell", tint: Theme.warning, "Notifiche",
-                   "Avvisa quando finisce un turno o ti fa una domanda.", value: bot.notifications) { BotPatch(notifications: $0) }
+            toggle("bell", tint: Theme.warning, tr("Notifiche"),
+                   tr("Avvisa quando finisce un turno o ti fa una domanda."), value: bot.notifications) { BotPatch(notifications: $0) }
             CardDivider(leading: 48)
-            toggle("pin", tint: Theme.accent, "Fissato in alto",
+            toggle("pin", tint: Theme.accent, tr("Fissato in alto"),
                    nil, value: bot.pinned ?? false) { BotPatch(pinned: $0) }
         }
     }
@@ -240,18 +240,18 @@ struct BotDetails: View {
         let path = bot.tasks?.first(where: { $0.threadId == bot.threadId })?.cwd.flatMap { $0.isEmpty ? nil : $0 } ?? bot.cwd
         var isDirectory: ObjCBool = false
         let missing = path.map { !(FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory) && isDirectory.boolValue) } ?? false
-        return SettingsCard("Cartella di lavoro") {
+        return SettingsCard(tr("Cartella di lavoro")) {
             SettingRow(icon: missing ? "exclamationmark.triangle.fill" : "folder", tint: missing ? Theme.warning : Theme.accentText,
-                       title: path.map { ($0 as NSString).lastPathComponent } ?? "Cartella del bot",
-                       subtitle: missing ? "Non esiste più: scegline un'altra" :
-                           path.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "La cartella privata del bot") {
-                Button("Scegli…") {
+                       title: path.map { ($0 as NSString).lastPathComponent } ?? tr("Cartella del bot"),
+                       subtitle: missing ? tr("Non esiste più: scegline un'altra") :
+                           path.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? tr("La cartella privata del bot")) {
+                Button(tr("Scegli…")) {
                     let panel = NSOpenPanel()
                     panel.canChooseDirectories = true
                     panel.canChooseFiles = false
                     panel.canCreateDirectories = true
-                    panel.prompt = "Scegli"
-                    panel.message = "Cartella di lavoro di questa chat e delle prossime"
+                    panel.prompt = tr("Scegli")
+                    panel.message = tr("Cartella di lavoro di questa chat e delle prossime")
                     if let path, !missing { panel.directoryURL = URL(fileURLWithPath: path, isDirectory: true) }
                     guard panel.runModal() == .OK, let url = panel.url else { return }
                     Task { await model.setWorkingFolder(url.path) }
@@ -264,7 +264,7 @@ struct BotDetails: View {
     // MARK: Chat e permessi
 
     private func taskList(_ tasks: [BotTask]) -> some View {
-        SettingsCard("Chat") {
+        SettingsCard(tr("Chat")) {
             ForEach(Array(tasks.enumerated()), id: \.element.threadId) { index, task in
                 if index > 0 { CardDivider() }
                 let current = task.threadId == bot.threadId
@@ -282,7 +282,7 @@ struct BotDetails: View {
     }
 
     private func permissions(_ allowed: [String]) -> some View {
-        SettingsCard("Sempre consentiti") {
+        SettingsCard(tr("Sempre consentiti")) {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(allowed, id: \.self) { key in
                     Text(key).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Theme.secondary)
@@ -342,8 +342,8 @@ private struct AppearanceCard: View {
     }
 
     var body: some View {
-        SettingsCard("Aspetto") {
-            Button("Ripristina") {
+        SettingsCard(tr("Aspetto")) {
+            Button(tr("Ripristina")) {
                 var patch = BotPatch(color: "green")
                 patch.mascotSilhouette = ""
                 patch.mascotExpression = ""
@@ -353,10 +353,10 @@ private struct AppearanceCard: View {
             .buttonStyle(.plain)
             .font(.system(size: 11.5))
             .foregroundStyle(Theme.secondary)
-            .help("Mascotte verde, forma e espressione predefinite")
+            .help(tr("Mascotte verde, forma e espressione predefinite"))
         } content: {
             VStack(alignment: .leading, spacing: 14) {
-                SegmentedPicker(options: [(Mode.mascot, "Mascotte"), (Mode.picture, "Immagine")], selection: $mode)
+                SegmentedPicker(options: [(Mode.mascot, tr("Mascotte")), (Mode.picture, tr("Immagine"))], selection: $mode)
                 switch mode {
                 case .mascot: mascot
                 case .picture: picture
@@ -376,10 +376,10 @@ private struct AppearanceCard: View {
         let face = SwarmeState.forBot(bot, last: nil)
         return VStack(alignment: .leading, spacing: 14) {
             if wearsPicture {
-                Label("Il bot usa un'immagine: la mascotte torna quando la rimuovi.", systemImage: "info.circle")
+                Label(tr("Il bot usa un'immagine: la mascotte torna quando la rimuovi."), systemImage: "info.circle")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.secondary)
             }
-            section("Forma") {
+            section(tr("Forma")) {
                 LazyVGrid(columns: grid, spacing: 6) {
                     ForEach(SwarmeSilhouette.ids, id: \.self) { id in
                         tile(selected: shape == id, help: id) {
@@ -392,7 +392,7 @@ private struct AppearanceCard: View {
                     }
                 }
             }
-            section("Espressione") {
+            section(tr("Espressione")) {
                 LazyVGrid(columns: grid, spacing: 6) {
                     ForEach(Self.expressions, id: \.self) { state in
                         tile(selected: SwarmeState.normalize(bot.mascotExpression) == state, help: state.rawValue) {
@@ -405,7 +405,7 @@ private struct AppearanceCard: View {
                     }
                 }
             }
-            section("Colore") {
+            section(tr("Colore")) {
                 HStack(spacing: 0) {
                     ForEach(SwarmePaletteData.names, id: \.self) { name in
                         let on = bot.color == name
@@ -466,9 +466,9 @@ private struct AppearanceCard: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(uploading ? "Caricamento…" : wearsPicture ? "Cambia immagine" : "Scegli un'immagine")
+                        Text(uploading ? tr("Caricamento…") : wearsPicture ? tr("Cambia immagine") : tr("Scegli un'immagine"))
                             .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.ink)
-                        Text("Trascina qui o clicca: PNG, JPG, GIF, WebP o SVG")
+                        Text(tr("Trascina qui o clicca: PNG, JPG, GIF, WebP o SVG"))
                             .font(.system(size: 11.5)).foregroundStyle(Theme.tertiary)
                     }
                     Spacer(minLength: 0)
@@ -485,8 +485,8 @@ private struct AppearanceCard: View {
 
             if let image = bot.mascotAvatarImage, !image.isEmpty {
                 let sheetRow = SpriteSheet.row(bot.mascotAvatarSheetRow)
-                section("Tipo") {
-                    SegmentedPicker(options: [(false, "Immagine fissa"), (true, "Spritesheet 9×8")], selection: Binding(
+                section(tr("Tipo")) {
+                    SegmentedPicker(options: [(false, tr("Immagine fissa")), (true, tr("Spritesheet 9×8"))], selection: Binding(
                         get: { sheetRow != nil },
                         set: { sheet in
                             var patch = BotPatch()
@@ -496,10 +496,10 @@ private struct AppearanceCard: View {
                     ))
                 }
                 if let sheetRow {
-                    section("Animazione") {
+                    section(tr("Animazione")) {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 6) {
                             ForEach(0..<SpriteSheet.rows, id: \.self) { row in
-                                tile(selected: sheetRow == row, help: "Riga \(row + 1)") {
+                                tile(selected: sheetRow == row, help: tr("Riga %@", String(row + 1))) {
                                     var patch = BotPatch()
                                     patch.mascotAvatarSheetRow = row
                                     Task { await model.patch(bot, patch) }
@@ -519,7 +519,7 @@ private struct AppearanceCard: View {
                     Task { await model.patch(bot, patch) }
                     mode = .mascot
                 } label: {
-                    Label("Rimuovi immagine e usa la mascotte", systemImage: "trash")
+                    Label(tr("Rimuovi immagine e usa la mascotte"), systemImage: "trash")
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
@@ -534,8 +534,8 @@ private struct AppearanceCard: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = Self.types
         panel.allowsMultipleSelection = false
-        panel.prompt = "Usa"
-        panel.message = "Immagine per \(bot.name)"
+        panel.prompt = tr("Usa")
+        panel.message = tr("Immagine per %@", bot.name)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         upload(url)
     }
@@ -553,11 +553,11 @@ private struct AppearanceCard: View {
         guard let type = UTType(filenameExtension: url.pathExtension),
               Self.types.contains(where: { type.conforms(to: $0) }),
               let mime = type.preferredMIMEType else {
-            error = "Formato non supportato: usa PNG, JPG, GIF, WebP o SVG."
+            error = tr("Formato non supportato: usa PNG, JPG, GIF, WebP o SVG.")
             return
         }
         guard let data = try? Data(contentsOf: url) else {
-            error = "Impossibile leggere il file."
+            error = tr("Impossibile leggere il file.")
             return
         }
         error = nil

@@ -19,14 +19,14 @@ struct ConnectorsPane: View {
                         ConnectorRow(connector: connector).tag(connector.id)
                     }
                     if selected == Self.newId {
-                        Label("Nuovo connettore", systemImage: "plus.circle").tag(Self.newId)
+                        Label(tr("Nuovo connettore"), systemImage: "plus.circle").tag(Self.newId)
                     }
                 }
                 Divider()
                 HStack {
                     Button { selected = Self.newId } label: { Image(systemName: "plus") }
-                        .help("Aggiungi un connettore")
-                    Button("Importa JSON…") { importing = true }
+                        .help(tr("Aggiungi un connettore"))
+                    Button(tr("Importa JSON…")) { importing = true }
                     Spacer()
                 }
                 .buttonStyle(.borderless)
@@ -42,8 +42,8 @@ struct ConnectorsPane: View {
                         .id(connector.id)
                 } else {
                     VStack(spacing: 8) {
-                        Text("I connettori sono server MCP che puoi dare ai bot.").foregroundStyle(.secondary)
-                        Text("Aggiungine uno con + oppure importa la configurazione di Claude Desktop.")
+                        Text(tr("I connettori sono server MCP che puoi dare ai bot.")).foregroundStyle(.secondary)
+                        Text(tr("Aggiungine uno con + oppure importa la configurazione di Claude Desktop."))
                             .font(.system(size: 12)).foregroundStyle(.tertiary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -77,9 +77,9 @@ private struct ConnectorRow: View {
 
     private var subtitle: String {
         var parts = [connector.transport == "http" ? "HTTP" : "stdio", connector.id]
-        if let count = connector.lastCheck?.tools?.count, connector.lastCheck?.ok == true { parts.append("\(count) strumenti") }
-        if connector.usesOAuth, connector.oauthState?.status != "connected" { parts.append("da collegare") }
-        if !connector.isEnabled { parts.append("disattivato") }
+        if let count = connector.lastCheck?.tools?.count, connector.lastCheck?.ok == true { parts.append(tr("%@ strumenti", String(count))) }
+        if connector.usesOAuth, connector.oauthState?.status != "connected" { parts.append(tr("da collegare")) }
+        if !connector.isEnabled { parts.append(tr("disattivato")) }
         return parts.joined(separator: " · ")
     }
 }
@@ -109,71 +109,75 @@ private struct ConnectorEditor: View {
 
     var body: some View {
         Form {
-            Section("Connettore") {
-                TextField("Nome", text: $input.name)
+            Section(tr("Connettore")) {
+                TextField(tr("Nome"), text: $input.name)
                     .onChange(of: input.name) { _, name in
                         if !existing, !idEdited { input.id = Self.slug(name) }
                     }
-                TextField("Identificativo", text: Binding(get: { input.id }, set: { input.id = $0; idEdited = true }))
+                TextField(tr("Identificativo"), text: Binding(get: { input.id }, set: { input.id = $0; idEdited = true }))
                     .font(.system(size: 12, design: .monospaced))
                     .disabled(existing)
-                    .help("Il nome con cui le harness vedono i suoi strumenti (mcp__\(input.id.isEmpty ? "id" : input.id)__…). Non si può cambiare dopo.")
-                Picker("Trasporto", selection: $input.transport) {
-                    Text("stdio (processo locale)").tag("stdio")
-                    Text("HTTP").tag("http")
+                    .help(tr("Il nome con cui le harness vedono i suoi strumenti (mcp__%@__…). Non si può cambiare dopo.", input.id.isEmpty ? "id" : input.id))
+                Picker(tr("Trasporto"), selection: $input.transport) {
+                    Text(tr("stdio (processo locale)")).tag("stdio")
+                    Text(verbatim: "HTTP").tag("http")
                 }
                 .pickerStyle(.segmented)
-                Toggle("Attivo", isOn: $input.enabled)
+                Toggle(tr("Attivo"), isOn: $input.enabled)
             }
 
             if input.transport == "stdio" {
                 Section {
-                    TextField("Comando", text: $input.command, prompt: Text("npx"))
+                    TextField(tr("Comando"), text: $input.command, prompt: Text(verbatim: "npx"))
                         .font(.system(size: 12, design: .monospaced))
-                    TextField("Argomenti, uno per riga", text: $argsText, prompt: Text("-y\n@modelcontextprotocol/server-everything"), axis: .vertical)
+                    TextField(tr("Argomenti, uno per riga"), text: $argsText, prompt: Text(verbatim: "-y\n@modelcontextprotocol/server-everything"), axis: .vertical)
                         .font(.system(size: 12, design: .monospaced))
                         .lineLimit(2...8)
-                    TextField("Cartella di lavoro (facoltativa)", text: $input.cwd)
+                    TextField(tr("Cartella di lavoro (facoltativa)"), text: $input.cwd)
                         .font(.system(size: 12, design: .monospaced))
                 } header: {
-                    Text("Processo")
+                    Text(tr("Processo"))
                 } footer: {
                     if !input.command.isEmpty {
-                        Label("Esegue `\(([input.command] + parsedArgs).joined(separator: " "))` sul tuo Mac, con i tuoi permessi.",
-                              systemImage: "exclamationmark.triangle")
+                        let warning = tr("Esegue `%@` sul tuo Mac, con i tuoi permessi.", ([input.command] + parsedArgs).joined(separator: " "))
+                        Label {
+                            Text((try? AttributedString(markdown: warning)) ?? AttributedString(warning))
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle")
+                        }
                             .font(.system(size: 11)).foregroundStyle(Theme.warning)
                     }
                 }
-                EntriesSection(title: "Variabili d'ambiente", namePrompt: "NOME", entries: $input.env)
+                EntriesSection(title: tr("Variabili d'ambiente"), namePrompt: tr("NOME"), entries: $input.env)
             } else {
-                Section("Server") {
-                    TextField("URL", text: $input.url, prompt: Text("https://example.com/mcp"))
+                Section(tr("Server")) {
+                    TextField(tr("URL"), text: $input.url, prompt: Text(verbatim: "https://example.com/mcp"))
                         .font(.system(size: 12, design: .monospaced))
-                    Picker("Autenticazione", selection: $input.auth) {
-                        Text("Nessuna o header").tag("none")
-                        Text("OAuth").tag("oauth")
+                    Picker(tr("Autenticazione"), selection: $input.auth) {
+                        Text(tr("Nessuna o header")).tag("none")
+                        Text(verbatim: "OAuth").tag("oauth")
                     }
                     .pickerStyle(.segmented)
                 }
                 if input.auth == "oauth" {
                     OAuthSection(connector: connector, input: $input) { await saveForLogin() }
                 }
-                EntriesSection(title: "Header", namePrompt: input.auth == "oauth" ? "X-Api-Version" : "Authorization", entries: $input.headers)
+                EntriesSection(title: tr("Header"), namePrompt: input.auth == "oauth" ? "X-Api-Version" : "Authorization", entries: $input.headers)
             }
 
             if let connector { ToolsSection(connector: connector, input: $input) }
 
-            Section("Avanzate") {
-                Stepper("Tempo massimo per chiamata: \(Int(input.toolTimeoutSeconds)) s", value: $input.toolTimeoutSeconds, in: 5...900, step: 5)
+            Section(tr("Avanzate")) {
+                Stepper(tr("Tempo massimo per chiamata: %@ s", String(Int(input.toolTimeoutSeconds))), value: $input.toolTimeoutSeconds, in: 5...900, step: 5)
             }
 
             Section {
                 HStack {
-                    Button(existing ? "Salva" : "Salva e prova") { Task { await save() } }
+                    Button(existing ? tr("Salva") : tr("Salva e prova")) { Task { await save() } }
                         .keyboardShortcut(.defaultAction)
                         .disabled(busy || input.id.isEmpty)
                     if let connector {
-                        Button("Prova connessione") {
+                        Button(tr("Prova connessione")) {
                             busy = true
                             Task {
                                 await model.test(connector: connector)
@@ -183,7 +187,7 @@ private struct ConnectorEditor: View {
                         .disabled(busy)
                         // a connector of this Mac's engine can go to a server, with its secrets (R14)
                         if !model.isRemote, !model.remoteEngines.isEmpty, !connector.usesOAuth {
-                            Menu("Copia su server") {
+                            Menu(tr("Copia su server")) {
                                 ForEach(model.remoteEngines) { engine in
                                     Button(engine.name) { Task { await copy(connector, to: engine) } }
                                 }
@@ -192,7 +196,7 @@ private struct ConnectorEditor: View {
                             .disabled(busy)
                         }
                         Spacer()
-                        Button("Elimina", role: .destructive) { confirmDelete = true }
+                        Button(tr("Elimina"), role: .destructive) { confirmDelete = true }
                     }
                     if busy { ProgressView().controlSize(.small) }
                 }
@@ -205,12 +209,12 @@ private struct ConnectorEditor: View {
             }
         }
         .formStyle(.grouped)
-        .confirmationDialog("Eliminare \(input.name)?", isPresented: $confirmDelete) {
-            Button("Elimina", role: .destructive) {
+        .confirmationDialog(tr("Eliminare %@?", input.name), isPresented: $confirmDelete) {
+            Button(tr("Elimina"), role: .destructive) {
                 if let connector { Task { await model.delete(connector: connector) } }
             }
         } message: {
-            Text("Anche i suoi segreti vengono cancellati.")
+            Text(tr("Anche i suoi segreti vengono cancellati."))
         }
     }
 
@@ -226,8 +230,8 @@ private struct ConnectorEditor: View {
             let remote = try await model.copyConnector(connector, to: engine)
             let check = remote.lastCheck
             copied = check?.ok == true
-                ? "Copiato su \(engine.name): \(check?.tools?.count ?? 0) strumenti, provato sul server"
-                : "Copiato su \(engine.name), ma la prova sul server non è riuscita: \(check?.error ?? "errore sconosciuto")"
+                ? tr("Copiato su %@: %@ strumenti, provato sul server", engine.name, String(check?.tools?.count ?? 0))
+                : tr("Copiato su %@, ma la prova sul server non è riuscita: %@", engine.name, check?.error ?? tr("errore sconosciuto"))
         } catch {
             self.error = error.localizedDescription
         }
@@ -286,14 +290,14 @@ private struct EntriesSection: View {
         Section(title) {
             ForEach($entries) { $entry in
                 HStack(spacing: 6) {
-                    TextField("Nome", text: $entry.name, prompt: Text(namePrompt))
+                    TextField(tr("Nome"), text: $entry.name, prompt: Text(namePrompt))
                         .font(.system(size: 12, design: .monospaced))
                         .frame(maxWidth: 200)
                     if entry.secret {
-                        SecureField("Valore", text: $entry.value,
-                                    prompt: Text(entry.keepStored ? "salvato — vuoto per non cambiarlo" : "valore segreto"))
+                        SecureField(tr("Valore"), text: $entry.value,
+                                    prompt: Text(entry.keepStored ? tr("salvato — vuoto per non cambiarlo") : tr("valore segreto")))
                     } else {
-                        TextField("Valore", text: $entry.value)
+                        TextField(tr("Valore"), text: $entry.value)
                             .font(.system(size: 12, design: .monospaced))
                     }
                     Button {
@@ -303,13 +307,13 @@ private struct EntriesSection: View {
                         Image(systemName: entry.secret ? "lock.fill" : "lock.open")
                     }
                     .buttonStyle(.borderless)
-                    .help(entry.secret ? "Segreto: non verrà più mostrato" : "Rendi segreto")
+                    .help(entry.secret ? tr("Segreto: non verrà più mostrato") : tr("Rendi segreto"))
                     Button { entries.removeAll { $0.id == entry.id } } label: { Image(systemName: "minus.circle") }
                         .buttonStyle(.borderless)
                 }
                 .labelsHidden()
             }
-            Button("Aggiungi") { entries.append(.init(name: "", value: "", secret: false)) }
+            Button(tr("Aggiungi")) { entries.append(.init(name: "", value: "", secret: false)) }
                 .buttonStyle(.borderless)
         }
     }
@@ -346,15 +350,15 @@ private struct ToolsSection: View {
         Section {
             if let check = connector.lastCheck {
                 if check.ok {
-                    Label("\(check.server?.name ?? "Server") \(check.server?.version ?? "") · \(tools.count) strumenti · circa \(tokens) token nel contesto",
+                    Label(tr("%@ %@ · %@ strumenti · circa %@ token nel contesto", check.server?.name ?? tr("Server"), check.server?.version ?? "", String(tools.count), String(tokens)),
                           systemImage: "checkmark.circle")
                         .font(.system(size: 12)).foregroundStyle(Theme.success)
                 } else {
-                    Label(check.error ?? "Connessione non riuscita", systemImage: "xmark.octagon")
+                    Label(check.error ?? tr("Connessione non riuscita"), systemImage: "xmark.octagon")
                         .font(.system(size: 12)).foregroundStyle(Theme.danger).textSelection(.enabled)
                 }
             } else {
-                Text("Non ancora provato: usa «Prova connessione».").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(tr("Non ancora provato: usa «Prova connessione».")).font(.system(size: 12)).foregroundStyle(.secondary)
             }
             ForEach(tools) { tool in
                 Toggle(isOn: Binding(get: { isOn(tool.name) }, set: { set(tool.name, $0) })) {
@@ -362,7 +366,7 @@ private struct ToolsSection: View {
                         HStack(spacing: 6) {
                             Text(tool.name).font(.system(size: 12, design: .monospaced))
                             if tool.readOnly == true {
-                                Text("sola lettura").font(.system(size: 10)).foregroundStyle(.secondary)
+                                Text(tr("sola lettura")).font(.system(size: 10)).foregroundStyle(.secondary)
                             }
                         }
                         if let description = tool.description, !description.isEmpty {
@@ -372,10 +376,10 @@ private struct ToolsSection: View {
                 }
             }
         } header: {
-            Text("Strumenti")
+            Text(tr("Strumenti"))
         } footer: {
             if !tools.isEmpty {
-                Text("Gli strumenti spenti non arrivano a nessun bot. Ricordati di salvare.").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text(tr("Gli strumenti spenti non arrivano a nessun bot. Ricordati di salvare.")).font(.system(size: 11)).foregroundStyle(.tertiary)
             }
         }
     }
@@ -401,38 +405,52 @@ private struct OAuthSection: View {
             HStack(spacing: 8) {
                 Circle().fill(status == "connected" ? Theme.success : status == "expired" ? Theme.warning : Theme.tertiary)
                     .frame(width: 8, height: 8)
-                Text(status == "connected" ? "Connesso" : status == "expired" ? "Accesso scaduto" : "Non connesso")
+                Text(status == "connected" ? tr("Connesso") : status == "expired" ? tr("Accesso scaduto") : tr("Non connesso"))
                     .font(.system(size: 12.5))
                 Spacer()
                 if busy { ProgressView().controlSize(.small) }
                 if status == "connected", let connector {
-                    Button("Esci") { Task { await model.oauthLogout(connector) } }
+                    Button(tr("Esci")) { Task { await model.oauthLogout(connector) } }
                 }
-                Button(status == "connected" ? "Accedi di nuovo…" : "Accedi…") { Task { await login() } }
+                Button(status == "connected" ? tr("Accedi di nuovo…") : tr("Accedi…")) { Task { await login() } }
                     .disabled(busy || input.url.isEmpty || input.id.isEmpty)
             }
             if let note {
                 Text(note).font(.system(size: 11.5)).foregroundStyle(.secondary).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            DisclosureGroup("Client registrato a mano", isExpanded: $manual) {
-                TextField("Client ID", text: $input.oauthClientId, prompt: Text("vuoto = registrazione automatica"))
+            DisclosureGroup(tr("Client registrato a mano"), isExpanded: $manual) {
+                TextField(tr("Client ID"), text: $input.oauthClientId, prompt: Text(tr("vuoto = registrazione automatica")))
                     .font(.system(size: 12, design: .monospaced))
-                SecureField("Client secret", text: $input.oauthClientSecret,
-                            prompt: Text(input.oauthClientSecretStored ? "salvato — vuoto per non cambiarlo" : "facoltativo"))
-                TextField("Scope", text: $input.oauthScope, prompt: Text("vuoto = quelli che chiede il server"))
+                SecureField(tr("Client secret"), text: $input.oauthClientSecret,
+                            prompt: Text(input.oauthClientSecretStored ? tr("salvato — vuoto per non cambiarlo") : tr("facoltativo")))
+                TextField(tr("Scope"), text: $input.oauthScope, prompt: Text(tr("vuoto = quelli che chiede il server")))
                     .font(.system(size: 12, design: .monospaced))
                 if let redirect {
-                    LabeledContent("Redirect URI") { Text(redirect).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled) }
+                    LabeledContent(tr("Redirect URI")) {
+                        HStack(spacing: 6) {
+                            Text(redirect).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
+                            Button(tr("Copia")) {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(redirect, forType: .string)
+                            }
+                            .controlSize(.small)
+                        }
+                    }
                 }
+                Text(tr("Per i servizi che non accettano la registrazione automatica (per esempio Meta): crea un'app sul loro portale sviluppatori, aggiungi questo Redirect URI e incolla qui il suo Client ID (per Meta, l'App ID)."))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         } header: {
-            Text("OAuth")
+            Text(verbatim: "OAuth")
         } footer: {
-            Text("SwarmeBot tiene i token: i bot non li vedono e, se cambi harness, non devi accedere di nuovo.")
+            Text(tr("SwarmeBot tiene i token: i bot non li vedono e, se cambi harness, non devi accedere di nuovo."))
                 .font(.system(size: 11)).foregroundStyle(.tertiary)
         }
         .onAppear { manual = !input.oauthClientId.isEmpty }
+        // shown before any login: a provider's app needs it registered first
+        .task { if redirect == nil { redirect = await model.oauthRedirect() } }
     }
 
     private func login() async {
@@ -442,10 +460,12 @@ private struct OAuthSection: View {
         switch await model.oauthLogin(saved) {
         case let .success(started):
             redirect = started.redirect
-            note = "Completa l'accesso nel browser: lo stato qui si aggiorna da solo."
+            note = tr("Completa l'accesso nel browser: lo stato qui si aggiorna da solo.")
             openURL(started.url)
         case let .failure(error):
             note = error.localizedDescription
+            // the usual way out is a client registered by hand: show where it goes
+            if input.oauthClientId.isEmpty { manual = true }
         }
     }
 }
@@ -462,8 +482,8 @@ private struct ConnectorImportSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Importa connettori").font(.headline)
-            Text("Incolla la configurazione di Claude Desktop (claude_desktop_config.json) o un file .mcp.json. I valori il cui nome contiene KEY, TOKEN, SECRET, PASSWORD o AUTH diventano segreti.")
+            Text(tr("Importa connettori")).font(.headline)
+            Text(tr("Incolla la configurazione di Claude Desktop (claude_desktop_config.json) o un file .mcp.json. I valori il cui nome contiene KEY, TOKEN, SECRET, PASSWORD o AUTH diventano segreti."))
                 .font(.system(size: 12)).foregroundStyle(.secondary)
             TextEditor(text: $text)
                 .font(.system(size: 12, design: .monospaced))
@@ -474,15 +494,15 @@ private struct ConnectorImportSheet: View {
             }
             HStack {
                 Spacer()
-                Button("Chiudi") { dismiss() }
-                Button("Importa") {
+                Button(tr("Chiudi")) { dismiss() }
+                Button(tr("Importa")) {
                     busy = true
                     Task {
                         switch await model.importConnectors(text) {
                         case let .success(result):
                             failed = result.created.isEmpty
-                            var lines = ["Importati: \(result.created.isEmpty ? "nessuno" : result.created.map(\.name).joined(separator: ", "))"]
-                            for skip in result.skipped { lines.append("Saltato \(skip.name ?? "?"): \(skip.reason ?? "")") }
+                            var lines = [tr("Importati: %@", result.created.isEmpty ? tr("nessuno") : result.created.map(\.name).joined(separator: ", "))]
+                            for skip in result.skipped { lines.append(tr("Saltato %@: %@", skip.name ?? "?", skip.reason ?? "")) }
                             outcome = lines.joined(separator: "\n")
                         case let .failure(error):
                             failed = true

@@ -13,6 +13,14 @@ struct InspectorView: View {
         case library = "Libreria"
         case computer = "Computer"
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .details: return tr("Dettagli")
+            case .library: return tr("Libreria")
+            case .computer: return tr("Computer")
+            }
+        }
     }
 
     var body: some View {
@@ -23,7 +31,7 @@ struct InspectorView: View {
                 Spacer()
                 Button { ui.showInspector = false } label: { Image(systemName: "xmark") }
                     .buttonStyle(IconButtonStyle(size: 26, iconSize: 14))
-                    .help("Chiudi (⌥⌘I)")
+                    .help(tr("Chiudi (⌥⌘I)"))
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
@@ -44,7 +52,7 @@ struct InspectorView: View {
                     .padding(.bottom, 12)
                 }
 
-                SegmentedPicker(options: Tab.allCases.map { ($0, $0.rawValue) }, selection: Binding(
+                SegmentedPicker(options: Tab.allCases.map { ($0, $0.title) }, selection: Binding(
                     get: { ui.inspectorTab }, set: { ui.inspectorTab = $0 }
                 ))
                 .padding(.horizontal, 16)
@@ -68,11 +76,11 @@ struct InspectorView: View {
     }
 
     private var title: String {
-        if model.selectedRoom != nil { return "Canale" }
+        if model.selectedRoom != nil { return tr("Canale") }
         switch ui.inspectorTab {
-        case .details: return "Impostazioni bot"
-        case .library: return "Libreria"
-        case .computer: return "Computer"
+        case .details: return tr("Impostazioni bot")
+        case .library: return tr("Libreria")
+        case .computer: return tr("Computer")
         }
     }
 
@@ -103,18 +111,18 @@ private struct RoomDetails: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("#\(room.name)").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
+            Text(verbatim: "#\(room.name)").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
             if !room.bulletin.isEmpty {
                 Text(room.bulletin).font(.system(size: 12)).foregroundStyle(Theme.secondary)
             }
-            Text("Membri").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.tertiary)
+            Text(tr("Membri")).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.tertiary)
             ForEach(room.memberIds, id: \.self) { id in
                 if let bot = model.state.bot(id) {
                     HStack(spacing: 8) {
                         BotAvatar(bot: bot, size: 24, animated: false)
                         Text(bot.name).font(.system(size: 13)).foregroundStyle(Theme.ink)
                         if room.busyBotId == id {
-                            Text("sta scrivendo…").font(.system(size: 11)).foregroundStyle(Theme.accent)
+                            Text(tr("sta scrivendo…")).font(.system(size: 11)).foregroundStyle(Theme.accent)
                         }
                     }
                 }

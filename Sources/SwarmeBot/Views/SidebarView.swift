@@ -48,13 +48,13 @@ struct SidebarView: View {
             if model.engineChoice == .local { layout.sync(names) }
         }
         .confirmationDialog(
-            "Eliminare \(confirmingDelete?.name ?? "")?",
+            tr("Eliminare %@?", confirmingDelete?.name ?? ""),
             isPresented: Binding(get: { confirmingDelete != nil }, set: { if !$0 { confirmingDelete = nil } }),
             presenting: confirmingDelete
         ) { bot in
-            Button("Elimina", role: .destructive) { Task { await model.delete(bot) } }
+            Button(tr("Elimina"), role: .destructive) { Task { await model.delete(bot) } }
         } message: { _ in
-            Text("La conversazione e i suoi task vengono cancellati. Non si può annullare.")
+            Text(tr("La conversazione e i suoi task vengono cancellati. Non si può annullare."))
         }
     }
 
@@ -70,7 +70,7 @@ struct SidebarView: View {
                 sectionHeader(section.name, count: section.bots.count, first: index == 0)
             }
             if section.bots.isEmpty, let name = section.name, !collapsed.contains(key) {
-                Text("Trascina qui un bot")
+                Text(tr("Trascina qui un bot"))
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.tertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,7 +87,7 @@ struct SidebarView: View {
             }
         }
         if !filteredRooms.isEmpty {
-            SectionHeader(title: "Canali", count: filteredRooms.count, first: filteredSections.isEmpty,
+            SectionHeader(title: tr("Canali"), count: filteredRooms.count, first: filteredSections.isEmpty,
                           collapsed: collapsed.contains("#rooms")) { flip("#rooms") }
             if !collapsed.contains("#rooms") {
                 ForEach(filteredRooms) { room in
@@ -98,7 +98,7 @@ struct SidebarView: View {
         }
         let hidden = model.state.bots.filter { $0.hidden == true }
         if !hidden.isEmpty, query.isEmpty {
-            SectionHeader(title: "Nascosti", count: hidden.count, first: false,
+            SectionHeader(title: tr("Nascosti"), count: hidden.count, first: false,
                           collapsed: !collapsed.contains("#hidden-open")) { flip("#hidden-open") }
             if collapsed.contains("#hidden-open") {
                 ForEach(hidden) { bot in
@@ -106,7 +106,7 @@ struct SidebarView: View {
                         .opacity(0.6)
                         .onTapGesture { model.selection = .bot(bot.id) }
                         .contextMenu {
-                            Button("Mostra") { Task { await model.patch(bot, BotPatch(hidden: false)) } }
+                            Button(tr("Mostra")) { Task { await model.patch(bot, BotPatch(hidden: false)) } }
                         }
                 }
             }
@@ -126,7 +126,7 @@ struct SidebarView: View {
         ForEach(Array(sections.enumerated()), id: \.element.name.peerKey) { index, section in
             let key = section.name ?? ""
             if section.name != nil || sections.count > 1 {
-                SectionHeader(title: section.name ?? "Non assegnati", count: section.bots.count, first: index == 0,
+                SectionHeader(title: section.name ?? tr("Non assegnati"), count: section.bots.count, first: index == 0,
                               collapsed: collapsed.contains(key)) { flip(key) }
             }
             if !collapsed.contains(key) {
@@ -153,13 +153,13 @@ struct SidebarView: View {
             SectionHeader(title: engine.name, count: bots.count, first: false, collapsed: collapsed.contains(key),
                           icon: "server.rack", status: shown ? model.status == .live : peer?.reachable ?? false) { flip(key) }
                 .contextMenu {
-                    Button("Nuovo bot su \(engine.name)") { Task { await model.createBot(on: choice) } }
+                    Button(tr("Nuovo bot su %@", engine.name)) { Task { await model.createBot(on: choice) } }
                     Divider()
-                    Button("Impostazioni dei server remoti…") { openSettings() }
+                    Button(tr("Impostazioni dei server remoti…")) { openSettings() }
                 }
             if !collapsed.contains(key) {
                 if bots.isEmpty {
-                    Text(shown || peer?.reachable == true ? "Nessun bot" : "Collegamento in corso…")
+                    Text(shown || peer?.reachable == true ? tr("Nessun bot") : tr("Collegamento in corso…"))
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.tertiary)
                         .padding(.horizontal, 10)
@@ -187,26 +187,26 @@ struct SidebarView: View {
     /// on it moves above it.
     private func sectionHeader(_ name: String?, count: Int, first: Bool) -> some View {
         let key = name ?? ""
-        return SectionHeader(title: name ?? "Non assegnati", count: count, first: first,
+        return SectionHeader(title: name ?? tr("Non assegnati"), count: count, first: first,
                              collapsed: collapsed.contains(key)) { flip(key) }
             .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(dropTarget == key ? Theme.accent.opacity(0.18) : .clear))
             .draggable(name.map { "section:\($0)" } ?? "section:") {
-                Text(name ?? "Non assegnati").font(.system(size: 12)).padding(6)
+                Text(name ?? tr("Non assegnati")).font(.system(size: 12)).padding(6)
             }
             .dropDestination(for: String.self) { items, _ in drop(items, on: name) } isTargeted: { dropTarget = $0 ? key : nil }
             .contextMenu {
                 if let name {
-                    Button("Rinomina sezione…") { naming = .rename(name) }
-                    Button("Sposta su") { layout.move(name, by: -1) }.disabled(!layout.canMove(name, by: -1))
-                    Button("Sposta giù") { layout.move(name, by: 1) }.disabled(!layout.canMove(name, by: 1))
+                    Button(tr("Rinomina sezione…")) { naming = .rename(name) }
+                    Button(tr("Sposta su")) { layout.move(name, by: -1) }.disabled(!layout.canMove(name, by: -1))
+                    Button(tr("Sposta giù")) { layout.move(name, by: 1) }.disabled(!layout.canMove(name, by: 1))
                     Divider()
                 }
-                Button("Nuova sezione…") { naming = .new }
+                Button(tr("Nuova sezione…")) { naming = .new }
                 if let name {
                     Divider()
-                    Button("Elimina sezione", role: .destructive) { deleteSection(name) }
-                        .help("I bot tornano tra i non assegnati")
+                    Button(tr("Elimina sezione"), role: .destructive) { deleteSection(name) }
+                        .help(tr("I bot tornano tra i non assegnati"))
                 }
             }
     }
@@ -264,7 +264,7 @@ struct SidebarView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
-                TextField("", text: $query, prompt: Text("Cerca").foregroundStyle(Theme.secondary))
+                TextField("", text: $query, prompt: Text(tr("Cerca")).foregroundStyle(Theme.secondary))
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.ink)
@@ -279,19 +279,19 @@ struct SidebarView: View {
             .padding(.vertical, 7)
             .background(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous).fill(Theme.raised.opacity(0.7)))
             Menu {
-                Button("Nuovo bot") { Task { await model.createBot() } }
+                Button(tr("Nuovo bot")) { Task { await model.createBot() } }
                 if !model.remoteEngines.isEmpty {
                     // the submenu is the question: on which server
-                    Menu("Nuovo bot remoto") {
+                    Menu(tr("Nuovo bot remoto")) {
                         ForEach(model.remoteEngines) { engine in
                             Button(engine.name) { Task { await model.createBot(on: .remote(engine.id)) } }
                         }
                     }
                 }
-                Button("Nuovo canale…") { model.showNewRoom = true }
-                Button("Nuova sezione…") { naming = .new }
+                Button(tr("Nuovo canale…")) { model.showNewRoom = true }
+                Button(tr("Nuova sezione…")) { naming = .new }
                 Divider()
-                Button("Libreria team…") { openWindow(id: "teams") }
+                Button(tr("Libreria team…")) { openWindow(id: "teams") }
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 15, weight: .medium))
@@ -302,7 +302,7 @@ struct SidebarView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Nuovo bot su questo Mac (⌘N) o su un server, nuovo canale (⇧⌘N)")
+            .help(tr("Nuovo bot su questo Mac (⌘N) o su un server, nuovo canale (⇧⌘N)"))
         }
         .padding(.horizontal, 10)
         .padding(.top, 10)
@@ -311,8 +311,8 @@ struct SidebarView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 0) {
-            FooterRow(icon: "calendar", title: "Automazioni") { openWindow(id: "automations") }
-                .help("Automazioni (⇧⌘R)")
+            FooterRow(icon: "calendar", title: tr("Automazioni")) { openWindow(id: "automations") }
+                .help(tr("Automazioni (⇧⌘R)"))
             HStack(spacing: 8) {
                 InitialsAvatar(name: userName, size: 22)
                 Text(userName)
@@ -322,7 +322,7 @@ struct SidebarView: View {
                 Spacer(minLength: 0)
                 SettingsLink { Image(systemName: "gearshape") }
                     .buttonStyle(IconButtonStyle(size: 27, iconSize: 15))
-                    .help("Impostazioni (⌘,)")
+                    .help(tr("Impostazioni (⌘,)"))
             }
             .padding(.leading, 8)
             .padding(.vertical, 4)
@@ -350,11 +350,11 @@ struct SidebarView: View {
                 .padding(6)
             }
             .contextMenu {
-                Button(bot.pinned == true ? "Rimuovi dai fissati" : "Fissa in alto") {
+                Button(bot.pinned == true ? tr("Rimuovi dai fissati") : tr("Fissa in alto")) {
                     Task { await model.patch(bot, BotPatch(pinned: !(bot.pinned ?? false))) }
                 }
                 if sections {
-                Menu("Sposta in") {
+                Menu(tr("Sposta in")) {
                     ForEach(layout.names, id: \.self) { name in
                         Button {
                             Task { await model.patch(bot, BotPatch(section: name)) }
@@ -364,23 +364,23 @@ struct SidebarView: View {
                     }
                     if bot.section?.isEmpty == false {
                         Divider()
-                        Button("Nessuna sezione") { Task { await model.patch(bot, BotPatch(section: "")) } }
+                        Button(tr("Nessuna sezione")) { Task { await model.patch(bot, BotPatch(section: "")) } }
                     }
                     Divider()
-                    Button("Nuova sezione…") { naming = .move(bot.id) }
+                    Button(tr("Nuova sezione…")) { naming = .move(bot.id) }
                 }
                 }
-                Button(bot.unread ? "Segna come letto" : "Segna come non letto") {
+                Button(bot.unread ? tr("Segna come letto") : tr("Segna come non letto")) {
                     Task { await model.patch(bot, BotPatch(unread: !bot.unread)) }
                 }
                 Divider()
-                Button("Copia ID conversazione") {
+                Button(tr("Copia ID conversazione")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(bot.threadId, forType: .string)
                 }
                 Divider()
-                Button("Nascondi") { Task { await model.patch(bot, BotPatch(hidden: true)) } }
-                Button("Elimina…", role: .destructive) { confirmingDelete = bot }
+                Button(tr("Nascondi")) { Task { await model.patch(bot, BotPatch(hidden: true)) } }
+                Button(tr("Elimina…"), role: .destructive) { confirmingDelete = bot }
             }
     }
 
@@ -424,7 +424,7 @@ private struct SectionHeader: View {
                     .font(.system(size: 12))
                     .lineLimit(1)
                     .fixedSize()
-                if collapsed { Text("\(count)").font(.system(size: 11)).foregroundStyle(Theme.tertiary) }
+                if collapsed { Text(verbatim: "\(count)").font(.system(size: 11)).foregroundStyle(Theme.tertiary) }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 8, weight: .semibold))
                     .rotationEffect(.degrees(collapsed ? 0 : 90))
@@ -433,7 +433,7 @@ private struct SectionHeader: View {
                 Spacer(minLength: 0)
                 if let status {
                     Circle().fill(status ? Theme.success : Theme.danger.opacity(0.8)).frame(width: 6, height: 6)
-                        .help(status ? "Collegato" : "Non raggiungibile")
+                        .help(status ? tr("Collegato") : tr("Non raggiungibile"))
                 }
             }
             .foregroundStyle(Theme.secondary)
@@ -495,7 +495,7 @@ struct BotRow: View {
                     }
                     Spacer(minLength: 0)
                     if selected, let last {
-                        Text(last.date.formatted(date: .omitted, time: .shortened))
+                        Text(last.date.appFormatted(date: .omitted, time: .shortened))
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.secondary)
                             .opacity(hovering ? 0 : 1)
@@ -504,7 +504,7 @@ struct BotRow: View {
                 .frame(height: 19.5)
                 HStack(spacing: 6) {
                     if chief {
-                        Text("Chief of Staff").font(.system(size: 10.5, weight: .medium)).foregroundStyle(Theme.accent)
+                        Text(tr("Chief of Staff")).font(.system(size: 10.5, weight: .medium)).foregroundStyle(Theme.accent)
                     }
                     Text(preview)
                         .font(.system(size: Theme.captionSize))
@@ -538,7 +538,7 @@ struct BotRow: View {
                             .shadow(color: .black.opacity(0.25), radius: 1, y: 1))
                 }
                 .buttonStyle(.plain)
-                .help("Nascondi")
+                .help(tr("Nascondi"))
                 .padding(.trailing, 4)
                 .padding(.top, 6)
             }
@@ -549,13 +549,13 @@ struct BotRow: View {
     }
 
     private var preview: String {
-        if bot.activity == "waiting-on-you" { return "Ti sta aspettando" }
-        if model.isBusy(bot) { return "Sta lavorando…" }
+        if bot.activity == "waiting-on-you" { return tr("Ti sta aspettando") }
+        if model.isBusy(bot) { return tr("Sta lavorando…") }
         guard let message = transcript.last(where: { $0.kind == .text && !($0.text ?? "").isEmpty }) else {
             return bot.description.isEmpty ? " " : bot.description
         }
         let text = (message.text ?? "").replacingOccurrences(of: "\n", with: " ")
-        return (message.role == .user ? "Tu: " : "") + text
+        return (message.role == .user ? tr("Tu: ") : "") + text
     }
 
     private var transcript: [Message] {
@@ -585,7 +585,7 @@ private struct RoomRow: View {
                     HStack(spacing: -8) {
                         ForEach(members.prefix(3)) { BotAvatar(bot: $0, size: 18, animated: false) }
                         if members.count > 3 {
-                            Text("+\(members.count - 3)")
+                            Text(verbatim: "+\(members.count - 3)")
                                 .font(.system(size: 8, weight: .medium))
                                 .foregroundStyle(Theme.secondary)
                                 .frame(width: 16, height: 16)
@@ -645,13 +645,13 @@ private struct SectionNameSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title).font(.headline)
-            TextField("Nome sezione", text: $draft)
+            TextField(tr("Nome sezione"), text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(commit)
             HStack {
                 Spacer()
-                Button("Annulla") { dismiss() }
-                Button(action: commit) { Text(isRename ? "Rinomina" : "Crea") }
+                Button(tr("Annulla")) { dismiss() }
+                Button(action: commit) { Text(isRename ? tr("Rinomina") : tr("Crea")) }
                     .keyboardShortcut(.defaultAction)
                     .disabled(name.isEmpty || name.count > 60)
             }
@@ -662,7 +662,7 @@ private struct SectionNameSheet: View {
     }
 
     private var isRename: Bool { if case .rename = naming { return true } else { return false } }
-    private var title: String { isRename ? "Rinomina sezione" : "Nuova sezione" }
+    private var title: String { isRename ? tr("Rinomina sezione") : tr("Nuova sezione") }
     private var name: String { draft.trimmingCharacters(in: .whitespaces) }
 
     private func commit() {

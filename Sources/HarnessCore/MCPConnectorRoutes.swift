@@ -50,6 +50,12 @@ enum MCPConnectorRoutes {
             return respond(200, ["created": .array(created), "skipped": .array(rejected)])
         }
 
+        // where a provider must send the browser back, for apps that need it
+        // registered by hand (no dynamic registration, or not for us)
+        if path == "/api/mcp-connectors/oauth-redirect", method == "GET" {
+            return respond(200, ["redirectUri": .string(harness.mcpOAuth.redirectUri)])
+        }
+
         let rest = String(path.dropFirst("/api/mcp-connectors/".count))
         let parts = rest.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
         guard let id = parts.first, id.range(of: #"^[a-z0-9_]{1,24}$"#, options: .regularExpression) != nil else { return nil }

@@ -19,7 +19,7 @@ extension AppModel {
             switch index % 10 {
             case 0, 5:
                 message.merge(["role": "user", "kind": "text",
-                               "text": "Messaggio \(index): controlla il servizio e dimmi se il deploy è andato."]) { $1 }
+                               "text": "Messaggio \(index): controlla il servizio e dimmi se il deploy ha funzionato."]) { $1 }
             case 1, 6, 8:
                 message.merge(["role": "bot", "kind": "activity",
                                "tool": ["name": "Bash(kubectl get pods -n prod)", "ok": index % 3 != 0]]) { $1 }

@@ -10,6 +10,7 @@ struct SwarmeBotApp: App {
         WindowGroup("SwarmeBot", id: "main") {
             RootView()
                 .environment(delegate.model)
+                .appLanguage()
                 .preferredColorScheme(.dark)
                 .frame(minWidth: 900, minHeight: 600)
         }
@@ -17,16 +18,18 @@ struct SwarmeBotApp: App {
         .defaultSize(width: 1440, height: 920)
         .commands { AppCommands(model: delegate.model) }
 
-        Window("Automazioni", id: "automations") {
+        Window(tr("Automazioni"), id: "automations") {
             AutomationsView()
                 .environment(delegate.model)
+                .appLanguage()
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 900, height: 600)
 
-        Window("Libreria team", id: "teams") {
+        Window(tr("Libreria team"), id: "teams") {
             TeamLibraryView()
                 .environment(delegate.model)
+                .appLanguage()
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 720, height: 560)
@@ -34,9 +37,23 @@ struct SwarmeBotApp: App {
         Settings {
             SettingsView()
                 .environment(delegate.model)
+                .appLanguage()
                 .preferredColorScheme(.dark)
         }
     }
+}
+
+/// Dates, numbers and system controls in the app's language, not macOS's.
+private struct AppLanguageEnvironment: ViewModifier {
+    @State private var localizer = Localizer.shared
+
+    func body(content: Content) -> some View {
+        content.environment(\.locale, localizer.language.locale)
+    }
+}
+
+extension View {
+    func appLanguage() -> some View { modifier(AppLanguageEnvironment()) }
 }
 
 /// Owns the model so it outlives windows: closing the last window must not
@@ -177,27 +194,27 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Nuovo bot") { Task { await model.createBot() } }
+            Button(tr("Nuovo bot")) { Task { await model.createBot() } }
                 .keyboardShortcut("n")
-            Button("Nuovo canale…") { model.showNewRoom = true }
+            Button(tr("Nuovo canale…")) { model.showNewRoom = true }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
         }
         CommandGroup(after: .sidebar) {
-            Button("Vai a… / Cerca") { model.showPalette = true }
+            Button(tr("Vai a… / Cerca")) { model.showPalette = true }
                 .keyboardShortcut("k")
         }
         CommandGroup(after: .appInfo) {
-            Button("Controlla aggiornamenti…") { Updater.shared.checkForUpdates() }
+            Button(tr("Controlla aggiornamenti…")) { Updater.shared.checkForUpdates() }
                 .disabled(!Updater.shared.available)
         }
         CommandGroup(before: .windowList) {
-            Button("Automazioni") { openWindow(id: "automations") }
+            Button(tr("Automazioni")) { openWindow(id: "automations") }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
-            Button("Libreria team") { openWindow(id: "teams") }
+            Button(tr("Libreria team")) { openWindow(id: "teams") }
             Divider()
         }
         CommandMenu("Bot") {
-            Button("Interrompi turno") { Task { await model.interrupt() } }
+            Button(tr("Interrompi turno")) { Task { await model.interrupt() } }
                 .keyboardShortcut(".", modifiers: .command)
             Divider()
             ForEach(Array(model.visibleBots.prefix(9).enumerated()), id: \.element.id) { index, bot in

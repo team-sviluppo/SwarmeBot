@@ -17,16 +17,16 @@ struct TeamLibraryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Libreria team").font(.system(size: 18, weight: .semibold))
+                Text(tr("Libreria team")).font(.system(size: 18, weight: .semibold))
                 Spacer()
-                Toggle("Sostituisci i bot attuali", isOn: $replace).toggleStyle(.checkbox)
-                Button("Importa file…", action: importFile)
-                Button("Esporta team…", action: exportTeam)
+                Toggle(tr("Sostituisci i bot attuali"), isOn: $replace).toggleStyle(.checkbox)
+                Button(tr("Importa file…"), action: importFile)
+                Button(tr("Esporta team…"), action: exportTeam)
             }
             .padding(16)
             HStack {
-                TextField("URL GitHub di un team", text: $githubURL).textFieldStyle(.roundedBorder)
-                Button("Carica") { Task { await importGitHub() } }.disabled(githubURL.isEmpty)
+                TextField(tr("URL GitHub di un team"), text: $githubURL).textFieldStyle(.roundedBorder)
+                Button(tr("Carica")) { Task { await importGitHub() } }.disabled(githubURL.isEmpty)
             }
             .padding(.horizontal, 16)
             if let status {
@@ -39,9 +39,9 @@ struct TeamLibraryView: View {
                 // The catalog route exists on the harness but no client has
                 // relied on it; GitHub and file import are the real paths.
                 ContentUnavailableView(
-                    "Catalogo non disponibile",
+                    tr("Catalogo non disponibile"),
                     systemImage: "books.vertical",
-                    description: Text("Importa un team da un URL GitHub o da un file JSON esportato.")
+                    description: Text(tr("Importa un team da un URL GitHub o da un file JSON esportato."))
                 )
             } else {
                 List(catalog) { team in
@@ -55,7 +55,7 @@ struct TeamLibraryView: View {
                             }
                         }
                         Spacer()
-                        Button("Importa") { Task { await importCatalog(team) } }
+                        Button(tr("Importa")) { Task { await importCatalog(team) } }
                     }
                     .padding(.vertical, 4)
                 }
@@ -80,17 +80,17 @@ struct TeamLibraryView: View {
     private func importCatalog(_ team: TeamCatalogEntry) async {
         guard let manifest = try? await model.client?.teamManifest(slug: team.slug),
               let data = try? JSONEncoder().encode(manifest) else {
-            status = "Impossibile scaricare \(team.name)."
+            status = tr("Impossibile scaricare %@.", team.name)
             return
         }
-        status = await model.importTeam(data, mode: mode) ? "Importato \(team.name)." : nil
+        status = await model.importTeam(data, mode: mode) ? tr("Importato %@.", team.name) : nil
     }
 
     private func importGitHub() async {
         do {
             guard let manifest = try await model.client?.teamManifest(github: githubURL) else { return }
             let data = try JSONEncoder().encode(manifest)
-            status = await model.importTeam(data, mode: mode) ? "Team importato da GitHub." : nil
+            status = await model.importTeam(data, mode: mode) ? tr("Team importato da GitHub.") : nil
         } catch {
             status = error.localizedDescription
         }
@@ -100,7 +100,7 @@ struct TeamLibraryView: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
-        Task { status = await model.importTeam(data, mode: mode) ? "Importato \(url.lastPathComponent)." : nil }
+        Task { status = await model.importTeam(data, mode: mode) ? tr("Importato %@.", url.lastPathComponent) : nil }
     }
 
     private func exportTeam() {
@@ -112,7 +112,7 @@ struct TeamLibraryView: View {
             guard panel.runModal() == .OK, let url = panel.url else { return }
             do {
                 try data.write(to: url)
-                status = "Esportato in \(url.lastPathComponent)."
+                status = tr("Esportato in %@.", url.lastPathComponent)
             } catch {
                 status = error.localizedDescription
             }

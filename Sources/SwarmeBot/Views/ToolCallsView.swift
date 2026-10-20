@@ -3,6 +3,7 @@
 // shows what it was asked and what it answered.
 import AppKit
 import CompanionCore
+import SwarmeKit
 import SwiftUI
 
 /// A tool's raw name as people read it: `mcp__aws_documentation__search_table`
@@ -57,7 +58,7 @@ struct ToolCallsGroup: View {
                     // Just the count: failed attempts are normal while the bot
                     // explores, so the closed line never flags them; opening it
                     // shows each call.
-                    Text(tools.count == 1 ? "1 strumento" : "\(tools.count) strumenti")
+                    Text(tools.count == 1 ? tr("1 strumento") : tr("%@ strumenti", String(tools.count)))
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.secondary)
                 }
@@ -68,7 +69,7 @@ struct ToolCallsGroup: View {
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .help(expanded ? "Nascondi le chiamate" : "Mostra le chiamate")
+            .help(expanded ? tr("Nascondi le chiamate") : tr("Mostra le chiamate"))
 
             if expanded {
                 VStack(alignment: .leading, spacing: 4) {
@@ -115,7 +116,7 @@ private struct ToolCallRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Dettagli della chiamata")
+        .help(tr("Dettagli della chiamata"))
         .popover(isPresented: $open, arrowEdge: .trailing) { ToolCallDetail(tool: tool) }
     }
 }
@@ -135,11 +136,11 @@ private struct ToolCallDetail: View {
                 Spacer()
             }
             if tool.input == nil, tool.output == nil {
-                Text(tool.ok == nil ? "La chiamata è ancora in corso." : "Nessun dettaglio registrato per questa chiamata.")
+                Text(tool.ok == nil ? tr("La chiamata è ancora in corso.") : tr("Nessun dettaglio registrato per questa chiamata."))
                     .font(.system(size: 12)).foregroundStyle(Theme.secondary)
             }
-            if let input = tool.input { DetailBlock(title: "Richiesta", text: Self.readable(input), maxHeight: 140) }
-            if let output = tool.output { DetailBlock(title: tool.ok == false ? "Errore" : "Risposta", text: Self.readable(output), maxHeight: 360) }
+            if let input = tool.input { DetailBlock(title: tr("Richiesta"), text: Self.readable(input), maxHeight: 140) }
+            if let output = tool.output { DetailBlock(title: tool.ok == false ? tr("Errore") : tr("Risposta"), text: Self.readable(output), maxHeight: 360) }
         }
         .padding(14)
         .frame(width: 540)
@@ -171,7 +172,7 @@ private struct DetailBlock: View {
                     NSPasteboard.general.setString(text, forType: .string)
                 } label: { Image(systemName: "doc.on.doc").font(.system(size: 11)) }
                     .buttonStyle(.borderless)
-                    .help("Copia")
+                    .help(tr("Copia"))
             }
             ScrollView {
                 Text(text)

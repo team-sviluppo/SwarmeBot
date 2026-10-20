@@ -25,7 +25,7 @@ struct RemoteServersPane: View {
         Form {
             Section {
                 if model.remoteEngines.isEmpty {
-                    Text("Nessun server. Un bot su un server continua a lavorare anche a Mac spento, e lo ritrovi qui o sul telefono.")
+                    Text(tr("Nessun server. Un bot su un server continua a lavorare anche a Mac spento, e lo ritrovi qui o sul telefono."))
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.remoteEngines) { engine in
@@ -35,43 +35,43 @@ struct RemoteServersPane: View {
                             Text(engine.name).font(.system(size: 13, weight: .medium))
                             Text(engine.chatURL).font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled)
                             if let identity = model.identity(for: engine) {
-                                Text("Amministrato da questo Mac come \(identity.label)").font(.system(size: 11)).foregroundStyle(.tertiary)
+                                Text(tr("Amministrato da questo Mac come %@", identity.label)).font(.system(size: 11)).foregroundStyle(.tertiary)
                                 EngineUpdateLine(engine: engine)
                                 if configuring == engine.id {
                                     HStack(spacing: 6) {
                                         ProgressView().controlSize(.small)
-                                        Text("Installo Claude Code e omp sul server…").font(.system(size: 11)).foregroundStyle(.secondary)
+                                        Text(tr("Installo Claude Code e omp sul server…")).font(.system(size: 11)).foregroundStyle(.secondary)
                                     }
                                 }
                             }
                         }
                         Spacer()
-                        Menu("Azioni") {
-                            Button("Mostra i suoi bot") { model.select(engine: .remote(engine.id)) }
-                            Button("Abbina un telefono o un altro Mac…") { qrFor = engine }
-                            Button("Dispositivi abbinati…") { devicesFor = engine }
+                        Menu(tr("Azioni")) {
+                            Button(tr("Mostra i suoi bot")) { model.select(engine: .remote(engine.id)) }
+                            Button(tr("Abbina un telefono o un altro Mac…")) { qrFor = engine }
+                            Button(tr("Dispositivi abbinati…")) { devicesFor = engine }
                             if let identity = model.identity(for: engine) {
                                 Divider()
-                                Button("Configura Claude Code e omp") { configureAgents(engine) }
+                                Button(tr("Configura Claude Code e omp")) { configureAgents(engine) }
                                     .disabled(configuring != nil)
-                                Button("Login di Claude sul server…") { claudeLoginFor = engine }
-                                Button("Copia la configurazione di pi…") { piCopyFor = engine }
-                                Button("Apri un terminale sul server") { try? model.openTerminal(identity) }
+                                Button(tr("Login di Claude sul server…")) { claudeLoginFor = engine }
+                                Button(tr("Copia la configurazione di pi…")) { piCopyFor = engine }
+                                Button(tr("Apri un terminale sul server")) { try? model.openTerminal(identity) }
                             }
                             Divider()
-                            Button("Dimentica su questo Mac…", role: .destructive) { forgetting = engine }
+                            Button(tr("Dimentica su questo Mac…"), role: .destructive) { forgetting = engine }
                         }
                         .fixedSize()
                     }
                 }
             } header: {
-                Text("Server remoti")
+                Text(tr("Server remoti"))
             } footer: {
-                Text("Il Mac amministra il server via ssh; la chat passa sempre in HTTPS con un token di questo dispositivo.")
+                Text(tr("Il Mac amministra il server via ssh; la chat passa sempre in HTTPS con un token di questo dispositivo."))
             }
             Section {
-                Button("Aggiungi un server…") { adding = true }
-                Button("Collega un server con un codice…") { pairingWithCode = true }
+                Button(tr("Aggiungi un server…")) { adding = true }
+                Button(tr("Collega un server con un codice…")) { pairingWithCode = true }
             }
         }
         .formStyle(.grouped)
@@ -80,32 +80,32 @@ struct RemoteServersPane: View {
         .sheet(item: $devicesFor) { DevicesSheet(engine: $0) }
         .sheet(item: $qrFor) { PairingQRSheet(engine: $0) }
         .sheet(item: $claudeLoginFor) { ClaudeTokenSheet(engine: $0) }
-        .confirmationDialog("Copiare la configurazione di pi su \(piCopyFor?.name ?? "")?",
+        .confirmationDialog(tr("Copiare la configurazione di pi su %@?", piCopyFor?.name ?? ""),
                             isPresented: Binding(get: { piCopyFor != nil }, set: { if !$0 { piCopyFor = nil } })) {
-            Button("Copia") {
+            Button(tr("Copia")) {
                 guard let engine = piCopyFor else { return }
                 Task {
                     do {
                         let copied = try await model.copyPiConfig(to: engine)
-                        notice = "Copiati su \(engine.name): \(copied.joined(separator: ", "))"
+                        notice = tr("Copiati su %@: %@", engine.name, copied.joined(separator: ", "))
                     } catch {
                         notice = error.localizedDescription
                     }
                 }
             }
         } message: {
-            Text("auth.json, models.json e settings.json di ~/.pi/agent vanno sul server, leggibili solo dal suo utente. Contengono le chiavi API dei tuoi provider. I file già presenti sul server restano come copia di backup.")
+            Text(tr("auth.json, models.json e settings.json di ~/.pi/agent vanno sul server, leggibili solo dal suo utente. Contengono le chiavi API dei tuoi provider. I file già presenti sul server restano come copia di backup."))
         }
         .alert(notice ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
-            Button("OK") { notice = nil }
+            Button(tr("OK")) { notice = nil }
         }
-        .confirmationDialog("Dimenticare \(forgetting?.name ?? "")?", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } })) {
-            Button("Dimentica", role: .destructive) {
+        .confirmationDialog(tr("Dimenticare %@?", forgetting?.name ?? ""), isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } })) {
+            Button(tr("Dimentica"), role: .destructive) {
                 if let engine = forgetting { try? model.forgetRemoteEngine(engine.id) }
                 forgetting = nil
             }
         } message: {
-            Text("Il server e i suoi bot continuano a funzionare; questo Mac non lo mostra più. Il dispositivo resta abbinato finché non lo revochi.")
+            Text(tr("Il server e i suoi bot continuano a funzionare; questo Mac non lo mostra più. Il dispositivo resta abbinato finché non lo revochi."))
         }
         .onAppear { model.reloadRemoteEngines() }
     }
@@ -132,7 +132,7 @@ struct ServerSetupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Aggiungi un server").font(.title2.weight(.semibold))
+            Text(tr("Aggiungi un server")).font(.title2.weight(.semibold))
             if let flow {
                 SetupBody(flow: flow) {
                     if let engine = flow.engine {
@@ -144,7 +144,7 @@ struct ServerSetupSheet: View {
             }
             HStack {
                 Spacer()
-                Button("Chiudi") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(tr("Chiudi")) { dismiss() }.keyboardShortcut(.cancelAction)
             }
         }
         .padding(20)
@@ -171,31 +171,31 @@ private struct SetupBody: View {
     var body: some View {
         Form {
             if editing {
-                Section("Server (amministrazione via ssh)") {
-                    TextField("Nome da mostrare", text: $flow.name, prompt: Text("srv1 · deploy"))
-                    TextField("Server", text: $flow.host, prompt: Text("10.0.4.12 o vps1.example.it"))
+                Section(tr("Server (amministrazione via ssh)")) {
+                    TextField(tr("Nome da mostrare"), text: $flow.name, prompt: Text(verbatim: "srv1 · deploy"))
+                    TextField(tr("Server"), text: $flow.host, prompt: Text(tr("10.0.4.12 o vps1.example.it")))
                         .onSubmit { flow.suggestPrefix() }
-                    TextField("Porta ssh", value: $flow.port, format: .number.grouping(.never))
-                    TextField("Utente", text: $flow.user, prompt: Text("deploy"))
+                    TextField(tr("Porta ssh"), value: $flow.port, format: .number.grouping(.never))
+                    TextField(tr("Utente"), text: $flow.user, prompt: Text(verbatim: "deploy"))
                         .onSubmit { flow.suggestPrefix() }
                 }
                 Section {
-                    TextField("Sito Caddy", text: $flow.site, prompt: Text("bot.example.it, oppure :8080 dietro un proxy"))
-                    TextField("Prefisso", text: $flow.prefix, prompt: Text("/srv1/deploy"))
-                    Picker("Certificato", selection: $flow.tls) {
-                        Text("Pubblico (Let's Encrypt)").tag(CaddySettings.TLS.public)
-                        Text("Nessuno: dietro un proxy HTTPS").tag(CaddySettings.TLS.off)
+                    TextField(tr("Sito Caddy"), text: $flow.site, prompt: Text(tr("bot.example.it, oppure :8080 dietro un proxy")))
+                    TextField(tr("Prefisso"), text: $flow.prefix, prompt: Text(verbatim: "/srv1/deploy"))
+                    Picker(tr("Certificato"), selection: $flow.tls) {
+                        Text(tr("Pubblico (Let's Encrypt)")).tag(CaddySettings.TLS.public)
+                        Text(tr("Nessuno: dietro un proxy HTTPS")).tag(CaddySettings.TLS.off)
                     }
-                    TextField("URL di chat (se c'è un proxy davanti)", text: $flow.chatURLOverride, prompt: Text(flow.chatURL))
+                    TextField(tr("URL di chat (se c'è un proxy davanti)"), text: $flow.chatURLOverride, prompt: Text(flow.chatURL))
                 } header: {
-                    Text("Chat (HTTPS)")
+                    Text(tr("Chat (HTTPS)"))
                 } footer: {
-                    Text("I dispositivi usano solo questo URL: \(flow.chatURL)")
+                    Text(tr("I dispositivi usano solo questo URL: %@", flow.chatURL))
                 }
             } else {
                 Section {
-                    LabeledContent("Server", value: "\(flow.user)@\(flow.host)\(flow.port == 22 ? "" : ":\(flow.port)")")
-                    LabeledContent("Chat", value: flow.chatURL)
+                    LabeledContent(tr("Server"), value: "\(flow.user)@\(flow.host)\(flow.port == 22 ? "" : ":\(flow.port)")")
+                    LabeledContent(tr("Chat"), value: flow.chatURL)
                 }
             }
 
@@ -204,22 +204,22 @@ private struct SetupBody: View {
                 Section {
                     if !flow.scannedKeys.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Confronta il fingerprint con quello mostrato dalla console del server:").font(.callout)
+                            Text(tr("Confronta il fingerprint con quello mostrato dalla console del server:")).font(.callout)
                             ForEach(flow.scannedKeys.prefix(1), id: \.self) { key in
-                                Text("\(key.type)  \(key.fingerprint)").font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-                                Button("È quello giusto: approva") { Task { await flow.approve(key) } }
+                                Text(verbatim: "\(key.type)  \(key.fingerprint)").font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+                                Button(tr("È quello giusto: approva")) { Task { await flow.approve(key) } }
                             }
                         }
                     }
                     if flow.needsPassword, flow.step == .key {
-                        SecureField("Password ssh di \(flow.user)", text: $flow.sshPassword)
-                    Text("Serve una volta sola, per installare la chiave dedicata di questo Mac. Non viene salvata.")
+                        SecureField(tr("Password ssh di %@", flow.user), text: $flow.sshPassword)
+                    Text(tr("Serve una volta sola, per installare la chiave dedicata di questo Mac. Non viene salvata."))
                         .font(.caption).foregroundStyle(.secondary)
                     }
                     if flow.needsSudoPassword, flow.step >= .root, flow.step < .device {
-                        SecureField("Password di sudo", text: $flow.sudoPassword)
-                    Text("Per i passi di root qui sotto. Non viene salvata.").font(.caption).foregroundStyle(.secondary)
-                        DisclosureGroup("Comandi eseguiti come root", isExpanded: $showRoot) {
+                        SecureField(tr("Password di sudo"), text: $flow.sudoPassword)
+                    Text(tr("Per i passi di root qui sotto. Non viene salvata.")).font(.caption).foregroundStyle(.secondary)
+                        DisclosureGroup(tr("Comandi eseguiti come root"), isExpanded: $showRoot) {
                             ScrollView {
                                 Text(flow.rootPreview).font(.system(size: 10, design: .monospaced)).textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -228,7 +228,7 @@ private struct SetupBody: View {
                         }
                     }
                     if let probe = flow.probe {
-                        Text("\(probe.os) \(probe.version) · \(probe.arch) · Claude: \(probe.claude ?? "non installato") · pi: \(probe.pi ?? "non installato")")
+                        Text(tr("%@ %@ · %@ · Claude: %@ · pi: %@", probe.os, probe.version, probe.arch, probe.claude ?? tr("non installato"), probe.pi ?? tr("non installato")))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     ForEach(flow.agentsReport, id: \.self) { line in
@@ -239,7 +239,7 @@ private struct SetupBody: View {
                     }
                 }
             }
-            Section("Avanzamento") {
+            Section(tr("Avanzamento")) {
                 ForEach(ServerSetupFlow.Step.allCases.filter { $0 != .done }, id: \.self) { step in
                     HStack {
                         Image(systemName: icon(step)).foregroundStyle(color(step))
@@ -257,9 +257,9 @@ private struct SetupBody: View {
             if let activity = flow.activity { Text(activity).font(.caption).foregroundStyle(.secondary) }
             Spacer()
             if flow.step == .done {
-                Button("Mostra i bot del server", action: finished).keyboardShortcut(.defaultAction)
+                Button(tr("Mostra i bot del server"), action: finished).keyboardShortcut(.defaultAction)
             } else {
-                Button(flow.step == .hostKey && flow.error == nil ? "Collegati" : "Continua") {
+                Button(flow.step == .hostKey && flow.error == nil ? tr("Collegati") : tr("Continua")) {
                     flow.suggestPrefix()
                     Task { await flow.run() }
                 }
@@ -295,20 +295,20 @@ struct PairWithCodeSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Collega un server con un codice").font(.title3.weight(.semibold))
-            Text("Su un dispositivo già abbinato: Server remoti › Abbina un telefono o un altro Mac. Copia qui l'URL e il codice.")
+            Text(tr("Collega un server con un codice")).font(.title3.weight(.semibold))
+            Text(tr("Su un dispositivo già abbinato: Server remoti › Abbina un telefono o un altro Mac. Copia qui l'URL e il codice."))
                 .font(.callout).foregroundStyle(.secondary)
             Form {
-                TextField("URL di chat", text: $chatURL, prompt: Text("https://bot.example.it/srv1/deploy"))
-                TextField("Codice", text: $code, prompt: Text("ABCD234567"))
-                TextField("Nome da mostrare", text: $name)
+                TextField(tr("URL di chat"), text: $chatURL, prompt: Text(verbatim: "https://bot.example.it/srv1/deploy"))
+                TextField(tr("Codice"), text: $code, prompt: Text(verbatim: "ABCD234567"))
+                TextField(tr("Nome da mostrare"), text: $name)
             }
             .formStyle(.grouped)
             if let error { Text(error).foregroundStyle(Theme.danger) }
             HStack {
                 Spacer()
-                Button("Annulla") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Collega") {
+                Button(tr("Annulla")) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(tr("Collega")) {
                     working = true
                     Task {
                         do {
@@ -338,20 +338,20 @@ struct PairingQRSheet: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Text("Abbina un dispositivo a \(engine.name)").font(.title3.weight(.semibold))
+            Text(tr("Abbina un dispositivo a %@", engine.name)).font(.title3.weight(.semibold))
             if let pairing, let link = RemotePairingLink(chatURL: engine.chatURL, code: pairing.code, name: engine.name).url {
                 if let image = Self.qr(link.absoluteString) {
                     Image(nsImage: image).interpolation(.none).resizable().frame(width: 220, height: 220)
                 }
-                Text("Codice: \(pairing.code)").font(.system(.title3, design: .monospaced)).textSelection(.enabled)
-                Text("URL: \(engine.chatURL)").font(.callout).textSelection(.enabled)
-                Text("Vale 10 minuti e una volta sola. Il QR non contiene il token.").font(.caption).foregroundStyle(.secondary)
+                Text(tr("Codice: %@", pairing.code)).font(.system(.title3, design: .monospaced)).textSelection(.enabled)
+                Text(tr("URL: %@", engine.chatURL)).font(.callout).textSelection(.enabled)
+                Text(tr("Vale 10 minuti e una volta sola. Il QR non contiene il token.")).font(.caption).foregroundStyle(.secondary)
             } else if let error {
                 Text(error).foregroundStyle(Theme.danger)
             } else {
                 ProgressView()
             }
-            Button("Chiudi") { dismiss() }.keyboardShortcut(.defaultAction)
+            Button(tr("Chiudi")) { dismiss() }.keyboardShortcut(.defaultAction)
         }
         .padding(24)
         .frame(width: 380)
@@ -379,20 +379,20 @@ struct DevicesSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Dispositivi abbinati a \(engine.name)").font(.title3.weight(.semibold))
+            Text(tr("Dispositivi abbinati a %@", engine.name)).font(.title3.weight(.semibold))
             if let list {
                 List(list.devices) { device in
                     HStack {
                         Image(systemName: device.kind == "ios" ? "iphone" : "laptopcomputer")
                         VStack(alignment: .leading) {
-                            Text(device.name + (device.id == list.current ? " (questo Mac)" : ""))
+                            Text(device.name + (device.id == list.current ? tr(" (questo Mac)") : ""))
                             if let seen = device.lastSeenAt {
-                                Text("Visto \(Date(timeIntervalSince1970: seen / 1000).formatted(.relative(presentation: .named)))")
+                                Text(tr("Visto %@", Date(timeIntervalSince1970: seen / 1000).appRelative()))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         Spacer()
-                        Button("Revoca", role: .destructive) {
+                        Button(tr("Revoca"), role: .destructive) {
                             Task {
                                 do {
                                     try await model.remoteClient(engine).revokeDevice(device.id)
@@ -408,7 +408,7 @@ struct DevicesSheet: View {
                 ProgressView()
             }
             if let error { Text(error).foregroundStyle(Theme.danger) }
-            HStack { Spacer(); Button("Chiudi") { dismiss() }.keyboardShortcut(.defaultAction) }
+            HStack { Spacer(); Button(tr("Chiudi")) { dismiss() }.keyboardShortcut(.defaultAction) }
         }
         .padding(20)
         .frame(width: 460)
@@ -432,16 +432,16 @@ struct ClaudeTokenSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Login di Claude su \(engine.name)").font(.title3.weight(.semibold))
-            Text("Nel Terminale di questo Mac esegui il comando qui sotto e accedi con il tuo abbonamento; poi incolla il token che stampa. Il token resta sul server in un file leggibile solo dal suo utente, e nel Portachiavi di questo Mac per i prossimi server che configuri.")
+            Text(tr("Login di Claude su %@", engine.name)).font(.title3.weight(.semibold))
+            Text(tr("Nel Terminale di questo Mac esegui il comando qui sotto e accedi con il tuo abbonamento; poi incolla il token che stampa. Il token resta sul server in un file leggibile solo dal suo utente, e nel Portachiavi di questo Mac per i prossimi server che configuri."))
                 .font(.callout).foregroundStyle(.secondary)
-            Text("claude setup-token").font(.system(.body, design: .monospaced)).textSelection(.enabled)
-            SecureField("sk-ant-…", text: $token)
+            Text(verbatim: "claude setup-token").font(.system(.body, design: .monospaced)).textSelection(.enabled)
+            SecureField(tr("sk-ant-…"), text: $token)
             if let error { Text(error).foregroundStyle(Theme.danger) }
             HStack {
                 Spacer()
-                Button("Annulla") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Salva sul server") {
+                Button(tr("Annulla")) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(tr("Salva sul server")) {
                     working = true
                     Task {
                         do {
@@ -475,26 +475,26 @@ private struct EngineUpdateLine: View {
         HStack(spacing: 6) {
             if working {
                 ProgressView().controlSize(.mini)
-                Text("Aggiorno il motore…").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(tr("Aggiorno il motore…")).font(.system(size: 11)).foregroundStyle(.secondary)
             } else if let error {
                 Text(error).font(.system(size: 11)).foregroundStyle(Theme.danger).lineLimit(2)
             } else if let status {
                 if status.updateAvailable {
-                    Text(status.installed == nil ? "Motore non installato" : "Aggiornamento del motore disponibile")
+                    Text(status.installed == nil ? tr("Motore non installato") : tr("Aggiornamento del motore disponibile"))
                         .font(.system(size: 11)).foregroundStyle(Theme.warning)
-                    Button("Aggiorna motore") { Task { await update(force: false) } }.controlSize(.small)
+                    Button(tr("Aggiorna motore")) { Task { await update(force: false) } }.controlSize(.small)
                 } else {
-                    Text("Motore aggiornato").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(tr("Motore aggiornato")).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             } else {
-                Text("Controllo il motore…").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text(tr("Controllo il motore…")).font(.system(size: 11)).foregroundStyle(.tertiary)
             }
         }
         .task(id: engine.id) { await load() }
-        .confirmationDialog("Aggiornare adesso?", isPresented: Binding(get: { busyNames != nil }, set: { if !$0 { busyNames = nil } })) {
-            Button("Aggiorna e interrompi", role: .destructive) { Task { await update(force: true) } }
+        .confirmationDialog(tr("Aggiornare adesso?"), isPresented: Binding(get: { busyNames != nil }, set: { if !$0 { busyNames = nil } })) {
+            Button(tr("Aggiorna e interrompi"), role: .destructive) { Task { await update(force: true) } }
         } message: {
-            Text("Stanno lavorando: \((busyNames ?? []).joined(separator: ", ")). L'aggiornamento riavvia il motore e interrompe i loro turni.")
+            Text(tr("Stanno lavorando: %@. L'aggiornamento riavvia il motore e interrompe i loro turni.", (busyNames ?? []).joined(separator: ", ")))
         }
     }
 

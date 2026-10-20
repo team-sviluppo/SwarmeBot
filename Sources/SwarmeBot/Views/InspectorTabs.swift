@@ -14,13 +14,13 @@ struct ComputerTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("Computer del bot", selection: Binding(
+            Picker(tr("Computer del bot"), selection: Binding(
                 get: { bot.computer == "vm" ? "vm" : bot.computer == "cloud" ? "cloud" : "off" },
                 set: { value in Task { await model.patch(bot, BotPatch(computer: value)) } }
             )) {
-                Text("Nessuno").tag("off")
-                Text("VM locale").tag("vm")
-                if bot.computer == "cloud" { Text("Cloud").tag("cloud") }
+                Text(tr("Nessuno")).tag("off")
+                Text(tr("VM locale")).tag("vm")
+                if bot.computer == "cloud" { Text(tr("Cloud")).tag("cloud") }
             }
             .font(.system(size: 12.5))
 
@@ -28,7 +28,7 @@ struct ComputerTab: View {
             case "vm": LocalVMSection(bot: bot)
             case "cloud": CloudComputerSection(bot: bot)
             default:
-                Text("Senza computer il bot lavora solo con i suoi strumenti (shell, file). Con la VM locale ha un desktop Linux isolato che puoi guardare e prendere in mano.")
+                Text(tr("Senza computer il bot lavora solo con i suoi strumenti (shell, file). Con la VM locale ha un desktop Linux isolato che puoi guardare e prendere in mano."))
                     .font(.system(size: 12)).foregroundStyle(Theme.secondary)
             }
 
@@ -52,26 +52,26 @@ private struct LocalVMSection: View {
             if let status {
                 HStack(spacing: 6) {
                     Circle().fill(status.ready == true ? Theme.success : Theme.warning).frame(width: 7, height: 7)
-                    Text(status.ready == true ? "Pronta" : (status.container ?? "sconosciuto"))
+                    Text(status.ready == true ? tr("Pronta") : (status.container ?? tr("sconosciuto")))
                         .font(.system(size: 12.5, weight: .medium))
-                    if let runtime = status.runtime { Text("· \(runtime)").font(.system(size: 11.5)).foregroundStyle(Theme.tertiary) }
+                    if let runtime = status.runtime { Text(verbatim: "· \(runtime)").font(.system(size: 11.5)).foregroundStyle(Theme.tertiary) }
                 }
                 if let problem = status.problem {
                     Text(problem).font(.system(size: 11.5)).foregroundStyle(Theme.warning)
                 }
                 HStack {
-                    if status.imageMatches != true { action("Prepara", "pull") }
-                    if status.container == "missing" { action("Crea", "run") }
-                    if status.container == "stopped" { action("Avvia", "start") }
-                    if status.container == "running" { action("Ferma", "stop") }
-                    if status.container != "missing" { action("Rimuovi", "remove") }
+                    if status.imageMatches != true { action(tr("Prepara"), "pull") }
+                    if status.container == "missing" { action(tr("Crea"), "run") }
+                    if status.container == "stopped" { action(tr("Avvia"), "start") }
+                    if status.container == "running" { action(tr("Ferma"), "stop") }
+                    if status.container != "missing" { action(tr("Rimuovi"), "remove") }
                 }
                 if let working { ProgressView("\(working)…").controlSize(.small) }
             } else {
                 ProgressView().controlSize(.small)
             }
             ControlStrip(bot: bot)
-            Toggle("Guarda il desktop", isOn: $watching).toggleStyle(.switch).controlSize(.small).font(.system(size: 12.5))
+            Toggle(tr("Guarda il desktop"), isOn: $watching).toggleStyle(.switch).controlSize(.small).font(.system(size: 12.5))
             if watching { LiveScreen(botId: bot.id) }
         }
         .task(id: bot.id) { status = try? await model.client?.localComputer() }
@@ -103,17 +103,17 @@ private struct ControlStrip: View {
         let control = model.state.computerControl[bot.id]
         VStack(alignment: .leading, spacing: 6) {
             if let reason = control?.helpReason {
-                Label("Il bot chiede aiuto: \(reason)", systemImage: "hand.raised.fill")
+                Label(tr("Il bot chiede aiuto: %@", reason), systemImage: "hand.raised.fill")
                     .font(.system(size: 12)).foregroundStyle(Theme.warning)
             }
             HStack {
                 if control?.held == true {
-                    Button("Restituisci al bot") { act("release") }.buttonStyle(PillButtonStyle(prominent: true))
+                    Button(tr("Restituisci al bot")) { act("release") }.buttonStyle(PillButtonStyle(prominent: true))
                 } else {
-                    Button("Prendi il controllo") { act("take") }.buttonStyle(PillButtonStyle())
+                    Button(tr("Prendi il controllo")) { act("take") }.buttonStyle(PillButtonStyle())
                 }
                 if control?.helpReason != nil {
-                    Button("Ignora richiesta") { act("dismiss-help") }.buttonStyle(PillButtonStyle())
+                    Button(tr("Ignora richiesta")) { act("dismiss-help") }.buttonStyle(PillButtonStyle())
                 }
             }
         }
@@ -143,7 +143,7 @@ private struct LiveScreen: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
                 RoundedRectangle(cornerRadius: 6).fill(Theme.inset).aspectRatio(16 / 10, contentMode: .fit)
-                    .overlay(Text("In attesa del primo fotogramma…").font(.system(size: 11)).foregroundStyle(Theme.tertiary))
+                    .overlay(Text(tr("In attesa del primo fotogramma…")).font(.system(size: 11)).foregroundStyle(Theme.tertiary))
             }
         }
         .onAppear { model.watchScreens(true) }
@@ -161,22 +161,22 @@ private struct CloudComputerSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let status {
-                Text(status.backend == "vps" ? "VPS \(status.sshAlias ?? "")" : "Box: \(status.box?.state ?? (status.configured == true ? "non creato" : "non configurato"))")
+                Text(status.backend == "vps" ? "VPS \(status.sshAlias ?? "")" : tr("Box: %@", status.box?.state ?? (status.configured == true ? tr("non creato") : tr("non configurato"))))
                     .font(.system(size: 12.5))
                 if let state = model.state.computerState[bot.id] {
-                    ProgressView(state == "waking" ? "Risveglio…" : "Preparazione…").controlSize(.small)
+                    ProgressView(state == "waking" ? tr("Risveglio…") : tr("Preparazione…")).controlSize(.small)
                 }
                 if status.backend == "box" {
                     HStack {
-                        Button("Prepara") { act("provision") }.buttonStyle(PillButtonStyle())
-                        Button("Apri desktop") {
+                        Button(tr("Prepara")) { act("provision") }.buttonStyle(PillButtonStyle())
+                        Button(tr("Apri desktop")) {
                             Task {
                                 do { viewer = try await model.client?.joinCloudDesktop(botId: bot.id).url }
                                 catch { model.lastError = error.localizedDescription }
                             }
                         }
                         .buttonStyle(PillButtonStyle(prominent: true))
-                        Button("Sospendi") { act("sleep") }.buttonStyle(PillButtonStyle())
+                        Button(tr("Sospendi")) { act("sleep") }.buttonStyle(PillButtonStyle())
                     }
                     .disabled(busy)
                 }
@@ -188,7 +188,7 @@ private struct CloudComputerSection: View {
         .task(id: bot.id) { status = try? await model.client?.cloudComputer(botId: bot.id) }
         .sheet(item: Binding(get: { viewer.map { ViewerBox(url: $0) } }, set: { viewer = $0?.url })) { box in
             VStack(spacing: 0) {
-                HStack { Text("Desktop di \(bot.name)").font(.headline); Spacer(); Button("Chiudi") { viewer = nil } }.padding(10)
+                HStack { Text(tr("Desktop di %@", bot.name)).font(.headline); Spacer(); Button(tr("Chiudi")) { viewer = nil } }.padding(10)
                 WebView(url: box.url)
             }
             .frame(minWidth: 1000, minHeight: 680)
@@ -237,14 +237,14 @@ private struct ThisMacPreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Anteprima di questo Mac", isOn: $on).toggleStyle(.switch).controlSize(.small).font(.system(size: 12.5))
+            Toggle(tr("Anteprima di questo Mac"), isOn: $on).toggleStyle(.switch).controlSize(.small).font(.system(size: 12.5))
             if on {
                 if let frame {
                     Image(decorative: frame, scale: 1).resizable().aspectRatio(contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 } else if let error {
                     Text(error).font(.system(size: 11.5)).foregroundStyle(Theme.warning)
-                    Button("Apri Privacy › Registrazione schermo") {
+                    Button(tr("Apri Privacy › Registrazione schermo")) {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
                     }
                     .buttonStyle(PillButtonStyle())
@@ -266,7 +266,7 @@ private struct ThisMacPreview: View {
                     frame = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
                     error = nil
                 } catch {
-                    self.error = "Serve il permesso di Registrazione schermo per SwarmeBot."
+                    self.error = tr("Serve il permesso di Registrazione schermo per SwarmeBot.")
                 }
                 try? await Task.sleep(for: .seconds(2))
             }

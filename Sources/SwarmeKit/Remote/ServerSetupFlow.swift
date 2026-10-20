@@ -15,15 +15,15 @@ public final class ServerSetupFlow {
 
         public var title: String {
             switch self {
-            case .hostKey: return "Fingerprint del server"
-            case .key: return "Chiave dedicata"
-            case .probe: return "Controllo del server"
-            case .root: return "Caddy, cartella dei socket, avvio automatico (root)"
-            case .engine: return "Motore SwarmeBot"
-            case .service: return "Servizio e rotte HTTPS"
-            case .device: return "Token di questo Mac"
-            case .agents: return "Claude Code e omp"
-            case .done: return "Pronto"
+            case .hostKey: return tr("Fingerprint del server")
+            case .key: return tr("Chiave dedicata")
+            case .probe: return tr("Controllo del server")
+            case .root: return tr("Caddy, cartella dei socket, avvio automatico (root)")
+            case .engine: return tr("Motore SwarmeBot")
+            case .service: return tr("Servizio e rotte HTTPS")
+            case .device: return tr("Token di questo Mac")
+            case .agents: return tr("Claude Code e omp")
+            case .done: return tr("Pronto")
             }
         }
     }
@@ -90,17 +90,17 @@ public final class ServerSetupFlow {
     }
 
     public var formError: String? {
-        if host.isEmpty || user.isEmpty { return "Indica server e utente" }
-        if site.isEmpty { return "Indica il dominio (o :porta) su cui Caddy risponde" }
+        if host.isEmpty || user.isEmpty { return tr("Indica server e utente") }
+        if site.isEmpty { return tr("Indica il dominio (o :porta) su cui Caddy risponde") }
         do { try caddy.validate() } catch { return error.localizedDescription }
-        if Connection.remote(chatURL: chatURL) == nil { return "L'URL di chat non è valido" }
+        if Connection.remote(chatURL: chatURL) == nil { return tr("L'URL di chat non è valido") }
         return nil
     }
 
     /// The root script the next step will run, to show before it runs.
     public var rootPreview: String {
         if probe?.isMac == true { return RemoteScripts.rootMac }
-        return RemoteScripts.rootLinux + "\n\n# poi, per le rotte:\n" + RemoteScripts.caddyLinux
+        return RemoteScripts.rootLinux + "\n\n" + tr("# poi, per le rotte:") + "\n" + RemoteScripts.caddyLinux
     }
 
     // MARK: Running
@@ -118,7 +118,7 @@ public final class ServerSetupFlow {
             }
         } catch let failure as SSHFailure where failure == .authentication && step == .key {
             needsPassword = true
-            error = "Password non accettata"
+            error = tr("Password non accettata")
         } catch {
             self.error = error.localizedDescription
         }
@@ -161,13 +161,13 @@ public final class ServerSetupFlow {
             let found = try await RemoteAdmin(identity: identity, store: identities).probe()
             probe = found
             guard found.supported else {
-                throw ProcessRunner.Failure(message: found.isMac ? "macOS \(found.version): serve macOS 14 o successivo"
-                                                                  : "Server \(found.os) \(found.version): servono Ubuntu 24.04 o 26.04 (o un Mac)")
+                throw ProcessRunner.Failure(message: found.isMac ? tr("macOS %@: serve macOS 14 o successivo", found.version)
+                                                                  : tr("Server %@ %@: servono Ubuntu 24.04 o 26.04 (o un Mac)", found.os, found.version))
             }
-            guard found.engineArch != nil else { throw ProcessRunner.Failure(message: "Architettura \(found.arch) non supportata") }
+            guard found.engineArch != nil else { throw ProcessRunner.Failure(message: tr("Architettura %@ non supportata", found.arch)) }
             needsSudoPassword = !found.isRoot && found.sudo == "password"
             if found.sudo == "none", !found.isRoot {
-                throw ProcessRunner.Failure(message: "L'utente \(user) non può usare sudo: serve root una volta sola per Caddy e l'avvio automatico")
+                throw ProcessRunner.Failure(message: tr("L'utente %@ non può usare sudo: serve root una volta sola per Caddy e l'avvio automatico", user))
             }
             return true
         case .root:
@@ -179,11 +179,11 @@ public final class ServerSetupFlow {
             let binary: (url: URL, sha256: String)
             if probe.isMac {
                 guard let mac = macBinary(arch) else {
-                    throw ProcessRunner.Failure(message: "Il motore di questa app non è per Mac \(probe.arch): usa la build dell'app per quell'architettura")
+                    throw ProcessRunner.Failure(message: tr("Il motore di questa app non è per Mac %@: usa la build dell'app per quell'architettura", probe.arch))
                 }
                 binary = mac
             } else {
-                activity = "Scarico e verifico il motore Linux \(arch)…"
+                activity = tr("Scarico e verifico il motore Linux %@…", arch)
                 defer { activity = nil }
                 binary = try await linuxEngines.engine(arch)
             }
@@ -213,9 +213,9 @@ public final class ServerSetupFlow {
             if let connection = record.connection {
                 do {
                     let health = try await reachChat(CompanionClient(connection: connection, token: added.token))
-                    guard health.remote == true else { throw ProcessRunner.Failure(message: "all'URL di chat risponde un altro servizio") }
+                    guard health.remote == true else { throw ProcessRunner.Failure(message: tr("all'URL di chat risponde un altro servizio")) }
                 } catch {
-                    throw ProcessRunner.Failure(message: "Server pronto, ma l'URL di chat \(chatURL) non risponde da qui: \(error.localizedDescription). Se c'è un proxy davanti, configuralo e riprova.")
+                    throw ProcessRunner.Failure(message: tr("Server pronto, ma l'URL di chat %@ non risponde da qui: %@. Se c'è un proxy davanti, configuralo e riprova.", chatURL, error.localizedDescription))
                 }
             }
             sshPassword = ""
@@ -224,7 +224,7 @@ public final class ServerSetupFlow {
         case .agents:
             guard let identity, let probe, let engine, let connection = engine.connection,
                   let token = RemoteEngineStore.token(engineId: engine.id) else { return false }
-            activity = "Installo Claude Code e omp sul server…"
+            activity = tr("Installo Claude Code e omp sul server…")
             defer { activity = nil }
             agentsReport = try await ServerAgents.configure(admin: RemoteAdmin(identity: identity, store: identities),
                                                             client: CompanionClient(connection: connection, token: token),
@@ -239,7 +239,7 @@ public final class ServerSetupFlow {
     /// so the first HTTPS calls fail until it arrives (seconds, longer on retries).
     private func reachChat(_ client: CompanionClient) async throws -> RemoteHealth {
         guard tls == .public else { return try await client.remoteHealth() }
-        activity = "Attendo il certificato di Let's Encrypt…"
+        activity = tr("Attendo il certificato di Let's Encrypt…")
         defer { activity = nil }
         let deadline = Date().addingTimeInterval(120)
         while true {

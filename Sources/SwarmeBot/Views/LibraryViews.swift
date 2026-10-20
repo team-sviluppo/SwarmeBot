@@ -14,15 +14,17 @@ enum LibraryFormat {
     /// The harness's limit for text sent whole (`Library.inlineBudget`).
     static let inlineBudget = 400_000
 
-    static func tokens(_ count: Int) -> String {
-        count < 1000 ? "\(count) token" : String(format: "~%.1fk token", Double(count) / 1000).replacingOccurrences(of: ".", with: ",")
+    @MainActor static func tokens(_ count: Int) -> String {
+        if count < 1000 { return tr("%@ token", String(count)) }
+        let thousands = (Double(count) / 1000).formatted(.number.precision(.fractionLength(1)).locale(Localizer.shared.language.locale))
+        return tr("~%@k token", thousands)
     }
 
-    static func summary(_ doc: LibraryDoc) -> String {
+    @MainActor static func summary(_ doc: LibraryDoc) -> String {
         var parts: [String] = []
-        if doc.kind == "pdf" { parts.append(doc.pages == 1 ? "1 pagina" : "\(doc.pages) pagine") }
+        if doc.kind == "pdf" { parts.append(doc.pages == 1 ? tr("1 pagina") : tr("%@ pagine", String(doc.pages))) }
         parts.append(tokens(doc.tokens))
-        if doc.ocrPages > 0 { parts.append(doc.ocrPages == 1 ? "OCR su 1 pagina" : "OCR su \(doc.ocrPages) pagine") }
+        if doc.ocrPages > 0 { parts.append(doc.ocrPages == 1 ? tr("OCR su 1 pagina") : tr("OCR su %@ pagine", String(doc.ocrPages))) }
         return parts.joined(separator: " · ")
     }
 
@@ -51,16 +53,16 @@ struct LibraryTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SettingsCard("Documenti", accessory: {
-                Button(action: pick) { Label("Aggiungi…", systemImage: "plus") }
+            SettingsCard(tr("Documenti"), accessory: {
+                Button(action: pick) { Label(tr("Aggiungi…"), systemImage: "plus") }
                     .buttonStyle(PillButtonStyle())
             }) {
                 if docs.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "doc.badge.plus").font(.system(size: 22)).foregroundStyle(Theme.tertiary)
-                        Text(loaded ? "Trascina qui PDF o file di testo" : "Caricamento…")
+                        Text(loaded ? tr("Trascina qui PDF o file di testo") : tr("Caricamento…"))
                             .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.secondary)
-                        Text("Diventano la conoscenza di \(bot.name): ogni chat li usa, e puoi spegnerli chat per chat dal composer.")
+                        Text(tr("Diventano la conoscenza di %@: ogni chat li usa, e puoi spegnerli chat per chat dal composer.", bot.name))
                             .font(.system(size: 11.5)).foregroundStyle(Theme.tertiary)
                             .multilineTextAlignment(.center)
                     }
@@ -100,9 +102,9 @@ struct LibraryTab: View {
                 }
                 .background(RoundedRectangle(cornerRadius: 6).fill(Theme.inset))
                 HStack {
-                    Text("Il testo che il bot riceve, estratto dal file.").font(.system(size: 11)).foregroundStyle(Theme.tertiary)
+                    Text(tr("Il testo che il bot riceve, estratto dal file.")).font(.system(size: 11)).foregroundStyle(Theme.tertiary)
                     Spacer()
-                    Button("Chiudi") { self.preview = nil }.keyboardShortcut(.defaultAction)
+                    Button(tr("Chiudi")) { self.preview = nil }.keyboardShortcut(.defaultAction)
                 }
             }
             .padding(16)
@@ -115,10 +117,10 @@ struct LibraryTab: View {
         let reader = LibraryFormat.readsText(model.instance(bot.modelSelection.instanceId)?.driverKind)
         let how = reader
             ? (total > LibraryFormat.inlineBudget
-                ? "Insieme superano \(LibraryFormat.tokens(LibraryFormat.inlineBudget)): a ogni messaggio il modello riceve i passaggi più pertinenti."
-                : "Il modello riceve il testo intero all'inizio di ogni chat; il server lo tiene in cache dal secondo messaggio.")
-            : "Il bot riceve i percorsi e apre i documenti quando la domanda li riguarda."
-        return Text("Totale \(LibraryFormat.tokens(total)). \(how)")
+                ? tr("Insieme superano %@: a ogni messaggio il modello riceve i passaggi più pertinenti.", LibraryFormat.tokens(LibraryFormat.inlineBudget))
+                : tr("Il modello riceve il testo intero all'inizio di ogni chat; il server lo tiene in cache dal secondo messaggio."))
+            : tr("Il bot riceve i percorsi e apre i documenti quando la domanda li riguarda.")
+        return Text(tr("Totale %@. %@", LibraryFormat.tokens(total), how))
             .font(.system(size: 11.5)).foregroundStyle(Theme.tertiary)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 4)
@@ -133,8 +135,8 @@ struct LibraryTab: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = LibraryFormat.types
         panel.allowsMultipleSelection = true
-        panel.prompt = "Aggiungi"
-        panel.message = "Documenti per \(bot.name)"
+        panel.prompt = tr("Aggiungi")
+        panel.message = tr("Documenti per %@", bot.name)
         guard panel.runModal() == .OK else { return }
         add(panel.urls)
     }
@@ -152,7 +154,7 @@ struct LibraryTab: View {
     private func add(_ urls: [URL]) {
         let accepted = urls.filter { LibraryFormat.extensions.contains($0.pathExtension.lowercased()) }
         if accepted.count < urls.count {
-            model.lastError = "La libreria accetta PDF e file di testo (.md, .txt, .csv)."
+            model.lastError = tr("La libreria accetta PDF e file di testo (.md, .txt, .csv).")
         }
         guard !accepted.isEmpty else { return }
         Task {
@@ -200,16 +202,16 @@ private struct LibraryRow: View {
                 if doc.status == "ready" {
                     Button(action: onPreview) { Image(systemName: "eye") }
                         .buttonStyle(IconButtonStyle(size: 24, iconSize: 12))
-                        .help("Vedi il testo estratto")
+                        .help(tr("Vedi il testo estratto"))
                 }
                 if confirming {
-                    Button("Elimina") { confirming = false; onDelete() }
+                    Button(tr("Elimina")) { confirming = false; onDelete() }
                         .buttonStyle(PillButtonStyle(prominent: true))
                         .tint(Theme.danger)
                 } else {
                     Button { confirming = true } label: { Image(systemName: "trash") }
                         .buttonStyle(IconButtonStyle(size: 24, iconSize: 12))
-                        .help("Rimuovi dalla libreria")
+                        .help(tr("Rimuovi dalla libreria"))
                 }
             }
         }
@@ -235,11 +237,11 @@ private struct LibraryRow: View {
         case "processing":
             HStack(spacing: 5) {
                 ProgressView().controlSize(.mini)
-                Text("Conversione in corso…")
+                Text(tr("Conversione in corso…"))
             }
             .font(.system(size: 11.5)).foregroundStyle(Theme.tertiary)
         case "failed":
-            Text(doc.error ?? "Conversione non riuscita").font(.system(size: 11.5)).foregroundStyle(Theme.danger).lineLimit(2)
+            Text(doc.error ?? tr("Conversione non riuscita")).font(.system(size: 11.5)).foregroundStyle(Theme.danger).lineLimit(2)
         default:
             Text(LibraryFormat.summary(doc)).font(.system(size: 11.5)).foregroundStyle(Theme.tertiary)
         }
@@ -265,14 +267,14 @@ struct LibraryChip: View {
                 Button { open.toggle() } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "books.vertical").font(.system(size: 12))
-                        Text("\(active.count)/\(ready.count)").font(.system(size: Theme.uiSize, weight: .medium)).monospacedDigit()
+                        Text(verbatim: "\(active.count)/\(ready.count)").font(.system(size: Theme.uiSize, weight: .medium)).monospacedDigit()
                     }
                     .fixedSize()
                     .padding(.vertical, 1)
                     .foregroundStyle(active.isEmpty ? Theme.tertiary : Theme.secondary)
                 }
                 .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
-                .help("Documenti usati in questa chat")
+                .help(tr("Documenti usati in questa chat"))
                 .popover(isPresented: $open, arrowEdge: .top) { popover }
             }
         }
@@ -281,14 +283,14 @@ struct LibraryChip: View {
 
     private var popover: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Documenti in questa chat").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary)
+            Text(tr("Documenti in questa chat")).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary)
             ForEach(docs) { doc in
                 HStack(spacing: 8) {
                     Image(systemName: doc.kind == "pdf" ? "doc.richtext" : "doc.plaintext")
                         .font(.system(size: 12)).foregroundStyle(Theme.tertiary).frame(width: 16)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(doc.name).font(.system(size: 12.5)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle)
-                        Text(doc.status == "ready" ? LibraryFormat.summary(doc) : doc.status == "processing" ? "Conversione in corso…" : (doc.error ?? "Non riuscito"))
+                        Text(doc.status == "ready" ? LibraryFormat.summary(doc) : doc.status == "processing" ? tr("Conversione in corso…") : (doc.error ?? tr("Non riuscito")))
                             .font(.system(size: 11)).foregroundStyle(doc.status == "failed" ? Theme.danger : Theme.tertiary)
                     }
                     Spacer(minLength: 12)
@@ -310,6 +312,6 @@ struct LibraryChip: View {
         guard LibraryFormat.readsText(model.instance(bot.modelSelection.instanceId)?.driverKind) else { return nil }
         let total = active.reduce(0) { $0 + $1.tokens }
         guard total > LibraryFormat.inlineBudget else { return nil }
-        return "Insieme superano \(LibraryFormat.tokens(LibraryFormat.inlineBudget)): il modello riceverà solo i passaggi più pertinenti a ogni messaggio."
+        return tr("Insieme superano %@: il modello riceverà solo i passaggi più pertinenti a ogni messaggio.", LibraryFormat.tokens(LibraryFormat.inlineBudget))
     }
 }

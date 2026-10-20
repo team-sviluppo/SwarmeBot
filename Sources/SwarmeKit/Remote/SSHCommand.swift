@@ -79,11 +79,11 @@ public enum SSHFailure: LocalizedError, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .hostKeyChanged: return "La chiave del server è cambiata: va approvata di nuovo prima di continuare"
-        case .hostKeyUnknown: return "Il fingerprint del server non è ancora stato approvato"
-        case .authentication: return "Accesso rifiutato: chiave non installata o password sbagliata"
-        case let .unreachable(detail): return "Server non raggiungibile: \(detail)"
-        case let .remote(status, message): return message.isEmpty ? "Comando fallito sul server (codice \(status))" : message
+        case .hostKeyChanged: return tr("La chiave del server è cambiata: va approvata di nuovo prima di continuare")
+        case .hostKeyUnknown: return tr("Il fingerprint del server non è ancora stato approvato")
+        case .authentication: return tr("Accesso rifiutato: chiave non installata o password sbagliata")
+        case let .unreachable(detail): return tr("Server non raggiungibile: %@", detail)
+        case let .remote(status, message): return message.isEmpty ? tr("Comando fallito sul server (codice %@)", String(status)) : message
         }
     }
 

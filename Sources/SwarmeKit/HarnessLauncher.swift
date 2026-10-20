@@ -108,7 +108,7 @@ public enum HarnessEngine: String, CaseIterable, Sendable {
             process.arguments = ["-readonly", source.appendingPathComponent("messages.db").path, "VACUUM INTO '\(destination)'"]
             try process.run()
             process.waitUntilExit()
-            if process.terminationStatus != 0 { throw BackupError("VACUUM INTO di messages.db è uscito con codice \(process.terminationStatus)") }
+            if process.terminationStatus != 0 { throw BackupError(tr("VACUUM INTO di messages.db è uscito con codice %@", String(process.terminationStatus))) }
         }
         try Data("ok\n".utf8).write(to: marker)
         return target
@@ -258,14 +258,14 @@ public final class HarnessLauncher {
 
     public func start() async {
         stopping = false
-        state = .starting("Avvio del motore…")
+        state = .starting(tr("Avvio del motore…"))
         let env = ProcessInfo.processInfo.environment
 
         if let raw = env["SWARMEBOT_HARNESS_URL"], let url = URL(string: raw), let port = url.port {
             if await Self.identify(port: port, pid: nil) {
                 state = .running(port: port, owned: false)
             } else {
-                state = .failed("Nessun harness risponde su \(raw).")
+                state = .failed(tr("Nessun harness risponde su %@.", raw))
             }
             return
         }
@@ -274,13 +274,13 @@ public final class HarnessLauncher {
             let backup = try await Task.detached { try HarnessEngine.backupRealDataIfNeeded() }.value
             log.info("backup of ~/.swarmebot at \(backup.path)")
         } catch {
-            state = .failed("Backup di ~/.swarmebot non riuscito, il motore non parte: \(error)")
+            state = .failed(tr("Backup di ~/.swarmebot non riuscito, il motore non parte: %@", String(describing: error)))
             return
         }
         do {
             try HarnessEngine.ensureRuntimeDirectories()
         } catch {
-            state = .failed("Impossibile preparare ~/.swarmebot: \(error.localizedDescription)")
+            state = .failed(tr("Impossibile preparare ~/.swarmebot: %@", error.localizedDescription))
             return
         }
         let engine = HarnessEngine.selected
@@ -305,13 +305,10 @@ public final class HarnessLauncher {
         for attempt in 0..<2 {
             for port in HarnessLocator.ports {
                 guard let command = HarnessLocator.swiftCommand(port: port) else {
-                    state = .failed(
-                        "Harness non trovato. Imposta SWARMEBOT_REPO sul checkout di SwarmeBot, " +
-                            "oppure usa SWARMEBOT_HARNESS_URL per collegarti a uno già avviato."
-                    )
+                    state = .failed(tr("Motore non trovato: swarme-harness non è accanto all'app. Reinstalla SwarmeBot, oppure usa SWARMEBOT_HARNESS_URL per collegarti a un motore già avviato."))
                     return
                 }
-                state = .starting("Avvio del motore sulla porta \(port)…")
+                state = .starting(tr("Avvio del motore sulla porta %@…", String(port)))
                 if await spawn(command, port: port, shellPath: shellPath) {
                     restarts = 0
                     state = .running(port: port, owned: true)
@@ -320,9 +317,9 @@ public final class HarnessLauncher {
             }
             if attempt == 0 { try? await Task.sleep(for: .milliseconds(2500)) }
         }
-        var message = "Impossibile avviare il motore: le porte 8799/18799/28799 sono occupate o il processo esce subito."
+        var message = tr("Impossibile avviare il motore: le porte 8799/18799/28799 sono occupate o il processo esce subito.")
         if let launchError { message += " \(launchError)" }
-        message += " Vedi ~/Library/Logs/SwarmeBot/server.log."
+        message += " " + tr("Vedi ~/Library/Logs/SwarmeBot/server.log.")
         state = .failed(message)
     }
 
@@ -375,8 +372,8 @@ public final class HarnessLauncher {
         for _ in 0..<40 {
             if !process.isRunning {
                 let code = process.terminationStatus
-                let how = process.terminationReason == .uncaughtSignal ? "segnale \(code)" : "codice \(code)"
-                launchError = "Il processo è uscito subito (\(how))."
+                let how = process.terminationReason == .uncaughtSignal ? tr("segnale %@", String(code)) : tr("codice %@", String(code))
+                launchError = tr("Il processo è uscito subito (%@).", how)
                 self.process = nil
                 return false
             }
@@ -402,11 +399,11 @@ public final class HarnessLauncher {
         // harness that dies on boot every time needs a person, not a loop.
         restarts += 1
         guard restarts <= 5 else {
-            state = .failed("Il motore si è chiuso \(restarts) volte di seguito. Vedi ~/Library/Logs/SwarmeBot/server.log.")
+            state = .failed(tr("Il motore si è chiuso %@ volte di seguito. Vedi ~/Library/Logs/SwarmeBot/server.log.", String(restarts)))
             return
         }
         let delay = min(1 << restarts, 15)
-        state = .starting("Il motore si è chiuso (codice \(code)); riavvio tra \(delay)s…")
+        state = .starting(tr("Il motore si è chiuso (codice %@); riavvio tra %@s…", String(code), String(delay)))
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             await self?.start()

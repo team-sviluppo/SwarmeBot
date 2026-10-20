@@ -127,7 +127,7 @@ struct StatusView: View {
                 .frame(maxWidth: 420)
                 .textSelection(.enabled)
             if case .failed = status {
-                Button("Riprova") { model.retry() }
+                Button(tr("Riprova")) { model.retry() }
                     .buttonStyle(PillButtonStyle(prominent: true))
             } else {
                 ProgressView()
@@ -150,9 +150,9 @@ struct StatusView: View {
 
     private var title: String {
         switch status {
-        case .starting, .connecting: return "Avvio di SwarmeBot"
-        case .offline: return "Connessione persa"
-        case .failed: return "Il motore non è partito"
+        case .starting, .connecting: return tr("Avvio di SwarmeBot")
+        case .offline: return tr("Connessione persa")
+        case .failed: return tr("Il motore non è partito")
         case .live: return ""
         }
     }
@@ -160,8 +160,8 @@ struct StatusView: View {
     private var detail: String {
         switch status {
         case let .starting(message): return message
-        case .connecting: return "Collegamento al motore…"
-        case let .offline(message): return message + " Riprovo automaticamente."
+        case .connecting: return tr("Collegamento al motore…")
+        case let .offline(message): return tr("%@ Riprovo automaticamente.", message)
         case let .failed(message): return message
         case .live: return ""
         }
@@ -174,13 +174,13 @@ struct EmptyChatView: View {
     var body: some View {
         VStack(spacing: 10) {
             SwarmeAvatar(color: "blue", size: 88, state: .happy)
-            Text("Nessuna chat selezionata")
+            Text(tr("Nessuna chat selezionata"))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.ink)
-            Text("Scegli un bot a sinistra o creane uno nuovo.")
+            Text(tr("Scegli un bot a sinistra o creane uno nuovo."))
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.secondary)
-            Button("Nuovo bot") { Task { await model.createBot() } }
+            Button(tr("Nuovo bot")) { Task { await model.createBot() } }
                 .buttonStyle(PillButtonStyle(prominent: true))
         }
     }
