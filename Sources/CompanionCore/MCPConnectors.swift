@@ -68,6 +68,8 @@ public enum MCPConnectorValue: Decodable, Hashable, Sendable {
 public struct MCPOAuthSettings: Decodable, Hashable, Sendable {
     public var clientId: String?
     public var scope: String?
+    /// Empty or missing: the engine's own callback.
+    public var redirectUri: String?
     public var clientSecret: MCPConnectorValue?
 }
 
@@ -143,6 +145,7 @@ public struct MCPConnectorInput: Sendable {
     public var auth = "none"
     public var oauthClientId = ""
     public var oauthScope = ""
+    public var oauthRedirectUri = ""
     /// Typed only to set or change it; empty keeps what is stored.
     public var oauthClientSecret = ""
     public var oauthClientSecretStored = false
@@ -183,6 +186,7 @@ public struct MCPConnectorInput: Sendable {
         auth = connector.auth ?? "none"
         oauthClientId = connector.oauth?.clientId ?? ""
         oauthScope = connector.oauth?.scope ?? ""
+        oauthRedirectUri = connector.oauth?.redirectUri ?? ""
         if case let .secret(set)? = connector.oauth?.clientSecret { oauthClientSecretStored = set }
     }
 
@@ -214,7 +218,7 @@ public struct MCPConnectorInput: Sendable {
         }
         body["auth"] = transport == "http" ? auth : "none"
         if transport == "http", auth == "oauth" {
-            var oauth: [String: Any] = ["clientId": oauthClientId, "scope": oauthScope]
+            var oauth: [String: Any] = ["clientId": oauthClientId, "scope": oauthScope, "redirectUri": oauthRedirectUri]
             if !oauthClientSecret.isEmpty { oauth["clientSecret"] = ["secret": true, "value": oauthClientSecret] }
             else if oauthClientSecretStored { oauth["clientSecret"] = ["secret": true] }
             body["oauth"] = oauth

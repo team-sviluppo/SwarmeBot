@@ -463,6 +463,32 @@ public final class Routes {
                 ("Content-Type", mime), ("Cache-Control", "private, max-age=31536000, immutable"), ("X-Content-Type-Options", "nosniff"),
             ], body: data))
         }
+        let filesRoute = match(#"^/api/threads/([\w-]+)/files$"#, path)
+        let contentRoute = match(#"^/api/threads/([\w-]+)/files/content$"#, path)
+        if let threadId = (filesRoute ?? contentRoute)?.first {
+            guard let roots = ThreadFiles.roots(store, harness.paths, threadId: threadId) else { return fail(404, "no such thread") }
+            let tools = r.deviceId == nil ? "" : ThreadFiles.toolText(store, threadId: threadId)
+            if filesRoute != nil, method == "POST" {
+                guard let references = try r.json()["paths"]?.array?.compactMap(\.string) else { return fail(400, "paths must be an array of strings") }
+                guard references.count <= ThreadFiles.maxPaths else { return fail(400, "at most \(ThreadFiles.maxPaths) paths") }
+                let files: [JSON] = references.compactMap { reference in
+                    guard let file = ThreadFiles.resolve(reference, roots: roots, toolText: tools, remote: r.deviceId != nil) else { return nil }
+                    return ["ref": .string(reference), "path": .string(file.path), "name": .string((file.path as NSString).lastPathComponent),
+                            "bytes": .number(Double(file.bytes))]
+                }
+                return ok(["files": .array(files)])
+            }
+            if contentRoute != nil, method == "GET" {
+                guard let file = ThreadFiles.resolve(r.query["path"] ?? "", roots: roots, toolText: tools, remote: r.deviceId != nil) else {
+                    return fail(404, "no such file")
+                }
+                guard file.bytes <= ThreadFiles.maxBytes else { return fail(413, "file exceeds \(ThreadFiles.maxBytes) bytes") }
+                guard let data = try? Data(contentsOf: URL(fileURLWithPath: file.path)) else { return fail(404, "no such file") }
+                return .response(HTTPResponse(status: 200, headers: [
+                    ("Content-Type", "application/octet-stream"), ("Cache-Control", "no-store"), ("X-Content-Type-Options", "nosniff"),
+                ], body: data))
+            }
+        }
         if method == "GET", path == "/api/decisions" {
             return ok(["decisions": .array(DecisionLog.read(harness.paths, limit: Int(r.query["limit"] ?? "") ?? 200))])
         }

@@ -323,8 +323,15 @@ private struct EntriesSection: View {
 private struct ToolsSection: View {
     let connector: MCPConnector
     @Binding var input: MCPConnectorInput
+    @State private var query = ""
 
     private var tools: [MCPConnectorCheck.Tool] { connector.lastCheck?.tools ?? [] }
+
+    /// The tools whose name matches the search; all of them without one.
+    private var shown: [MCPConnectorCheck.Tool] {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? tools : tools.filter { $0.name.localizedCaseInsensitiveContains(text) }
+    }
 
     private func isOn(_ name: String) -> Bool {
         switch input.toolMode {
@@ -335,9 +342,9 @@ private struct ToolsSection: View {
     }
 
     /// Stored as "everything but": a tool the server adds later starts on.
-    private func set(_ name: String, _ on: Bool) {
+    private func set(_ names: [String], _ on: Bool) {
         var off = Set(tools.map(\.name).filter { !isOn($0) })
-        if on { off.remove(name) } else { off.insert(name) }
+        if on { off.subtract(names) } else { off.formUnion(names) }
         input.toolMode = off.isEmpty ? "all" : "deny"
         input.toolNames = off.sorted()
     }
@@ -360,8 +367,24 @@ private struct ToolsSection: View {
             } else {
                 Text(tr("Non ancora provato: usa «Prova connessione».")).font(.system(size: 12)).foregroundStyle(.secondary)
             }
-            ForEach(tools) { tool in
-                Toggle(isOn: Binding(get: { isOn(tool.name) }, set: { set(tool.name, $0) })) {
+            if !tools.isEmpty {
+                HStack(spacing: 8) {
+                    TextField(tr("Cerca"), text: $query, prompt: Text(tr("Cerca strumenti per nome")))
+                        .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                    // with a search, only the tools it shows
+                    Button(tr("Abilita tutti")) { set(shown.map(\.name), true) }
+                        .disabled(shown.allSatisfy { isOn($0.name) })
+                    Button(tr("Disabilita tutti")) { set(shown.map(\.name), false) }
+                        .disabled(shown.allSatisfy { !isOn($0.name) })
+                }
+                .controlSize(.small)
+                if shown.isEmpty {
+                    Text(tr("Nessuno strumento con questo nome.")).font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            ForEach(shown) { tool in
+                Toggle(isOn: Binding(get: { isOn(tool.name) }, set: { set([tool.name], $0) })) {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(tool.name).font(.system(size: 12, design: .monospaced))
@@ -379,7 +402,7 @@ private struct ToolsSection: View {
             Text(tr("Strumenti"))
         } footer: {
             if !tools.isEmpty {
-                Text(tr("Gli strumenti spenti non arrivano a nessun bot. Ricordati di salvare.")).font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text(tr("Gli strumenti spenti non arrivano a nessun bot. Con una ricerca, «Abilita tutti» e «Disabilita tutti» valgono solo per gli strumenti trovati. Ricordati di salvare.")).font(.system(size: 11)).foregroundStyle(.tertiary)
             }
         }
     }
@@ -399,6 +422,10 @@ private struct OAuthSection: View {
     @State private var manual = false
 
     private var status: String { connector?.oauthState?.status ?? "disconnected" }
+    private var effectiveRedirect: String {
+        let typed = input.oauthRedirectUri.trimmingCharacters(in: .whitespaces)
+        return typed.isEmpty ? redirect ?? "" : typed
+    }
 
     var body: some View {
         Section {
@@ -426,19 +453,20 @@ private struct OAuthSection: View {
                             prompt: Text(input.oauthClientSecretStored ? tr("salvato — vuoto per non cambiarlo") : tr("facoltativo")))
                 TextField(tr("Scope"), text: $input.oauthScope, prompt: Text(tr("vuoto = quelli che chiede il server")))
                     .font(.system(size: 12, design: .monospaced))
-                if let redirect {
-                    LabeledContent(tr("Redirect URI")) {
-                        HStack(spacing: 6) {
-                            Text(redirect).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
-                            Button(tr("Copia")) {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(redirect, forType: .string)
-                            }
-                            .controlSize(.small)
-                        }
+                HStack(spacing: 6) {
+                    TextField(tr("Redirect URI"), text: $input.oauthRedirectUri, prompt: redirect.map { Text(verbatim: $0) })
+                        .font(.system(size: 12, design: .monospaced))
+                    Button(tr("Copia")) {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(effectiveRedirect, forType: .string)
                     }
+                    .controlSize(.small)
+                    .disabled(effectiveRedirect.isEmpty)
                 }
                 Text(tr("Per i servizi che non accettano la registrazione automatica (per esempio Meta): crea un'app sul loro portale sviluppatori, aggiungi questo Redirect URI e incolla qui il suo Client ID (per Meta, l'App ID)."))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(tr("Se il servizio accetta solo redirect HTTPS (Meta, con l'app pubblicata), scrivi qui l'indirizzo di una tua pagina HTTPS che rimanda a quello del motore, con la stessa query string."))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -459,7 +487,6 @@ private struct OAuthSection: View {
         guard let saved = await saveFirst() else { return }
         switch await model.oauthLogin(saved) {
         case let .success(started):
-            redirect = started.redirect
             note = tr("Completa l'accesso nel browser: lo stato qui si aggiorna da solo.")
             openURL(started.url)
         case let .failure(error):

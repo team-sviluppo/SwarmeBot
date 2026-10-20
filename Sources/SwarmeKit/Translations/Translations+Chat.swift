@@ -1,6 +1,10 @@
 // English for the chat window: sidebar, header, transcript, composer, inspector, palette, menus, notifications.
 extension Translations {
     static let chat: [String: String] = [
+        "Copia percorso": "Copy Path",
+        "File non trovato: %@": "File not found: %@",
+        "Mostra nel Finder": "Show in Finder",
+        "Salva una copia…": "Save a Copy…",
         "%@ membri": "%@ members",
         "%@ Riprovo automaticamente.": "%@ Retrying automatically.",
         "%@ sta lavorando — invia quando il turno finisce": "%@ is working — send when the turn ends",

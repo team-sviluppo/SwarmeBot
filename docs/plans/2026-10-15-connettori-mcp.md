@@ -546,6 +546,13 @@ cambiano. Per il resto si verifica con:
     client che ha in elenco, cioè Claude, ChatGPT e Perplexity) risponde con l'errore del server più cosa
     fare e il redirect da registrare; con l'App ID inserito come Client ID il login parte (verificato
     fino all'URL del dialogo di Facebook, non fino al token: serve un'app Meta).
+  - il redirect del motore è `http://localhost:<porta>/oauth/mcp/callback` (non `127.0.0.1`: Meta non
+    accetta un IP tra i domini dell'app). Meta accetta `http://localhost` solo con l'app in sviluppo;
+    pubblicata, vuole HTTPS su un dominio vero. Per questo `oauth.redirectUri` (facoltativo, HTTPS o
+    HTTP loopback) sostituisce il redirect del motore nel login e nello scambio del codice: punta a una
+    pagina che rimanda al callback del motore con la stessa query, per esempio con nginx
+    `location = /oauth/mcp/callback { return 302 http://localhost:8799/oauth/mcp/callback$is_args$args; }`.
+    Verificato con i test; il login con Meta attraverso il proxy non ancora.
 - App: autenticazione «Nessuna o header» / «OAuth» nei connettori HTTP; sezione OAuth con stato,
   «Accedi…» (salva, poi apre il browser), «Esci», client registrato a mano (ID, secret, scope, redirect
   URI da registrare); nell'elenco, «da collegare» finché manca il login.

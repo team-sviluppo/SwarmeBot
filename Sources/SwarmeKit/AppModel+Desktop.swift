@@ -84,6 +84,54 @@ extension AppModel {
         return try? await client?.attachment(named: name)
     }
 
+    // MARK: - Files in replies
+
+    /// The files a settled reply points at that the engine can hand over;
+    /// asked once per message. An engine without the route shows none.
+    public func replyFiles(threadId: String, messageId: String, text: String) async -> [ReplyFile] {
+        let key = "\(threadId)/\(messageId)"
+        if let cached = replyFileCache[key] { return cached }
+        let references = ReplyFiles.candidates(in: text)
+        guard !references.isEmpty, let client else { return [] }
+        guard let found = try? await client.replyFiles(threadId: threadId, references: references) else { return [] }
+        // the same file named twice (a link and its full path) is one card
+        var seen = Set<String>()
+        let files = found.filter { seen.insert($0.path).inserted }
+        replyFileCache[key] = files
+        return files
+    }
+
+    /// One reference, e.g. a link clicked in a reply.
+    public func replyFile(threadId: String, reference: String) async -> ReplyFile? {
+        guard let client else { return nil }
+        do {
+            return try await client.replyFiles(threadId: threadId, references: [reference]).first
+        } catch {
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// A file on this Mac to open or copy: the file itself on this Mac's
+    /// engine, a copy fetched into a temporary folder on a remote one.
+    public func localURL(for file: ReplyFile, threadId: String) async -> URL? {
+        guard isRemote else { return URL(fileURLWithPath: file.path) }
+        guard let client else { return nil }
+        do {
+            let data = try await client.replyFileContent(threadId: threadId, path: file.path)
+            let folder = FileManager.default.temporaryDirectory
+                .appendingPathComponent("SwarmeBot Files", isDirectory: true)
+                .appendingPathComponent(String(file.path.hashValue.magnitude), isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let url = folder.appendingPathComponent(file.name)
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
     // MARK: - Cards
 
     public func answer(threadId: String, card: OptionCard, selected: [String], custom: String?) async {

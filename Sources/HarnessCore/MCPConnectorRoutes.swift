@@ -75,7 +75,7 @@ enum MCPConnectorRoutes {
             case "start":
                 do {
                     let url = try await harness.mcpOAuth.start(id)
-                    return respond(200, ["authorizationUrl": .string(url.absoluteString), "redirectUri": .string(harness.mcpOAuth.redirectUri)])
+                    return respond(200, ["authorizationUrl": .string(url.absoluteString), "redirectUri": .string(harness.mcpOAuth.redirectUri(for: id))])
                 } catch {
                     return fail(400, error.localizedDescription)
                 }

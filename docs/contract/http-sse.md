@@ -128,6 +128,8 @@ Shape ricorrenti: **WireBot** = `BotRecord` senza `resumeCursors`, con `tasks[]`
 | GET | `/api/threads/:tid/events` | `limit` (>0; default 300, max 2000) | `{entries: ({kind:"runtime",at,data:RuntimeEvent}\|{kind:"native",at,data:{at,dir:"in"\|"out",source,msg}})[], total:{runtime,native}}` (Inspector) | ✅ | ❌ |
 | POST | `/api/attachments` | **body raw** immagine, `Content-Type: image/*` (max `IMAGE_MAX_BYTES`) | 201 `{path, mime, bytes}` (il path finisce nel prompt come `<attached-image path="…"/>`) | ✅ | ❌ |
 | GET | `/api/attachments/:name` | — | bytes, `nosniff`, immutable | ✅ | ❌ |
+| POST | `/api/threads/:tid/files` | `{paths: string[]}` (max 20: link, percorsi assoluti, `~/…`, `file://…` o relativi alla cartella della chat) | `{files: {ref, path, name, bytes}[]}`, solo i file regolari che esistono; 404 se il thread non è di un bot né di una room. Da un client remoto solo i file dentro le cartelle della chat (task, bot, room, workspace dei membri; symlink risolti) o nominati da uno strumento di quella chat | — (solo Swift) | ❌ |
+| GET | `/api/threads/:tid/files/content` | `path` (come sopra) | bytes `application/octet-stream`, `nosniff`, `no-store`; 404 se non raggiungibile, 413 oltre 50 MB | — (solo Swift) | ❌ |
 
 ### 2.4 Task (contesti separati di un bot)
 

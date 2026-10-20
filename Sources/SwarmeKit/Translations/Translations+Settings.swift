@@ -181,7 +181,11 @@ extension Translations {
         "Non ancora provato: usa «Prova connessione».": "Not tested yet: use “Test connection”.",
         "sola lettura": "read-only",
         "Strumenti": "Tools",
-        "Gli strumenti spenti non arrivano a nessun bot. Ricordati di salvare.": "Tools that are off reach no bot. Remember to save.",
+        "Gli strumenti spenti non arrivano a nessun bot. Con una ricerca, «Abilita tutti» e «Disabilita tutti» valgono solo per gli strumenti trovati. Ricordati di salvare.": "Tools turned off reach no bot. With a search, “Enable all” and “Disable all” apply only to the tools found. Remember to save.",
+        "Cerca strumenti per nome": "Search tools by name",
+        "Abilita tutti": "Enable all",
+        "Disabilita tutti": "Disable all",
+        "Nessuno strumento con questo nome.": "No tool with this name.",
         "Connesso": "Connected",
         "Accesso scaduto": "Sign-in expired",
         "Non connesso": "Not connected",
@@ -308,6 +312,7 @@ extension Translations {
         "Copia": "Copy",
         "Oppure: POST %@ con header Authorization: Bearer %@": "Or: POST %@ with header Authorization: Bearer %@",
         "Fatto": "Done",
+        "Se il servizio accetta solo redirect HTTPS (Meta, con l'app pubblicata), scrivi qui l'indirizzo di una tua pagina HTTPS che rimanda a quello del motore, con la stessa query string.": "If the service only accepts HTTPS redirects (Meta, once the app is published), enter the address of an HTTPS page of yours that forwards to the engine's, with the same query string.",
         "Per i servizi che non accettano la registrazione automatica (per esempio Meta): crea un'app sul loro portale sviluppatori, aggiungi questo Redirect URI e incolla qui il suo Client ID (per Meta, l'App ID).": "For services that don't accept automatic registration (Meta, for example): create an app on their developer portal, add this redirect URI and paste its client ID here (for Meta, the app ID).",
     ]
 }

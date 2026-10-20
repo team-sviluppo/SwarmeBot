@@ -51,6 +51,8 @@ public final class AppModel {
 
     @ObservationIgnored private let launcher = HarnessLauncher()
     @ObservationIgnored public internal(set) var client: CompanionClient?
+    /// The files each settled reply points at, by thread and message (AppModel+Desktop.swift).
+    @ObservationIgnored var replyFileCache: [String: [ReplyFile]] = [:]
     /// Which engine the window shows: this Mac's, or a remote one (AppModel+Remote.swift).
     public internal(set) var engineChoice: EngineChoice = .local
     public internal(set) var remoteEngines: [RemoteEngine] = []
