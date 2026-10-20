@@ -270,6 +270,23 @@ extension CompanionClient {
         return data
     }
 
+    /// `POST /api/threads/:tid/files`: which of these references name a file
+    /// the engine can hand over.
+    public func replyFiles(threadId: String, references: [String]) async throws -> [ReplyFile] {
+        struct Answer: Decodable { var files: [ReplyFile] }
+        let request = try makeRequest("POST", "/api/threads/\(threadId)/files", body: ["paths": references])
+        return try await send(request, as: Answer.self).files
+    }
+
+    /// `GET /api/threads/:tid/files/content`: the bytes of one of those files.
+    public func replyFileContent(threadId: String, path: String) async throws -> Data {
+        var request = try makeRequest("GET", "/api/threads/\(threadId)/files/content", query: [URLQueryItem(name: "path", value: path)])
+        request.timeoutInterval = 120
+        let (data, response) = try await perform(request)
+        try Self.check(response, data)
+        return data
+    }
+
     // MARK: Config and engines
 
     /// `secretStorage=external` keeps credentials out of config.json: the app

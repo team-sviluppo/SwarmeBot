@@ -276,6 +276,8 @@ struct MessageRow: View {
                         }
                             .contextMenu { messageMenu }
                     }
+                    .replyFileLinks(threadId: threadId, model: model)
+                    ReplyFileCards(message: message, threadId: threadId)
                     if message.interrupted == true {
                         Label(tr("Interrotto"), systemImage: "stop.circle")
                             .font(.system(size: 12))
