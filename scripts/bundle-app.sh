@@ -66,6 +66,9 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION:-0.1.0}" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER:-1}" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${SPARKLE_FEED_URL:-https://github.com/team-sviluppo/SwarmeBot/releases/latest/download/appcast.xml}" "$APP/Contents/Info.plist"
+# check every 6 hours (Updater also checks at every launch), on by default without asking
+/usr/libexec/PlistBuddy -c "Add :SUScheduledCheckInterval integer 21600" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :SUEnableAutomaticChecks bool true" "$APP/Contents/Info.plist"
 if [[ -n "${SPARKLE_PUBLIC_KEY:-}" ]]; then
   /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_KEY" "$APP/Contents/Info.plist"
 fi

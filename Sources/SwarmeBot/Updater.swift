@@ -25,6 +25,8 @@ final class Updater: ObservableObject {
         self.controller = controller
         available = true
         automaticChecks = controller.updater.automaticallyChecksForUpdates
+        // the scheduled check waits for its interval; a launch always looks
+        if automaticChecks { controller.updater.checkForUpdatesInBackground() }
     }
 
     func checkForUpdates() {
