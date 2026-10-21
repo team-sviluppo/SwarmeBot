@@ -301,7 +301,7 @@ public struct CompanionState: Sendable {
 
         // Config and connectors are refetched by whoever shows them; nothing to fold here.
         // The session window lives on the instance list, which the app keeps.
-        case .config, .mcpConnectors, .usageLimit, .unknown:
+        case .config, .mcpConnectors, .skills, .usageLimit, .unknown:
             break
         }
     }

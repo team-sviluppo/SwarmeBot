@@ -92,6 +92,8 @@ extension AppModel {
         instances = []
         config = nil
         mcpConnectors = []
+        skills = []
+        skillsFolder = nil
         webhookIngress = nil
         selection = nil
         client = nil

@@ -202,6 +202,23 @@ La **selezione del modello per bot** non ha una route dedicata: si fa con `PATCH
 selezionate per turno lato server (`selectBundledSkills(text, capabilities)`), iniettate nel system prompt;
 `phoneMcp` attiva l'integrazione phone. Per il client nativo l'unico contratto è la variabile d'ambiente.
 
+**Solo Swift (2026-10-21): skill universali** (`docs/plans/2026-10-21-skill.md`), una cosa diversa dalle
+skill bundle di Node.
+
+| Metodo | Path | Request | Risposta |
+|---|---|---|---|
+| GET | `/api/skills` | — | `{skills: [Skill]}` |
+| POST | `/api/skills` | `{files: [{path, content (base64), executable?}], replace?}` | 201 `{skill}`; 409 se esiste senza `replace`; 413 oltre 8 MB |
+| GET | `/api/skills/:name` | — | `{skill, content}` (testo di `SKILL.md`) |
+| PUT | `/api/skills/:name` | `{content}` | `{skill}` (riscrive solo `SKILL.md`, il `name` non cambia) |
+| DELETE | `/api/skills/:name` | — | `{ok: true}`; la toglie da `bot.skills` e `task.skills` |
+| GET | `/api/skills-folder` | — | `{folder, defaultFolder, custom}` |
+| PUT | `/api/skills-folder` | `{folder: string\|null}` | come GET (null torna al default) |
+
+`Skill` = `{id, name, description, files: [path], bytes, tokens, hasScripts, updatedAt}`. Sul bot:
+`PATCH /api/bots/:id` con `skills: [{id, defaultOn}]`; sulla chat: `PATCH /api/bots/:id/tasks/:tid` con
+`skills: {name: bool}` (solo le differenze dal default del bot). Ogni modifica manda il frame `skills`.
+
 ### 2.11 Computer: Local VM, Box, VPS, controllo
 
 | Metodo | Path | Request | Risposta | React | CC |
@@ -311,6 +328,7 @@ CompanionCore copre **25** route dell'harness (+ `POST /api/pair` del sidecar).
 | `webhook` | `webhook: WebhookTrigger` | WebhookManager | ❌ |
 | `webhook.deleted` | `webhookId` | WebhookManager | ❌ |
 | `webhook.attempt` | `attempt: WebhookAttempt` | WebhookManager | ❌ |
+| `skills` | — | **solo Swift** (2026-10-21): repository delle skill o sua cartella cambiati; il client rilegge `/api/skills` | ✅ |
 | `usage-limit` | `instanceId`, `usageLimit:{window:"five_hour", utilization (0–1, oltre 1 se sopra il tetto), resetsAt? (epoch s)}` | **solo Swift** (2026-10-20): `rate_limit_event` di Claude, solo quando il valore cambia; mai come `runtime` | ✅ |
 
 ### 3.4 Eventi runtime rilanciati (`kind:"runtime"`)

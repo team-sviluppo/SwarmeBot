@@ -16,6 +16,7 @@ see any of this):
 after a `tool` message the reply is "Risultato: " + every trailing result.
 Model fake/no-tools answers 400 to any request with tools.
 FAKE_OPENAI_HERMES=1 adds fake/hermes-1, owned_by hermes, to /models.
+FAKE_OPENAI_RECORD_SYSTEM=1 records the system message too.
 """
 import json
 import os
@@ -63,6 +64,8 @@ class Handler(BaseHTTPRequestHandler):
             "last": (body.get("messages") or [{}])[-1].get("content"),
             "stream": body.get("stream"),
         }
+        if os.environ.get("FAKE_OPENAI_RECORD_SYSTEM"):
+            entry["system"] = next((m.get("content") for m in body.get("messages", []) if m.get("role") == "system"), None)
         if "tools" in body:
             entry["tools"] = [t["function"]["name"] for t in body["tools"]]
         with open(RECORD, "a") as f:

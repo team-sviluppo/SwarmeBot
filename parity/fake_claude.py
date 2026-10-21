@@ -11,7 +11,8 @@ The prompt picks the script:
   CONNETTORE <server> <text>  calls `echo` on that connector, lists the mounted servers
   anything else: streamed text, one tool call, a result
 
-FAKE_CLAUDE_RECORD appends one JSON line per turn: the flags that matter.
+FAKE_CLAUDE_RECORD appends one JSON line per turn: the flags that matter, and
+with FAKE_CLAUDE_RECORD_SYSTEM=1 the system prompt text too.
 """
 import json
 import os
@@ -55,6 +56,8 @@ if record:
             "allowedTools": after("--allowedTools"),
             "prompt": prompt,
             "apiKeyLeaked": "ANTHROPIC_API_KEY" in os.environ,
+            # opt-in, so the parity traces stay as they were
+            **({"systemPrompt": after("--append-system-prompt")} if os.environ.get("FAKE_CLAUDE_RECORD_SYSTEM") else {}),
         }) + "\n")
 
 out({"type": "system", "subtype": "init", "session_id": session, "model": after("--model") or "claude-fake"})

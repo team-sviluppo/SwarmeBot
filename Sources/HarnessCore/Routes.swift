@@ -55,6 +55,7 @@ public final class Routes {
         if let team = await TeamRoutes.handle(r, harness: harness) { return team }
         if let avatar = AvatarRoutes.handle(r, harness: harness) { return avatar }
         if let connectors = try await MCPConnectorRoutes.handle(r, harness: harness) { return connectors }
+        if let skills = try SkillRoutes.handle(r, harness: harness) { return skills }
 
         // Mutations that carry a body must declare JSON (no CSRF via HTML forms).
         // DELETE has no body and is not a form method, so a library delete is allowed without the header.
@@ -258,6 +259,14 @@ public final class Routes {
                     var clean: [String: Bool] = [:]
                     for (id, value) in map where harness.mcpConnectors.connector(id) != nil { clean[id] = value.bool }
                     task = store.setTaskConnectors(m[0], m[1], clean) ?? task
+                }
+                if let overrides = body["skills"] {
+                    guard let map = overrides.object, map.count <= 50, map.allSatisfy({ $0.value.bool != nil }) else {
+                        return fail(400, "skills must be an object of skill name → true/false")
+                    }
+                    var clean: [String: Bool] = [:]
+                    for (id, value) in map where Skills.isValidId(id) { clean[id] = value.bool }
+                    task = store.setTaskSkills(m[0], m[1], clean) ?? task
                 }
                 if let off = body["libraryOff"] {
                     guard let list = off.array, list.allSatisfy({ $0.string != nil }) else { return fail(400, "libraryOff must be a list of document ids") }
@@ -590,6 +599,23 @@ public final class Routes {
                 clean.append(["id": .string(id), "defaultOn": .bool(entry["defaultOn"]?.bool ?? true)])
             }
             patch["connectors"] = .array(clean)
+        }
+        if let list = body["skills"] {
+            // [{id, defaultOn}], like the connectors; a skill missing from the
+            // folder is refused here, but one that vanishes later (a shared
+            // folder) just drops out of turns
+            guard let entries = list.array, entries.count <= 50 else { return fail(400, "skills must be a list of at most 50 {id, defaultOn}") }
+            var seen = Set<String>()
+            var clean: [JSON] = []
+            for entry in entries {
+                guard let id = entry["id"]?.string, harness.skills.skill(id) != nil else {
+                    return fail(400, "skills: unknown skill \(entry["id"]?.string ?? "")")
+                }
+                guard seen.insert(id).inserted else { return fail(400, "skills: \(id) is listed twice") }
+                if let on = entry["defaultOn"], on.bool == nil { return fail(400, "skills: defaultOn must be true or false") }
+                clean.append(["id": .string(id), "defaultOn": .bool(entry["defaultOn"]?.bool ?? true)])
+            }
+            patch["skills"] = .array(clean)
         }
         if let allowed = body["alwaysAllow"] {
             guard let list = allowed.array, list.allSatisfy({ $0.string != nil }) else { return fail(400, "alwaysAllow must be a list of tool keys") }
