@@ -551,20 +551,37 @@ public final class Store {
         }
     }
 
+    /// Per-conversation skill switches, like the connectors': only the
+    /// choices that differ from the bot's defaults.
+    @discardableResult
+    public func setTaskSkills(_ botId: String, _ threadId: String, _ overrides: [String: Bool]) -> JSONObject? {
+        updateTask(botId, threadId) { task in
+            var map = JSONObject()
+            for (id, on) in overrides.sorted(by: { $0.key < $1.key }) { map[id] = .bool(on) }
+            task["skills"] = map.isEmpty ? Optional<JSON>.none : .object(map)
+        }
+    }
+
     /// A deleted connector leaves no trace on bots or their conversations.
-    public func forgetConnector(_ id: String) {
+    public func forgetConnector(_ id: String) { forget("connectors", id) }
+
+    /// Nor does a deleted skill.
+    public func forgetSkill(_ id: String) { forget("skills", id) }
+
+    /// `field` is a bot's `[{id, defaultOn}]` list and its tasks' `{id: on}` switches.
+    private func forget(_ field: String, _ id: String) {
         var changed: [String] = []
         for index in bots.indices {
             var touched = false
-            if let list = bots[index]["connectors"]?.array, list.contains(where: { $0["id"]?.string == id }) {
-                bots[index]["connectors"] = .array(list.filter { $0["id"]?.string != id })
+            if let list = bots[index][field]?.array, list.contains(where: { $0["id"]?.string == id }) {
+                bots[index][field] = .array(list.filter { $0["id"]?.string != id })
                 touched = true
             }
             if var tasks = bots[index]["tasks"]?.array {
                 for at in tasks.indices {
-                    guard var task = tasks[at].object, var map = task["connectors"]?.object, map[id] != nil else { continue }
+                    guard var task = tasks[at].object, var map = task[field]?.object, map[id] != nil else { continue }
                     map = map.removing(id)
-                    task["connectors"] = map.isEmpty ? Optional<JSON>.none : .object(map)
+                    task[field] = map.isEmpty ? Optional<JSON>.none : .object(map)
                     tasks[at] = .object(task)
                     touched = true
                 }

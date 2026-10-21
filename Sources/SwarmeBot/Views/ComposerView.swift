@@ -34,6 +34,9 @@ struct ComposerView: View {
             if let candidates = mentionCandidates, !candidates.isEmpty {
                 MentionList(bots: candidates) { insertMention($0) }
             }
+            if let candidates = skillCandidates, !candidates.isEmpty {
+                SkillSuggestionList(skills: candidates) { insertSkill($0) }
+            }
             PendingApprovalSlot(threadId: threadId)
             if !(attachments[threadId] ?? []).isEmpty {
                 AttachmentChips(items: attachments[threadId] ?? []) { id in
@@ -123,6 +126,7 @@ struct ComposerView: View {
                     }
                     LibraryChip(bot: bot)
                     ConnectorsChip(bot: bot)
+                    SkillsChip(bot: bot)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 6)
@@ -294,6 +298,64 @@ struct ComposerView: View {
         guard let at = text.lastIndex(of: "@") else { return }
         text.replaceSubrange(at..., with: "@\(bot.name) ")
         drafts[threadId] = text
+    }
+}
+
+// MARK: Skills
+
+extension ComposerView {
+    /// The bot's skills matching the `/word` being typed at the end of the
+    /// draft. A `/` inside a path (`/tmp/x`) is not a call and offers nothing.
+    var skillCandidates: [Skill]? {
+        guard let bot = model.selectedBot else { return nil }
+        let text = drafts[threadId] ?? ""
+        guard let slash = text.lastIndex(of: "/") else { return nil }
+        if slash > text.startIndex, !text[text.index(before: slash)].isWhitespace, text[text.index(before: slash)] != "(" { return nil }
+        let partial = text[text.index(after: slash)...]
+        guard !partial.contains(where: { $0.isWhitespace || $0 == "/" }) else { return nil }
+        let skills = model.assignedSkills(bot).filter { partial.isEmpty || $0.id.hasPrefix(partial.lowercased()) }
+        // a finished name needs no list
+        return skills.count == 1 && skills[0].id == partial ? nil : skills
+    }
+
+    func insertSkill(_ skill: Skill) {
+        var text = drafts[threadId] ?? ""
+        guard let slash = text.lastIndex(of: "/") else { return }
+        text.replaceSubrange(slash..., with: "/\(skill.id) ")
+        drafts[threadId] = text
+    }
+}
+
+private struct SkillSuggestionList: View {
+    let skills: [Skill]
+    let pick: (Skill) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(skills.prefix(6)) { skill in
+                Button {
+                    pick(skill)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: skill.hasScripts ? "terminal" : "wand.and.stars")
+                            .font(.system(size: 12)).foregroundStyle(Theme.secondary).frame(width: 20)
+                        Text(verbatim: "/\(skill.id)").font(.system(size: 13.5, weight: .medium, design: .monospaced)).foregroundStyle(Theme.ink)
+                        Text(skill.description).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                    .hoverHighlight(radius: 6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .frame(maxWidth: 520, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.raised))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline.opacity(0.4)))
+        .shadow(color: .black.opacity(0.35), radius: 12, y: 8)
     }
 }
 

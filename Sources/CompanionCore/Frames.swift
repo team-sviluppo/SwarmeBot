@@ -64,6 +64,8 @@ public enum Frame: Sendable {
     case library(botId: String)
     /// Connectors were added, edited, tested or removed: refetch the list.
     case mcpConnectors
+    /// The skills, or the folder they live in, changed: refetch the list.
+    case skills
     /// An instance's session window moved (after a turn on that account).
     case usageLimit(instanceId: String, limit: UsageLimit)
     case unknown(kind: String)
@@ -147,6 +149,8 @@ extension Frame: Decodable {
             self = (try? container.decode(String.self, forKey: .botId)).map { .library(botId: $0) } ?? .unknown(kind: kind)
         case "mcpConnectors":
             self = .mcpConnectors
+        case "skills":
+            self = .skills
         case "usage-limit":
             if let id = try? container.decode(String.self, forKey: .instanceId),
                let limit = try? container.decode(UsageLimit.self, forKey: .usageLimit) {

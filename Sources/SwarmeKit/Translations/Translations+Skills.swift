@@ -1,0 +1,58 @@
+// English for skills: Settings › Skill, the bot's card, the chat chip and the import.
+extension Translations {
+    static let skills: [String: String] = [
+        // Settings › Skill
+        "Skill": "Skills",
+        "Nuova skill": "New skill",
+        "Scrivi una nuova skill": "Write a new skill",
+        "Importa…": "Import…",
+        "Una cartella con SKILL.md, oppure un .zip o .skill che la contiene": "A folder with SKILL.md, or a .zip or .skill holding one",
+        "Le skill sono istruzioni, con script e riferimenti, che puoi dare ai bot.": "Skills are instructions, with scripts and references, that you can give to bots.",
+        "Valgono con tutti i motori. Scrivine una con + oppure importa una cartella con SKILL.md.": "They work with every engine. Write one with + or import a folder with SKILL.md.",
+        "Questa skill contiene script": "This skill contains scripts",
+        "I bot a cui la darai potranno eseguirli, con i permessi del motore. Importala solo se ti fidi di chi l'ha scritta.": "Bots you give it to will be able to run them, with the engine's permissions. Import it only if you trust whoever wrote it.",
+        "Esiste già una skill con questo nome": "A skill with this name already exists",
+        "Sostituisci": "Replace",
+        "La cartella esistente verrà sostituita per intero.": "The existing folder will be replaced entirely.",
+        "Scegli una cartella con SKILL.md, o un archivio .zip o .skill": "Choose a folder with SKILL.md, or a .zip or .skill archive",
+        "Cartella delle skill": "Skills folder",
+        "Cambia percorso sul server…": "Change path on the server…",
+        "Scegli cartella…": "Choose folder…",
+        "Usa la cartella predefinita": "Use the default folder",
+        "Una cartella condivisa (OneDrive, Dropbox, disco di rete) fa vedere le stesse skill da più Mac.": "A shared folder (OneDrive, Dropbox, network drive) shows the same skills on several Macs.",
+        "Percorso della cartella sul server": "Folder path on the server",
+        "Usa questa cartella": "Use this folder",
+        "Le skill già presenti nella cartella diventano subito disponibili. Quelle nella cartella attuale restano dove sono.": "Skills already in the folder become available right away. The ones in the current folder stay where they are.",
+        "Contiene script": "Contains scripts",
+        "Minuscole, cifre e trattini. In chat si richiama con /%@.": "Lowercase letters, digits and hyphens. Call it in a chat with /%@.",
+        "nome": "name",
+        "Richiamo in chat": "Call in a chat",
+        "Peso nel prompt": "Prompt cost",
+        "~%@ token quando viene usata": "~%@ tokens when used",
+        "Contiene script: i bot che la usano possono eseguirli.": "Contains scripts: bots that use it can run them.",
+        "File (%@)": "Files (%@)",
+        "Si cancella la cartella con tutti i suoi file, e la skill sparisce dai bot che la usano.": "The folder is deleted with all its files, and the skill disappears from the bots that use it.",
+        "Sul server c'è già una skill %@": "The server already has a skill %@",
+        "La versione sul server verrà sostituita per intero da questa.": "The version on the server will be replaced entirely by this one.",
+        "Copiata su %@.": "Copied to %@.",
+
+        // Bot card and chat chip
+        "Nessuna skill": "No skills",
+        "Aggiungile in Impostazioni › Skill, poi scegli qui quali usa questo bot.": "Add them in Settings › Skills, then choose here which ones this bot uses.",
+        "Accesa nelle nuove chat": "On in new chats",
+        "Se spenta, il bot non la vede finché non la accendi nella chat o la richiami con /%@.": "When off, the bot doesn't see it until you switch it on in the chat or call it with /%@.",
+        "Skill in questa chat": "Skills in this chat",
+        "Ripristina predefinite": "Restore defaults",
+        "Le accese il bot le usa quando servono. Scrivi /nome per usarne una di sicuro, anche se spenta.": "The bot uses the ones that are on when they're needed. Write /name to make sure it uses one, even if it's off.",
+
+        // Import
+        "Non riesco ad aprire l'archivio %@.": "Couldn't open the archive %@.",
+        "Nell'archivio non c'è un SKILL.md, né in cima né in un'unica cartella.": "The archive has no SKILL.md, neither at the top nor in a single folder.",
+        "Nella cartella %@ non c'è un SKILL.md: una skill è una cartella con SKILL.md in cima.": "The folder %@ has no SKILL.md: a skill is a folder with SKILL.md at the top.",
+        "Una skill può avere al massimo %@ file.": "A skill can have at most %@ files.",
+        "Una skill può pesare al massimo %@ MB.": "A skill can be at most %@ MB.",
+        "Cosa fa questa skill e quando usarla: il bot la sceglie da qui.": "What this skill does and when to use it: the bot chooses it from this.",
+        "Istruzioni passo passo per il bot.": "Step-by-step instructions for the bot.",
+        "Cartella delle skill sconosciuta.": "Unknown skills folder.",
+    ]
+}

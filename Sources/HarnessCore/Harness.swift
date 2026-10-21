@@ -46,6 +46,13 @@ public final class Harness {
         return library
     }()
     private(set) lazy var localVM = LocalVM(paths: paths)
+    // skills: instruction folders the user hands to bots (Skills.swift)
+    public private(set) lazy var skills: Skills = {
+        let skills = Skills(paths: paths)
+        skills.chosenFolder = { [weak self] in self?.config.skillsFolder }
+        skills.onChange = { [weak self] in self?.broadcast(["kind": "skills"]) }
+        return skills
+    }()
     // connectors: MCP servers the user hands to bots (MCPConnectors.swift)
     public private(set) lazy var mcpConnectors = MCPConnectors(paths: paths)
     public private(set) lazy var mcpPool: MCPConnectorPool = {
@@ -664,8 +671,14 @@ public final class Harness {
                     Workspace.ensure(self.paths, botId: botId)
                     cwd = self.store.pinTaskCwd(botId, threadId, fallback: self.paths.workspace(botId).path)
                 }
-                let off = self.store.taskByThread(botId, threadId)?["libraryOff"]?.array?.compactMap(\.string) ?? []
+                let task = self.store.taskByThread(botId, threadId)
+                let off = task?["libraryOff"]?.array?.compactMap(\.string) ?? []
                 let library = self.library.prompt(botId, off: off, mode: Library.mode(instance.driverKind), message: text)
+                // a skill called with /name goes whole into this turn; the others are an index
+                let invoked = Skills.invoked(text, bot: bot)
+                let available = Skills.active(bot: bot, task: task) { self.skills.skill($0) != nil }.filter { !invoked.contains($0) }
+                let skills = self.skills.prompt(available, mode: Library.mode(instance.driverKind))
+                let invocation = self.skills.invocation(invoked, mode: Library.mode(instance.driverKind))
                 // peer comms for a person's turn (a peer's own turn gets none: hard
                 // recursion stop), and only on drivers that mount the tools — a bot
                 // must not be told about tools it cannot call
@@ -685,9 +698,9 @@ public final class Harness {
                                                       mount: instance.adapter.capabilities.connectors)
                 let webhook = options.automationSource == "webhook" ? Self.webhookBoundary : ""
                 // the library goes before the per-turn tags, so the text a server caches stays put
-                let system = (persona + computer.prompt + (coordination.isEmpty ? "" : " \(coordination)") + (library.isEmpty ? "" : "\n\n\(library)\n\n") + webhook + tags).trimmingCharacters(in: .whitespacesAndNewlines)
+                let system = (persona + computer.prompt + (coordination.isEmpty ? "" : " \(coordination)") + (library.isEmpty ? "" : "\n\n\(library)\n\n") + (skills.isEmpty ? "" : "\n\n\(skills)\n\n") + webhook + tags).trimmingCharacters(in: .whitespacesAndNewlines)
                 var input = SendTurnInput(
-                    threadId: threadId, text: turnText, model: model, effort: selection.effort,
+                    threadId: threadId, text: invocation + turnText, model: model, effort: selection.effort,
                     resumeCursor: resume ? cursors[instanceId] : nil, transcript: transcript,
                     system: system.isEmpty ? nil : system, cwd: cwd, agents: agents
                 )

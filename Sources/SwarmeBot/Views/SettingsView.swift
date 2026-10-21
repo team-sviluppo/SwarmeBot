@@ -10,6 +10,7 @@ struct SettingsView: View {
             EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }
             RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }
             ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }
+            SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }
             MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }
             KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }
             DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }

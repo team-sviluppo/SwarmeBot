@@ -182,6 +182,8 @@ public struct BotTask: Codable, Hashable, Sendable {
     public var libraryOff: [String]?
     /// Connector switches that differ from the bot's defaults, id → on.
     public var connectors: [String: Bool]?
+    /// Skill switches that differ from the bot's defaults, name → on.
+    public var skills: [String: Bool]?
 }
 
 /// A connector handed to a bot, and whether new chats start with it on.
@@ -214,6 +216,8 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     public var alwaysAllow: [String]?
     /// Desktop: the connectors this bot may use.
     public var connectors: [BotConnector]?
+    /// Desktop: the skills this bot may use.
+    public var skills: [BotSkill]?
     public var computer: String?
     /// Which cloud computer backs `computer == "cloud"`. Absent (older
     /// harnesses included) means the hosted Box; "vps" means the user's own

@@ -39,6 +39,9 @@ public final class AppModel {
     public internal(set) var config: ConfigStatus?
     /// Settings › Connettori: MCP servers bots can be given.
     public internal(set) var mcpConnectors: [MCPConnector] = []
+    /// Settings › Skill: instruction folders bots can be given, and where the engine keeps them.
+    public internal(set) var skills: [Skill] = []
+    public internal(set) var skillsFolder: SkillsFolder?
     /// Where the transcript should land after a search jump.
     public var focusMessageId: String?
     public internal(set) var webhookIngress: WebhookIngress?
@@ -150,6 +153,7 @@ public final class AppModel {
                         Task { await self.refreshConfig() }
                         Task { await self.refreshAutomations() }
                         Task { await self.refreshMCPConnectors() }
+                        Task { await self.refreshSkills() }
                         continue
                     }
                     advance(to: frame.seq)
@@ -184,6 +188,9 @@ public final class AppModel {
                     }
                     if case .mcpConnectors = frame.frame {
                         Task { await self.refreshMCPConnectors() }
+                    }
+                    if case .skills = frame.frame {
+                        Task { await self.refreshSkills() }
                     }
                     if case let .notify(notification) = frame.frame { onNotify?(notification) }
                     onUnreadChange?(state.unreadCount)

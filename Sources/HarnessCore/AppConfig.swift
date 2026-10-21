@@ -211,6 +211,23 @@ public final class AppConfig {
         return secrets
     }
 
+    /// Where the skills live, when the user moved them (a shared folder,
+    /// so several machines see the same ones). Nil: `<data>/skills`.
+    public var skillsFolder: String? {
+        guard let path = json["skills"]?["folder"]?.string, path.hasPrefix("/") else { return nil }
+        return path
+    }
+
+    public func setSkillsFolder(_ path: String?) throws {
+        var disk = FileIO.readJSON(paths.config)?.object ?? JSONObject()
+        var section = disk["skills"]?.object ?? JSONObject()
+        // explicit Optional: a bare nil here would be JSON null, not a removal
+        section["folder"] = path.map(JSON.string) ?? Optional<JSON>.none
+        disk["skills"] = section.isEmpty ? Optional<JSON>.none : .object(section)
+        try FileIO.writeAtomic(Data(JSON.object(disk).pretty().utf8), to: paths.config)
+        json = disk
+    }
+
     /// Set (or clear) one instance's picker visibility. False for unknown ids.
     public func setPickerVisibility(_ instanceId: InstanceID, _ visible: Bool?) throws -> Bool {
         guard instanceConfigs().contains(where: { $0.0 == instanceId }) else { return false }
