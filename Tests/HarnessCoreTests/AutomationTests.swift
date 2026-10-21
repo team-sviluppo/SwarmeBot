@@ -63,3 +63,28 @@ final class WebhookTests: XCTestCase {
         XCTAssertEqual(WebhookIngress.form("b=x+y%21")["b"]?.string, "x y!")
     }
 }
+
+@MainActor
+final class RoutineRunChatTests: XCTestCase {
+    func testEveryRunOpensAnAutomationChatAndMakesItLive() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var created: [(title: String, activate: Bool)] = []
+        let manager = RoutineManager(file: dir.appendingPathComponent("routines.json"), host: .init(
+            emit: { _ in },
+            botState: { _ in "ready" },
+            createTask: { _, title, activate in created.append((title, activate)); return "thread-\(created.count)" },
+            startTurn: { _, _, _, _, _, _ in },
+            interruptTurn: { _, _, _ in }
+        ))
+        let routine = try manager.create(["name": "Report", "prompt": "Write it", "botId": "bot",
+                                          "schedule": ["type": "once", "at": .number(nowMillis() + 3_600_000)]])
+        _ = manager.runNow(routine["id"]!.string!)
+        manager.tick()
+        _ = try manager.enqueueWebhook(webhookId: "w", webhookName: "Inbox", prompt: "Read it", botId: "bot2",
+                                       runOn: "maus", deliveryId: "d", receivedAt: nowMillis())
+        manager.tick()
+        XCTAssertEqual(created.map(\.title), ["[AUTOMAZIONE] Report", "[AUTOMAZIONE] Inbox"])
+        XCTAssertEqual(created.map(\.activate), [true, true])
+    }
+}

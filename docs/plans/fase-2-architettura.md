@@ -181,6 +181,10 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 - pi/omp chiude un turno fallito con `turn_end`/`agent_end` e `stopReason: "error"` (il motivo in
   `message.errorMessage`), senza testo: trattarlo come "end_turn" lasciava in chat una risposta vuota. Trovato
   su un server vero con un 403 di LiteLLM (2026-10-20); scenario `RIFIUTO` in `parity/fake_pi.py`.
+- Divergenza voluta dal Node (2026-10-21): ogni esecuzione di routine apre la sua chat come chat attiva del bot,
+  titolo `[AUTOMAZIONE] <nome>`. Il Node attivava solo i webhook: con le routine il risultato finiva in una chat
+  nascosta nell'elenco e il pallino blu sul bot non bastava a trovarla. Lo scenario `automations` (non rieseguito:
+  manca il checkout Node) dovrebbe divergere sul titolo della chat e sul `threadId` attivo del bot.
 
 ## Non verificato dal vivo
 

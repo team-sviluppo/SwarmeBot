@@ -175,6 +175,8 @@ La **selezione del modello per bot** non ha una route dedicata: si fa con `PATCH
 | POST | `/api/routine-runs/:runId/cancel` | — | `{run}` / 404 | ✅ | ❌ |
 | POST | `/api/routine-runs/:runId/seen` | — | `{run}` / 404 | ✅ | ❌ |
 
+Ogni esecuzione (pianificata, "Esegui ora" o webhook) crea una chat intitolata `[AUTOMAZIONE] <nome>` e la rende la chat attiva del bot (frame `bot` con il nuovo `threadId`); a fine turno il bot resta `unread`. Il Node attivava solo le chat dei webhook e usava il nome nudo.
+
 ### 2.8 Webhook (gestione)
 
 | Metodo | Path | Request | Risposta | React | CC |

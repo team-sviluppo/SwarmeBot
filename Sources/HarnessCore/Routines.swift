@@ -15,6 +15,8 @@ public final class RoutineManager {
     static let catchUpMillis = 12.0 * 60 * 60_000
     static let maxRuns = 2_000
     static let allDays = [0, 1, 2, 3, 4, 5, 6]
+    /// Stored in the task title, like the untitled "Nuova chat": engine titles are not translated.
+    public static let automationTitlePrefix = "[AUTOMAZIONE] "
 
     public struct Host {
         public var emit: (JSONObject) -> Void
@@ -343,9 +345,10 @@ public final class RoutineManager {
                 fail(index, "The assigned bot no longer exists")
                 continue
             }
-            // a webhook is an incoming message: its task becomes the live chat
-            let webhook = runs[index]["triggerSource"]?.string == "webhook"
-            guard let threadId = host.createTask(botId, runs[index]["routineName"]?.string ?? "", webhook) else {
+            // every run opens its own chat and makes it the bot's live one, so its
+            // result is what the user sees on opening the bot; the title says it is unattended
+            let title = Self.automationTitlePrefix + (runs[index]["routineName"]?.string ?? "")
+            guard let threadId = host.createTask(botId, title, true) else {
                 fail(index, "Could not create a task for this run")
                 continue
             }
