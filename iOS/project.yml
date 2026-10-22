@@ -184,3 +184,16 @@ schemes:
     test:
       targets:
         - SwarmeBot-iOSTests
+  # the app as people will use it: optimized, no debugger attached (a debug
+  # build under Xcode's debugger is far slower on a device, MLX above all)
+  SwarmeBot-iOS Release:
+    build:
+      targets:
+        SwarmeBot-iOS: all
+    run:
+      config: Release
+      debugEnabled: false
+    profile:
+      config: Release
+    archive:
+      config: Release
