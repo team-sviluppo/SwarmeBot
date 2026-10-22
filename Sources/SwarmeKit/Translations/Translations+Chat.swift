@@ -2,6 +2,11 @@
 extension Translations {
     static let chat: [String: String] = [
         "Copia percorso": "Copy Path",
+        "Cartella del canale": "Channel folder",
+        "Una per ogni bot": "One per bot",
+        "Fissata al primo messaggio: non si può più cambiare.": "Fixed at the first message: it can no longer be changed.",
+        "Tutti i bot del canale lavorano in questa cartella. Si fissa al primo messaggio.": "Every bot in the channel works in this folder. It is fixed at the first message.",
+        "Cartella di lavoro di tutti i bot del canale": "Working folder for every bot in the channel",
         "File non trovato: %@": "File not found: %@",
         "Mostra nel Finder": "Show in Finder",
         "Salva una copia…": "Save a Copy…",

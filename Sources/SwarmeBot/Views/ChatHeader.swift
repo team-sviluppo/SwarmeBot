@@ -338,6 +338,7 @@ struct RoomSettingsSheet: View {
     @State private var members: Set<String> = []
     @State private var responder = "mentions"
     @State private var responderBot = ""
+    @State private var folder = ""
     @State private var confirmDelete = false
 
     var body: some View {
@@ -355,6 +356,7 @@ struct RoomSettingsSheet: View {
                     ForEach(memberBots) { Text($0.name).tag($0.id) }
                 }
             }
+            RoomFolderField(folder: $folder, locked: room.pinnedCwd != nil)
             Section(tr("Membri")) {
                 ForEach(model.state.bots.filter { $0.hidden != true }) { bot in
                     Toggle(bot.name, isOn: Binding(
@@ -365,7 +367,7 @@ struct RoomSettingsSheet: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 520)
+        .frame(width: 420, height: 580)
         .toolbar {
             ToolbarItem(placement: .destructiveAction) {
                 Button(tr("Elimina canale"), role: .destructive) { confirmDelete = true }
@@ -375,7 +377,9 @@ struct RoomSettingsSheet: View {
                 Button(tr("Salva")) {
                     let patch = RoomPatch(
                         name: name, bulletin: bulletin, memberIds: Array(members),
-                        responder: responder, responderBotId: responder == "member" ? responderBot : nil
+                        responder: responder, responderBotId: responder == "member" ? responderBot : nil,
+                        // once the first turn has pinned it the folder cannot move
+                        cwd: room.pinnedCwd == nil && folder != (room.cwd ?? "") ? folder : nil
                     )
                     Task { await model.patch(room, patch) }
                     dismiss()
@@ -395,10 +399,54 @@ struct RoomSettingsSheet: View {
             members = Set(room.memberIds)
             responder = room.defaultResponder.kind
             responderBot = room.defaultResponder.botId ?? room.memberIds.first ?? ""
+            folder = room.pinnedCwd ?? room.cwd ?? ""
         }
     }
 
     private var memberBots: [Bot] { members.compactMap { model.state.bot($0) } }
+}
+
+/// The channel's working folder: where every member's tools run. Chosen with
+/// the system panel on this Mac, typed as a path on a remote engine.
+private struct RoomFolderField: View {
+    @Binding var folder: String
+    /// The first turn already pinned it.
+    let locked: Bool
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            if model.isRemote && !locked {
+                TextField(tr("Percorso della cartella sul server"), text: $folder)
+            } else {
+                LabeledContent(tr("Cartella del canale")) {
+                    HStack(spacing: 8) {
+                        Text(folder.isEmpty ? tr("Una per ogni bot") : (folder as NSString).abbreviatingWithTildeInPath)
+                            .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        if !locked {
+                            Button(tr("Scegli…"), action: choose)
+                            if !folder.isEmpty { Button(tr("Rimuovi")) { folder = "" } }
+                        }
+                    }
+                }
+            }
+        } footer: {
+            Text(locked ? tr("Fissata al primo messaggio: non si può più cambiare.")
+                        : tr("Tutti i bot del canale lavorano in questa cartella. Si fissa al primo messaggio."))
+        }
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = tr("Scegli")
+        panel.message = tr("Cartella di lavoro di tutti i bot del canale")
+        if !folder.isEmpty { panel.directoryURL = URL(fileURLWithPath: folder, isDirectory: true) }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        folder = url.path
+    }
 }
 
 /// Pick members and a name; the harness names it after the first member
@@ -408,10 +456,12 @@ struct NewRoomSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var members: Set<String> = []
+    @State private var folder = ""
 
     var body: some View {
         Form {
             TextField(tr("Nome (facoltativo)"), text: $name)
+            RoomFolderField(folder: $folder, locked: false)
             Section(tr("Membri")) {
                 ForEach(model.state.bots.filter { $0.hidden != true }) { bot in
                     Toggle(isOn: Binding(
@@ -427,13 +477,13 @@ struct NewRoomSheet: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380, height: 460)
+        .frame(width: 380, height: 520)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button(tr("Annulla")) { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 Button(tr("Crea")) {
                     let ordered = model.state.bots.map(\.id).filter(members.contains)
-                    Task { await model.createRoom(name: name, memberIds: ordered) }
+                    Task { await model.createRoom(name: name, memberIds: ordered, cwd: folder) }
                     dismiss()
                 }
                 .disabled(members.isEmpty)
