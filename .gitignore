@@ -6,3 +6,7 @@ build/
 release/
 .env.mac-release.local
 Resources/linux-engines.json
+
+# iOS app: generated project, local signing
+iOS/Local.xcconfig
+iOS/SwarmeBot/Info.plist

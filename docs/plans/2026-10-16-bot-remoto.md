@@ -327,6 +327,8 @@ Cosa cambia:
 
 ## 9. App iOS (futura)
 
+Piano dedicato: `docs/plans/2026-10-22-app-ios.md` (decisioni D1–D16; push con relay, fine di R5).
+
 Non è parte di questo lavoro, ma il piano la rende possibile senza modifiche al motore:
 - client `CompanionCore` su HTTPS con bearer, lo stesso dell'app Mac;
 - abbinamento con QR (§4.3);

@@ -1,0 +1,82 @@
+# The iOS app (docs/plans/2026-10-22-app-ios.md). The Xcode project is
+# generated and git-ignored: run `xcodegen` in this folder, then open
+# SwarmeBot-iOS.xcodeproj or build with
+#   xcodebuild -project iOS/SwarmeBot-iOS.xcodeproj -scheme SwarmeBot-iOS \
+#     -destination 'platform=iOS Simulator,name=iPhone 17' build
+# Signing for a device: put DEVELOPMENT_TEAM in iOS/Local.xcconfig (git-ignored).
+name: SwarmeBot-iOS
+options:
+  bundleIdPrefix: com.swarmebot
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+configFiles:
+  Debug: Shared.xcconfig
+  Release: Shared.xcconfig
+packages:
+  SwarmeBot:
+    path: ..
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  SwarmeBot-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: SwarmeBot
+    dependencies:
+      - package: SwarmeBot
+        product: AgentCore
+      - package: SwarmeBot
+        product: CompanionCore
+      - package: SwarmeBot
+        product: SwarmeL10n
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.swarmebot.ios
+        PRODUCT_NAME: SwarmeBot
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: SwarmeBot
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_NSCameraUsageDescription: "SwarmeBot usa la fotocamera per leggere il QR di abbinamento e per le foto da allegare."
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+    info:
+      path: SwarmeBot/Info.plist
+      properties:
+        # endpoints and test engines on the local network may be plain HTTP (plan §8)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.swarmebot.ios
+            CFBundleURLSchemes: [swarmebot]
+  SwarmeBot-iOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SwarmeBotTests
+    dependencies:
+      - target: SwarmeBot-iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/SwarmeBot.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwarmeBot"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  SwarmeBot-iOS:
+    build:
+      targets:
+        SwarmeBot-iOS: all
+        SwarmeBot-iOSTests: [test]
+    test:
+      targets:
+        - SwarmeBot-iOSTests

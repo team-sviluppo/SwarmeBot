@@ -1,0 +1,32 @@
+// English for the iOS app (iOS/SwarmeBot): server list, pairing, chat, settings.
+extension Translations {
+    static let ios: [String: String] = [
+        "%@ immagini allegate": "%@ images attached",
+        "Abbina questo telefono": "Pair This Phone",
+        "Abbina un server dal Mac: Impostazioni › server › Abbina telefono, poi inquadra il QR.": "Pair a server from the Mac: Settings › server › Pair Phone, then scan the QR code.",
+        "Abbina un server": "Pair a Server",
+        "Abbinamento…": "Pairing…",
+        "Aggiornato %@": "Updated %@",
+        "Allega un'immagine": "Attach an Image",
+        "Chat non trovata": "Chat Not Found",
+        "Connessione al server persa.": "Lost the connection to the server.",
+        "Connessione…": "Connecting…",
+        "Consenti": "Allow",
+        "Fine": "Done",
+        "Indirizzo del server non valido.": "The server address is not valid.",
+        "Inquadra il QR che il Mac mostra in Impostazioni › server › Abbina telefono.": "Scan the QR code the Mac shows in Settings › server › Pair Phone.",
+        "Messaggi precedenti": "Earlier Messages",
+        "Nessun server": "No Servers",
+        "Non abbinato": "Not paired",
+        "Oppure incolla il link": "Or Paste the Link",
+        "Portachiavi non disponibile (errore %@).": "Keychain unavailable (error %@).",
+        "Questo non è un link di abbinamento di SwarmeBot.": "This is not a SwarmeBot pairing link.",
+        "Questo server parla una versione diversa di SwarmeBot: aggiorna il motore o l'app.": "This server speaks a different version of SwarmeBot: update the engine or the app.",
+        "Questo telefono non è più abbinato: abbinalo di nuovo dal Mac.": "This phone is no longer paired: pair it again from the Mac.",
+        "Rimuovere %@?": "Remove %@?",
+        "Rimuovere un server lo dimentica su questo telefono. Per revocarne l'accesso, usa la scheda del server sul Mac.": "Removing a server forgets it on this phone. To revoke its access, use the server's page on the Mac.",
+        "Schermata del computer": "Computer screen",
+        "Scrivi un messaggio": "Write a message",
+        "Senza connessione al server: l'invio torna quando la connessione riprende.": "No connection to the server: sending comes back when the connection does.",
+    ]
+}

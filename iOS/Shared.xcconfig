@@ -1,0 +1,4 @@
+// Settings shared by Debug and Release. A developer's own signing team goes
+// in Local.xcconfig, next to this file and git-ignored:
+//   DEVELOPMENT_TEAM = ABCDE12345
+#include? "Local.xcconfig"

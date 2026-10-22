@@ -28,10 +28,11 @@ and commit messages are **English**.
 
 The app is localized in English (default) and Italian, chosen in Settings › Generale
 (`SwarmeKit/Localization.swift`). UI strings are written in Italian and wrapped in `tr("…")`; the
-Italian text is the key and its English goes in `SwarmeKit/Translations/Translations+<Area>.swift`.
+Italian text is the key and its English goes in `SwarmeL10n/Translations/Translations+<Area>.swift`.
 Interpolations become `%@` (`tr("Eliminare %@?", name)`), SwiftUI titles take the `tr` String
 (`Button(tr("Salva"))`), words not to translate use `Text(verbatim:)`, dates use `appFormatted`.
-`LocalizationTests` fails on a missing English entry or a bare literal title. Engine text is English
+`LocalizationTests` fails on a missing English entry or a bare literal title (it also reads `iOS/SwarmeBot`,
+whose English goes in `Translations+iOS.swift`). Engine text is English
 and stays untranslated.
 
 ## Layout
@@ -39,12 +40,17 @@ and stays untranslated.
 | Target | Role |
 |---|---|
 | `CompanionCore` | Wire types, SSE parser, HTTP client (`Client`, `Client+Desktop`, `Client+Remote`), pure fold of stream frames into state. Originally copied from the iOS companion — see `docs/companion-core-divergence.md`. |
+| `AgentCore` | Shared by the engine and the iOS app, no processes (macOS, iOS, Linux): ordered `JSON`, `StreamingBytes`, `Redact`, `MCPClient` over HTTP, `OAuthFlow`, `OpenAIChatEndpoint` (OpenAI-compatible streaming, tool loop, Hermes continuity). `HarnessCore` re-exports it. |
+| `SwarmeL10n` | UI languages, `translate` and the Italian → English tables, for the Mac and iOS apps. |
 | `SwarmeKit` | Desktop logic that is not a view: `HarnessLauncher` (start/supervise/stop the engine), observable `AppModel` (+`Desktop`, +`Remote`), `AppPaths`, Keychain credentials, `Remote/` (ssh identities, host keys, remote scripts, server setup flow, Linux engine download). |
 | `SwarmeBot` | The SwiftUI app (`Views/`, `Mascot/`, Sparkle `Updater`, notifications). |
-| `HarnessCore` | The engine: ordered `JSON`, contracts (`RuntimeEvent`, drivers), `Store` + `MessageDB` (SQLite), `Harness` (turns), `Routes`, `HTTPServer`/`HTTPTransport`/`SSEHub`, rooms, comms between bots, routines, webhooks, library, team, computers (Box, local VM, VPS), MCP connectors + OAuth, permission broker, remote access (devices, pairing, rate limits). |
+| `HarnessCore` | The engine: contracts (`RuntimeEvent`, drivers), `Store` + `MessageDB` (SQLite), `Harness` (turns), `Routes`, `HTTPServer`/`HTTPTransport`/`SSEHub`, rooms, comms between bots, routines, webhooks, library, team, computers (Box, local VM, VPS), MCP connectors + OAuth, permission broker, remote access (devices, pairing, rate limits). |
 | `HarnessDrivers` | One file per provider driver; `ACP/ACPCore` (JSON-RPC runtime) + `ACP/ACPDrivers`; `DeepSeek/`. |
 | `swarme-harness` | Engine executable. Subcommands: `serve [--remote …]`, `device add|list|revoke`, `secret set|unset`, and MCP stdio helpers spawned by the engine itself (`mcp-permission`, `mcp-agents`, `mcp-connector`, `mcp-container`, `mcp-vps`). New MCP helpers go here as subcommands, not as separate binaries. |
 | `CSQLite3` | System libsqlite3 module, Linux only (macOS uses the built-in `SQLite3`). |
+
+`iOS/` is the iOS app (`docs/plans/2026-10-22-app-ios.md`): an XcodeGen `project.yml` using the local
+package's `AgentCore`, `CompanionCore` and `SwarmeL10n`; the `.xcodeproj` is generated and git-ignored.
 
 Other folders: `docs/` (contract, plans, benchmarks, design), `parity/` (Node↔Swift comparison and
 fake CLIs/servers), `scripts/` (bundle, release, Linux build, integration tests), `Resources/` (app
@@ -59,7 +65,13 @@ swift test                                   # unit + in-process integration tes
 swift test --filter HarnessCoreTests         # engine only
 swift run SwarmeBot                          # the app (see warning below)
 OMB_PORT=38899 OMB_DATA_DIR=/tmp/swarme swift run swarme-harness   # engine alone, throwaway data
+(cd iOS && xcodegen) && xcodebuild -project iOS/SwarmeBot-iOS.xcodeproj -scheme SwarmeBot-iOS \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test          # the iOS app
 ```
+
+The iOS app talks to remote engines only; try it against a throwaway `serve --remote` engine behind Caddy
+(debug launch arguments `-pairLink swarmebot://pair?…` and `-openFirstChat YES` skip the camera and the
+taps). MLX (Gemma) does not run on the simulator.
 
 **Running the app touches real data.** By default it opens `~/.swarmebot` and the login Keychain.
 Before launching it, ask the user, or isolate it with `SWARMEBOT_HOME=/some/test/folder`, which
