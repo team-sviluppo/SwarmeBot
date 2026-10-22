@@ -17,6 +17,15 @@ struct SettingsView: View {
                         }
                     }
                 }
+                if PushManager.shared.isConfigured {
+                    Section {
+                        Button(tr("Attiva le notifiche")) { PushManager.shared.requestPermission() }
+                    } header: {
+                        Text(tr("Notifiche"))
+                    } footer: {
+                        Text(tr("I server abbinati avvisano quando un bot finisce o chiede un permesso. Le notifiche dicono quale bot e cosa è successo, mai il testo della chat."))
+                    }
+                }
                 Section(tr("Sul telefono")) {
                     NavigationLink(tr("Connettori")) { ConnectorsView() }
                     NavigationLink(tr("Modelli sul telefono")) { ModelsView() }
