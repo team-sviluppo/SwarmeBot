@@ -1,5 +1,6 @@
-// A chat with a remote bot or room: the transcript, the reply as it streams,
-// the cards that wait for an answer, and the composer (plan §5.2).
+// A chat with a remote bot or room (plan §5.2), in the Mac app's look: the
+// title pill opens the bot's chats, bubbles in the bot's colour, the reply as
+// it streams, the cards that wait for an answer, the floating composer.
 import CompanionCore
 import PhotosUI
 import SwiftUI
@@ -12,6 +13,7 @@ struct ChatView: View {
     @State private var attachments: [String] = []
     @State private var photo: PhotosPickerItem?
     @State private var sending = false
+    @State private var showChats = false
 
     private var bot: Bot? {
         if case let .bot(id) = chat { return session.state.bot(id) }
@@ -26,30 +28,62 @@ struct ChatView: View {
     private var threadId: String? { bot?.threadId ?? room?.threadId }
     private var title: String { bot?.name ?? room?.name ?? tr("Chat") }
     private var busy: Bool { bot.map(session.isBusy) ?? (room?.busyBotId != nil) }
+    private var color: String { bot?.color ?? "blue" }
 
     var body: some View {
-        VStack(spacing: 0) {
+        Group {
             if let threadId {
                 transcript(threadId)
             } else {
                 ContentUnavailableView(tr("Chat non trovata"), systemImage: "bubble.left.and.exclamationmark.bubble.right")
             }
-            composer
         }
-        .navigationTitle(title)
+        .safeAreaInset(edge: .bottom) { composer }
+        .background(Theme.app)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if busy {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(tr("Ferma"), systemImage: "stop.circle") { Task { await session.interrupt(chat) } }
+            ToolbarItem(placement: .principal) {
+                ChatTitlePill(title: title, action: { if bot != nil { showChats = true } }) {
+                    if let bot { RemoteBotAvatar(bot: bot, size: 30) } else { RoomAvatar(members: members, size: 30) }
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if let bot {
+                        Button(tr("Nuova chat"), systemImage: "square.and.pencil") { Task { await session.newChat(bot.id) } }
+                        Button(tr("Chat precedenti"), systemImage: "clock.arrow.circlepath") { showChats = true }
+                    }
+                    if busy {
+                        Button(tr("Ferma"), systemImage: "stop.circle") { Task { await session.interrupt(chat) } }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
                 }
             }
         }
-        .task(id: threadId) { await session.markRead(chat) }
+        .sheet(isPresented: $showChats) {
+            if let bot {
+                ChatsSheet(botName: bot.name,
+                           items: session.chats(of: bot).map { .init(id: $0.threadId, title: $0.title, date: Date(timeIntervalSince1970: $0.createdAt / 1000),
+                                                                     current: $0.threadId == bot.threadId) },
+                           onNew: { Task { await session.newChat(bot.id) } },
+                           onOpen: { id in Task { await session.openChat(bot.id, threadId: id) } },
+                           onDelete: { id in Task { await session.deleteChat(bot.id, threadId: id) } })
+            }
+        }
+        .task(id: threadId) {
+            guard let threadId else { return }
+            await session.ensureLoaded(threadId)
+            await session.markRead(chat)
+        }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             Task { await attach(item) }
         }
+    }
+
+    private var members: [Bot] {
+        (room?.memberIds ?? []).compactMap { session.state.bot($0) }
     }
 
     // MARK: Transcript
@@ -59,29 +93,30 @@ struct ChatView: View {
         let live = session.state.streaming[threadId]
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 10) {
                     if session.state.hasMore[threadId] == true {
                         Button(tr("Messaggi precedenti")) { Task { await session.loadOlder(threadId) } }
                             .font(.footnote)
+                            .foregroundStyle(Theme.secondary)
                             .frame(maxWidth: .infinity)
                     }
                     ForEach(messages) { message in
-                        MessageRow(message: message, inRoom: room != nil) { card, choice in
+                        MessageRow(message: message, color: message.from?.color ?? color, inRoom: room != nil) { card, choice in
                             Task { await session.answer(threadId: threadId, card: card, choice: choice) }
                         }
                         .id(message.id)
                     }
                     if let live, !live.isEmpty {
-                        MarkdownView(source: live)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .id("live")
+                        ChatBubble(text: live, isUser: false, color: color).id("live")
                     } else if busy {
-                        ProgressView().padding(.vertical, 4).id("live")
+                        ActivityLine(text: tr("Sta lavorando…"), running: true).id("live")
                     }
                 }
-                .padding()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
             .defaultScrollAnchor(.bottom)
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.last?.id) { _, id in
                 withAnimation { proxy.scrollTo(id, anchor: .bottom) }
             }
@@ -92,37 +127,16 @@ struct ChatView: View {
     // MARK: Composer
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if !attachments.isEmpty {
-                Label(tr("%@ immagini allegate", String(attachments.count)), systemImage: "photo")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            HStack(alignment: .bottom, spacing: 8) {
-                PhotosPicker(selection: $photo, matching: .images) {
-                    Image(systemName: "paperclip").font(.title3)
-                }
-                .accessibilityLabel(tr("Allega un'immagine"))
-                TextField(tr("Scrivi un messaggio"), text: $draft, axis: .vertical)
-                    .lineLimit(1...6)
-                    .textFieldStyle(.roundedBorder)
-                Button {
-                    Task { await send() }
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.title2)
-                }
-                .disabled(sending || !session.isLive || (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty))
-                .accessibilityLabel(tr("Invia"))
-            }
+        VStack(spacing: 4) {
             if !session.isLive {
                 Text(tr("Senza connessione al server: l'invio torna quando la connessione riprende."))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.secondary)
             }
+            ComposerBar(text: $draft, placeholder: tr("Chiedi a %@", title), photo: $photo, attachedCount: attachments.count,
+                        busy: busy, enabled: session.isLive && !sending,
+                        send: { Task { await send() } }, stop: { Task { await session.interrupt(chat) } })
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
     }
 
     private func attach(_ item: PhotosPickerItem) async {
@@ -145,48 +159,30 @@ struct ChatView: View {
 /// One transcript entry.
 struct MessageRow: View {
     let message: Message
+    /// The bot's palette name (in a room, the sender's).
+    let color: String
     let inRoom: Bool
     let answer: (OptionCard, String) -> Void
 
     var body: some View {
         switch message.kind {
         case .text, .unknown:
-            if message.role == .user {
-                Text(Self.visibleText(message.text ?? ""))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    if inRoom, let from = message.from {
-                        Text(verbatim: from.name).font(.caption.bold()).foregroundStyle(Color(hex: from.color) ?? .secondary)
-                    }
-                    MarkdownView(source: message.text ?? "")
-                    if message.interrupted == true {
-                        Text(tr("Interrotto")).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            ChatBubble(text: message.role == .user ? Self.visibleText(message.text ?? "") : message.text ?? "",
+                       isUser: message.role == .user, color: color,
+                       header: inRoom && message.role == .bot ? message.from?.name : nil, headerColor: message.from?.color,
+                       footnote: message.interrupted == true ? tr("Interrotto") : nil)
         case .activity:
             if let tool = message.tool {
-                Label {
-                    Text(verbatim: tool.name).font(.system(.footnote, design: .monospaced))
-                } icon: {
-                    Image(systemName: tool.ok == false ? "exclamationmark.triangle" : "wrench.and.screwdriver")
-                }
-                .font(.footnote)
-                .foregroundStyle(tool.ok == false ? .red : .secondary)
+                ActivityLine(text: tool.name, failed: tool.ok == false)
             }
         case .options:
             if let card = message.card { CardView(card: card, answer: answer) }
         case .screen:
-            Label(tr("Schermata del computer"), systemImage: "display").font(.footnote).foregroundStyle(.secondary)
+            ActivityLine(text: tr("Schermata del computer"), symbol: "display")
         }
     }
 
-    /// The prompt as the user typed it: attachment tags become a word.
+    /// The prompt as the user typed it: attachment tags become a picture.
     static func visibleText(_ text: String) -> String {
         text.replacingOccurrences(of: #"<attached-image path="[^"]*"/>"#, with: "🖼", options: .regularExpression)
     }
@@ -199,14 +195,14 @@ struct CardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(verbatim: card.title).font(.subheadline.bold())
+            Text(verbatim: card.title).font(.subheadline.bold()).foregroundStyle(Theme.ink)
             if !card.subtitle.isEmpty {
-                Text(verbatim: card.subtitle).font(.footnote).foregroundStyle(.secondary).lineLimit(8)
+                Text(verbatim: card.subtitle).font(.footnote).foregroundStyle(Theme.secondary).lineLimit(8)
             }
             if card.isPending {
                 if card.isPermission {
                     HStack {
-                        Button(tr("Consenti")) { answer(card, "Allow") }.buttonStyle(.borderedProminent)
+                        Button(tr("Consenti")) { answer(card, "Allow") }.buttonStyle(.borderedProminent).tint(Theme.accent)
                         Button(tr("Nega"), role: .destructive) { answer(card, "Deny") }.buttonStyle(.bordered)
                     }
                 } else {
@@ -218,21 +214,11 @@ struct CardView: View {
                     }
                 }
             } else if let answered = card.answered {
-                Text(verbatim: answered).font(.footnote).foregroundStyle(.secondary)
+                Text(verbatim: answered).font(.footnote).foregroundStyle(Theme.secondary)
             }
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-extension Color {
-    /// `#RRGGBB`, as bots and room members carry their color.
-    init?(hex: String) {
-        var text = hex.trimmingCharacters(in: .whitespaces)
-        if text.hasPrefix("#") { text.removeFirst() }
-        guard text.count == 6, let value = UInt32(text, radix: 16) else { return nil }
-        self.init(red: Double((value >> 16) & 0xFF) / 255, green: Double((value >> 8) & 0xFF) / 255, blue: Double(value & 0xFF) / 255)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }

@@ -249,6 +249,45 @@ final class RemoteSession: Identifiable {
         }
     }
 
+    // MARK: - Chats of a bot (the engine's tasks)
+
+    /// A bot's chats, newest first; the shown one is `bot.threadId`.
+    func chats(of bot: Bot) -> [BotTask] {
+        (bot.tasks ?? []).sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func newChat(_ botId: String) async {
+        await perform { client in
+            let bot = try await client.createTask(botId: botId)
+            self.state.apply(.bot(bot))
+        }
+    }
+
+    /// Show an older chat; its messages come from the engine when they are not here yet.
+    func openChat(_ botId: String, threadId: String) async {
+        await perform { client in
+            let bot = try await client.switchTask(botId: botId, threadId: threadId)
+            self.state.apply(.bot(bot))
+            if self.state.messages[threadId]?.isEmpty != false {
+                let page = try await client.messages(threadId: threadId)
+                self.state.merge(page, intoThread: threadId)
+            }
+        }
+    }
+
+    func deleteChat(_ botId: String, threadId: String) async {
+        await perform { client in
+            let bot = try await client.deleteTask(botId: botId, threadId: threadId)
+            self.state.apply(.bot(bot))
+        }
+    }
+
+    /// The shown chat's messages, fetched if a switch made elsewhere left them out.
+    func ensureLoaded(_ threadId: String) async {
+        guard let client, state.messages[threadId]?.isEmpty != false else { return }
+        if let page = try? await client.messages(threadId: threadId) { state.merge(page, intoThread: threadId) }
+    }
+
     func loadOlder(_ threadId: String) async {
         guard let client, state.hasMore[threadId] == true else { return }
         let before = state.messages[threadId]?.first?.id

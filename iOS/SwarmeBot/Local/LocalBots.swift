@@ -25,15 +25,70 @@ final class LocalBots {
         self.store = store
         bots = store?.bots() ?? []
         connectors = store?.connectors() ?? []
+        // bots from before several chats: their one chat becomes the first of the list
+        for var bot in bots where bot.chats == nil {
+            let first = store?.messages(bot: bot.id).first { $0.role == .user }
+            bot.chats = [LocalChatSummary(id: bot.id, title: first.map { Self.title($0.text) } ?? "", createdAt: bot.createdAt,
+                                          sessionId: bot.sessionId)]
+            save(bot)
+        }
+    }
+
+    static func title(_ text: String) -> String {
+        String(text.split(whereSeparator: \.isNewline).first.map(String.init)?.prefix(60) ?? "")
     }
 
     func bot(_ id: String) -> LocalBot? { bots.first { $0.id == id } }
 
+    /// The chat a bot shows now.
     func chat(_ botId: String) -> LocalChat {
-        if let known = chats[botId] { return known }
-        let chat = LocalChat(botId: botId, owner: self)
-        chats[botId] = chat
+        let key = bot(botId)?.currentChatKey ?? botId
+        if let known = chats[key] { return known }
+        let chat = LocalChat(key: key, botId: botId, owner: self)
+        chats[key] = chat
         return chat
+    }
+
+    // MARK: Chats of a bot
+
+    /// A new chat on top; the shown one stays when it is still empty.
+    func newChat(_ botId: String) {
+        guard var bot = bot(botId), !chat(botId).messages.isEmpty else { return }
+        let summary = LocalChatSummary(id: newId(), title: "", createdAt: Date())
+        bot.chats = [summary] + (bot.chats ?? [])
+        bot.currentChat = summary.id
+        save(bot)
+    }
+
+    func openChat(_ botId: String, key: String) {
+        guard var bot = bot(botId) else { return }
+        bot.currentChat = key == bot.id ? nil : key
+        save(bot)
+    }
+
+    func deleteChat(_ botId: String, key: String) {
+        guard var bot = bot(botId) else { return }
+        chats.removeValue(forKey: key)?.stop()
+        store?.clear(bot: key)
+        bot.chats = (bot.chats ?? []).filter { $0.id != key }
+        if bot.currentChatKey == key { bot.currentChat = bot.chats?.first.map { $0.id == bot.id ? nil : $0.id } ?? nil }
+        if bot.chats?.isEmpty != false {
+            // never without a chat: a fresh first one
+            bot.chats = [LocalChatSummary(id: bot.id, title: "", createdAt: Date())]
+            bot.currentChat = nil
+            bot.sessionId = nil
+        }
+        save(bot)
+    }
+
+    /// The chat's Hermes session and title, kept on its summary.
+    func update(_ botId: String, chat key: String, title: String? = nil, sessionId: String? = nil) {
+        guard var bot = bot(botId), var list = bot.chats, let index = list.firstIndex(where: { $0.id == key }) else { return }
+        if let title, list[index].title.isEmpty { list[index].title = Self.title(title) }
+        if let sessionId { list[index].sessionId = sessionId }
+        bot.chats = list
+        if key == bot.id, let sessionId { bot.sessionId = sessionId }
+        save(bot)
     }
 
     func driver(_ kind: LocalBotKind) -> LocalDriver {
@@ -57,21 +112,16 @@ final class LocalBots {
     }
 
     func delete(_ bot: LocalBot) {
+        for summary in bot.chats ?? [] {
+            chats.removeValue(forKey: summary.id)?.stop()
+            if summary.id != bot.id { store?.delete(bot: summary.id) }
+        }
         chats.removeValue(forKey: bot.id)?.stop()
         store?.delete(bot: bot.id)
         Keychain.remove(bot.apiKeyAccount)
         bots.removeAll { $0.id == bot.id }
     }
 
-    /// A new chat: the messages go, and so does the Hermes session.
-    func clearChat(_ bot: LocalBot) {
-        chats[bot.id]?.stop()
-        store?.clear(bot: bot.id)
-        chats[bot.id]?.reload()
-        var updated = bot
-        updated.sessionId = nil
-        save(updated)
-    }
 
     // MARK: Connectors
 
@@ -137,6 +187,8 @@ final class LocalBots {
 @MainActor
 @Observable
 final class LocalChat {
+    /// Where the messages are kept: the chat's id.
+    let key: String
     let botId: String
     private(set) var messages: [LocalMessage] = []
     /// The reply so far while a turn runs.
@@ -147,14 +199,15 @@ final class LocalChat {
     @ObservationIgnored private weak var owner: LocalBots?
     @ObservationIgnored private var turn: Task<Void, Never>?
 
-    init(botId: String, owner: LocalBots) {
+    init(key: String, botId: String, owner: LocalBots) {
+        self.key = key
         self.botId = botId
         self.owner = owner
         reload()
     }
 
     func reload() {
-        messages = owner?.store?.messages(bot: botId) ?? []
+        messages = owner?.store?.messages(bot: key) ?? []
     }
 
     private func append(_ message: LocalMessage) {
@@ -171,13 +224,17 @@ final class LocalChat {
 
     func send(_ text: String, images: [(data: Data, mime: String)] = []) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !busy, !trimmed.isEmpty || !images.isEmpty, let owner, let bot = owner.bot(botId) else { return }
+        guard !busy, !trimmed.isEmpty || !images.isEmpty, let owner, var bot = owner.bot(botId) else { return }
+        // the driver continues this chat's Hermes session
+        bot.sessionId = bot.chats?.first { $0.id == key }?.sessionId ?? (key == bot.id ? bot.sessionId : nil)
+        let chatKey = key
+        owner.update(botId, chat: chatKey, title: trimmed.isEmpty ? tr("Immagine") : trimmed)
         let history = messages
         var names: [String] = []
         for image in images {
             if let name = try? owner.store?.saveImage(image.data, ext: image.mime == "image/png" ? "png" : "jpg") { names.append(name) }
         }
-        let latest = LocalMessage(id: newId(), botId: botId, role: .user, text: trimmed, at: Date(), images: names)
+        let latest = LocalMessage(id: newId(), botId: key, role: .user, text: trimmed, at: Date(), images: names)
         append(latest)
         busy = true
         streaming = ""
@@ -189,7 +246,7 @@ final class LocalChat {
             let sink = TurnSink(
                 delta: { [weak self] piece in self?.streaming += piece },
                 toolStarted: { [weak self] title, arguments in
-                    let message = LocalMessage(id: newId(), botId: bot.id, role: .tool, text: "", at: Date(),
+                    let message = LocalMessage(id: newId(), botId: chatKey, role: .tool, text: "", at: Date(),
                                                tool: LocalToolCall(name: title, ok: nil, input: arguments, output: nil))
                     self?.append(message)
                     return message.id
@@ -201,14 +258,13 @@ final class LocalChat {
                     self.update(message)
                 },
                 note: { [weak self] text in
-                    self?.append(LocalMessage(id: newId(), botId: bot.id, role: .note, text: text, at: Date()))
+                    self?.append(LocalMessage(id: newId(), botId: chatKey, role: .note, text: text, at: Date()))
                 })
             do {
                 let outcome = try await driver.run(input, sink: sink)
                 self.finish(text: outcome.text, interrupted: false)
-                if let sessionId = outcome.sessionId, sessionId != bot.sessionId, var current = self.owner?.bot(bot.id) {
-                    current.sessionId = sessionId
-                    self.owner?.save(current)
+                if let sessionId = outcome.sessionId, sessionId != bot.sessionId {
+                    self.owner?.update(bot.id, chat: chatKey, sessionId: sessionId)
                 }
             } catch {
                 let aborted = error is CancellationError || (error as? URLError)?.code == .cancelled
@@ -221,7 +277,7 @@ final class LocalChat {
     private func finish(text: String, interrupted: Bool) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty || interrupted && !streaming.isEmpty {
-            append(LocalMessage(id: newId(), botId: botId, role: .bot, text: trimmed, at: Date(), interrupted: interrupted))
+            append(LocalMessage(id: newId(), botId: key, role: .bot, text: trimmed, at: Date(), interrupted: interrupted))
         }
         streaming = ""
         busy = false

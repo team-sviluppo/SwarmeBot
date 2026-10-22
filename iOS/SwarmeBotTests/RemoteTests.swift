@@ -8,9 +8,14 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(MessageRow.visibleText("<attached-image path=\"/a/b.jpg\"/>\nguarda"), "🖼\nguarda")
     }
 
-    func testHexColors() {
-        XCTAssertNotNil(Color(hex: "#1084FE"))
-        XCTAssertNil(Color(hex: "blue"))
+    func testBotsWearThePaletteColours() {
+        XCTAssertTrue(SwarmePalette.hex("red").hasPrefix("#"))
+        var bot = LocalBot(id: "b", name: "B", kind: .apple, createdAt: Date())
+        XCTAssertEqual(bot.paletteColor, "blue")
+        bot.color = "#1084FE"  // saved before the palette
+        XCTAssertEqual(bot.paletteColor, "blue")
+        bot.color = "red"
+        XCTAssertEqual(bot.paletteColor, "red")
     }
 
     func testPairingLinkRoundTrip() throws {

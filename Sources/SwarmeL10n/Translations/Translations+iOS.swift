@@ -117,5 +117,10 @@ extension Translations {
         "Senza chiave": "Without a key",
         "Attiva le notifiche": "Turn On Notifications",
         "I server abbinati avvisano quando un bot finisce o chiede un permesso. Le notifiche dicono quale bot e cosa è successo, mai il testo della chat.": "Paired servers tell you when a bot finishes or asks for permission. Notifications say which bot and what happened, never the chat's text.",
+        "Chat precedenti": "Earlier Chats",
+        "Chat senza titolo": "Untitled chat",
+        "Chiedi a %@": "Ask %@",
+        "Ieri": "Yesterday",
+        "Sta pensando…": "Thinking…",
     ]
 }

@@ -1,5 +1,7 @@
-// The list of chats: one section per paired server with its bots and rooms
-// (plan §1). The phone's own bots get their section in phase 3.
+// The list of chats, in the Mac app's look (Grok style): the chief of staff
+// large on top, then collapsible sections — the phone's own bots, then each
+// server's bots by their sidebar section, and its channels — with mascots,
+// times, previews and unread dots; search floats at the bottom.
 import AgentCore
 import CompanionCore
 import SwiftUI
@@ -21,25 +23,33 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var pendingLink: RemotePairingLink?
     @State private var newBot = false
+    @State private var search = ""
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                PhoneSection(newBot: $newBot)
-                if model.sessions.isEmpty {
-                    Section {
-                        Button(tr("Abbina un server"), systemImage: "qrcode.viewfinder") { showPairing = true }
-                    } header: {
-                        Label(tr("Nessun server"), systemImage: "server.rack")
-                    } footer: {
-                        Text(tr("Abbina un server dal Mac: Impostazioni › server › Abbina telefono, poi inquadra il QR."))
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if search.isEmpty, let hero { HeroBot(session: hero.session, bot: hero.bot) }
+                    PhoneSection(search: search)
+                    ForEach(model.sessions) { session in
+                        ServerSections(session: session, search: search)
+                    }
+                    if model.sessions.isEmpty, search.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button(tr("Abbina un server"), systemImage: "qrcode.viewfinder") { showPairing = true }
+                                .foregroundStyle(Theme.accent)
+                            Text(tr("Abbina un server dal Mac: Impostazioni › server › Abbina telefono, poi inquadra il QR."))
+                                .font(.footnote).foregroundStyle(Theme.secondary)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
                     }
                 }
-                ForEach(model.sessions) { session in
-                    ServerSection(session: session)
-                }
+                .padding(.bottom, 24)
             }
-            .navigationTitle(Text(verbatim: "SwarmeBot"))
+            .background(Theme.app)
+            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom) { bottomBar }
             .navigationDestination(for: Route.self) { route in
                 if let session = model.session(route.serverId) {
                     ChatView(session: session, chat: route.chat)
@@ -52,9 +62,7 @@ struct RootView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(tr("Impostazioni"), systemImage: "gearshape") { showSettings = true }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(tr("Abbina un server"), systemImage: "qrcode.viewfinder") { showPairing = true }
-                }
+                ToolbarItem(placement: .topBarTrailing) { addMenu }
             }
             .refreshable {
                 for session in model.sessions {
@@ -134,123 +142,267 @@ struct RootView: View {
         }
         .sheet(item: Binding(get: { model.pendingImport }, set: { model.pendingImport = $0 })) { ImportView(source: $0) }
     }
+
+    /// The chief of staff of the first server, as Grok Bot shows its own.
+    private var hero: (session: RemoteSession, bot: Bot)? {
+        for session in model.sessions {
+            if let bot = session.visibleBots.first(where: { $0.chiefOfStaff == true }) { return (session, bot) }
+        }
+        return nil
+    }
+
+    private var addMenu: some View {
+        Menu {
+            Button(tr("Nuovo bot sul telefono"), systemImage: "iphone") { newBot = true }
+            Button(tr("Abbina un server"), systemImage: "qrcode.viewfinder") { showPairing = true }
+        } label: {
+            Image(systemName: "plus")
+        }
+    }
+
+    private var bottomBar: some View {
+        HStack(spacing: 10) {
+            Menu {
+                Button(tr("Nuovo bot sul telefono"), systemImage: "iphone") { newBot = true }
+                Button(tr("Abbina un server"), systemImage: "qrcode.viewfinder") { showPairing = true }
+            } label: {
+                Image(systemName: "square.grid.2x2")
+                    .font(.title3)
+                    .foregroundStyle(Theme.ink)
+                    .frame(width: 52, height: 52)
+                    .background(Theme.pill, in: Circle())
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondary)
+                TextField(tr("Cerca"), text: $search).foregroundStyle(Theme.ink).submitLabel(.search)
+                if !search.isEmpty {
+                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.secondary) }
+                }
+            }
+            .padding(.horizontal, 18)
+            .frame(height: 52)
+            .background(Theme.pill, in: Capsule())
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
+    }
+}
+
+/// The chief of staff, large, at the top of the list.
+private struct HeroBot: View {
+    let session: RemoteSession
+    let bot: Bot
+
+    var body: some View {
+        NavigationLink(value: Route(serverId: session.id, chat: .bot(bot.id))) {
+            VStack(spacing: 10) {
+                RemoteBotAvatar(bot: bot, size: 112)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "star.fill").font(.caption.bold()).foregroundStyle(.white)
+                            .frame(width: 28, height: 28).background(Theme.warning, in: Circle())
+                    }
+                Text(verbatim: bot.name).font(.subheadline).foregroundStyle(Theme.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// A section's title; a tap folds it.
+private struct SectionHeader: View {
+    let title: String
+    var detail: String? = nil
+    var dot: Color? = nil
+    @Binding var collapsed: Bool
+
+    var body: some View {
+        Button { withAnimation(.snappy) { collapsed.toggle() } } label: {
+            HStack(spacing: 6) {
+                if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
+                Text(verbatim: title).font(.body).foregroundStyle(Theme.secondary)
+                Image(systemName: "chevron.down").font(.caption).foregroundStyle(Theme.tertiary)
+                    .rotationEffect(.degrees(collapsed ? -90 : 0))
+                Spacer()
+                if let detail { Text(verbatim: detail).font(.caption).foregroundStyle(Theme.tertiary).lineLimit(1) }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// One chat in the list: mascot, name (and a badge), time, preview, unread dot.
+private struct ChatRow<Avatar: View>: View {
+    let name: String
+    var badge: String? = nil
+    let preview: String
+    let date: Date?
+    let unread: Bool
+    let busy: Bool
+    @ViewBuilder let avatar: () -> Avatar
+
+    var body: some View {
+        HStack(spacing: 14) {
+            avatar().frame(width: 56, height: 56)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(verbatim: name).font(.title3.weight(.medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                    if let badge {
+                        Text(verbatim: badge).font(.footnote).foregroundStyle(Theme.secondary)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    }
+                    Spacer(minLength: 4)
+                    if busy {
+                        ProgressView().controlSize(.mini)
+                    } else if let date {
+                        Text(verbatim: date.listStamp()).font(.subheadline).foregroundStyle(Theme.tertiary)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Text(verbatim: preview.isEmpty ? " " : preview).font(.body).foregroundStyle(Theme.secondary).lineLimit(1)
+                    Spacer(minLength: 4)
+                    if unread { Circle().fill(Theme.accent).frame(width: 10, height: 10) }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+}
+
+private func matches(_ search: String, _ fields: String...) -> Bool {
+    search.isEmpty || fields.contains { $0.localizedCaseInsensitiveContains(search) }
 }
 
 /// The phone's own bots: private, never synced (D5).
 private struct PhoneSection: View {
     @Environment(AppModel.self) private var model
-    @Binding var newBot: Bool
+    let search: String
+    @State private var collapsed = false
 
     var body: some View {
-        Section {
-            ForEach(model.local.bots) { bot in
-                NavigationLink(value: LocalRoute(botId: bot.id)) {
-                    ChatRow(name: bot.name, color: bot.color, preview: preview(bot), unread: false,
-                            busy: model.local.chat(bot.id).busy, symbol: symbol(bot.kind))
+        let bots = model.local.bots.filter { matches(search, $0.name, last($0)?.text ?? "") }
+        if !bots.isEmpty {
+            SectionHeader(title: tr("Sul telefono"), collapsed: $collapsed)
+            if !collapsed {
+                ForEach(bots) { bot in
+                    NavigationLink(value: LocalRoute(botId: bot.id)) {
+                        ChatRow(name: bot.name, badge: badge(bot.kind), preview: last(bot)?.text.replacingOccurrences(of: "\n", with: " ") ?? "",
+                                date: last(bot)?.at, unread: false, busy: model.local.chat(bot.id).busy) {
+                            LocalBotAvatar(bot: bot, size: 56, busy: model.local.chat(bot.id).busy)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
-            }
-            Button(tr("Nuovo bot sul telefono"), systemImage: "plus") { newBot = true }
-        } header: {
-            HStack(spacing: 6) {
-                Image(systemName: "iphone")
-                Text(tr("Sul telefono"))
             }
         }
     }
 
-    private func preview(_ bot: LocalBot) -> String {
-        model.local.chat(bot.id).messages.last(where: { $0.role == .bot || $0.role == .user })?.text
-            .replacingOccurrences(of: "\n", with: " ") ?? ""
+    private func last(_ bot: LocalBot) -> LocalMessage? {
+        model.local.chat(bot.id).messages.last { $0.role == .bot || $0.role == .user }
     }
 
-    private func symbol(_ kind: LocalBotKind) -> String {
+    private func badge(_ kind: LocalBotKind) -> String? {
         switch kind {
-        case .endpoint: return "network"
-        case .gemma: return "cpu"
-        case .apple: return "apple.intelligence"
+        case .gemma: return "Local AI"
+        case .apple: return "Apple"
+        case .endpoint: return nil
         }
     }
 }
 
-private struct ServerSection: View {
+/// A server's bots by their sidebar section, then its channels.
+private struct ServerSections: View {
     let session: RemoteSession
+    let search: String
+    @State private var collapsed: Set<String> = []
 
     var body: some View {
-        Section {
-            ForEach(session.visibleBots) { bot in
-                NavigationLink(value: Route(serverId: session.id, chat: .bot(bot.id))) {
-                    ChatRow(name: bot.name, color: bot.color, preview: preview(bot.threadId), unread: bot.unread,
-                            busy: session.isBusy(bot), symbol: "person.crop.circle.fill")
+        let groups = sections
+        ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+            let key = group.name ?? "-"
+            SectionHeader(title: group.name ?? session.server.name, detail: index == 0 ? statusText : nil, dot: index == 0 ? statusColor : nil,
+                          collapsed: Binding(get: { collapsed.contains(key) }, set: { if $0 { collapsed.insert(key) } else { collapsed.remove(key) } }))
+            if !collapsed.contains(key) {
+                ForEach(group.bots) { bot in
+                    NavigationLink(value: Route(serverId: session.id, chat: .bot(bot.id))) {
+                        ChatRow(name: bot.name, preview: preview(bot.threadId), date: last(bot.threadId)?.date, unread: bot.unread,
+                                busy: session.isBusy(bot)) {
+                            RemoteBotAvatar(bot: bot, size: 56)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            ForEach(session.state.rooms) { room in
-                NavigationLink(value: Route(serverId: session.id, chat: .room(room.id))) {
-                    ChatRow(name: room.name, color: nil, preview: preview(room.threadId), unread: room.unread,
-                            busy: room.busyBotId != nil, symbol: "number")
+        }
+        if case .unpaired = session.status {
+            Text(tr("Questo telefono non è più abbinato: abbinalo di nuovo dal Mac."))
+                .font(.footnote).foregroundStyle(Theme.danger).padding(.horizontal, 20)
+        }
+        let rooms = session.state.rooms.filter { matches(search, $0.name, preview($0.threadId)) }
+        if !rooms.isEmpty {
+            let key = "rooms"
+            SectionHeader(title: tr("Canali"), collapsed: Binding(get: { collapsed.contains(key) }, set: { if $0 { collapsed.insert(key) } else { collapsed.remove(key) } }))
+            if !collapsed.contains(key) {
+                ForEach(rooms) { room in
+                    NavigationLink(value: Route(serverId: session.id, chat: .room(room.id))) {
+                        ChatRow(name: room.name, preview: preview(room.threadId), date: last(room.threadId)?.date, unread: room.unread,
+                                busy: room.busyBotId != nil) {
+                            RoomAvatar(members: room.memberIds.compactMap { session.state.bot($0) }, size: 56)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
-            }
-        } header: {
-            HStack(spacing: 6) {
-                Circle().fill(statusColor).frame(width: 8, height: 8)
-                Text(verbatim: session.server.name)
-                Spacer()
-                Text(statusText).font(.caption2).textCase(nil)
-            }
-        } footer: {
-            if case .unpaired = session.status {
-                Text(tr("Questo telefono non è più abbinato: abbinalo di nuovo dal Mac."))
             }
         }
     }
 
+    /// As the Mac's sidebar: labeled sections in first-seen order, unlabeled bots last; pinned first.
+    private var sections: [(name: String?, bots: [Bot])] {
+        let bots = session.visibleBots.filter { $0.chiefOfStaff != true || !search.isEmpty }
+            .filter { matches(search, $0.name, preview($0.threadId)) }
+        var order: [String?] = []
+        var grouped: [String?: [Bot]] = [:]
+        for bot in bots {
+            let key = bot.section?.isEmpty == false ? bot.section : nil
+            if grouped[key] == nil { order.append(key) }
+            grouped[key, default: []].append(bot)
+        }
+        order.sort { a, b in a != nil && b == nil }
+        return order.map { ($0, grouped[$0] ?? []) }
+    }
+
+    private func last(_ threadId: String) -> Message? {
+        session.state.messages[threadId]?.last { $0.kind == .text }
+    }
+
     private func preview(_ threadId: String) -> String {
-        guard let last = session.state.messages[threadId]?.last(where: { $0.kind == .text }) else { return "" }
-        return MessageRow.visibleText(last.text ?? "").replacingOccurrences(of: "\n", with: " ")
+        MessageRow.visibleText(last(threadId)?.text ?? "").replacingOccurrences(of: "\n", with: " ")
     }
 
     private var statusColor: Color {
         switch session.status {
-        case .live: return .green
-        case .connecting, .cached: return .orange
-        case .offline, .unpaired: return .red
+        case .live: return Theme.success
+        case .connecting, .cached: return Theme.warning
+        case .offline, .unpaired: return Theme.danger
         }
     }
 
     private var statusText: String {
         switch session.status {
-        case .live: return tr("Connesso")
+        case .live: return session.server.name
         case .connecting: return tr("Connessione…")
         case .cached: return session.cachedAt.map { tr("Aggiornato %@", $0.appRelative()) } ?? tr("Connessione…")
         case let .offline(reason): return reason
         case .unpaired: return tr("Non abbinato")
-        }
-    }
-}
-
-private struct ChatRow: View {
-    let name: String
-    let color: String?
-    let preview: String
-    let unread: Bool
-    let busy: Bool
-    let symbol: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.title2)
-                .foregroundStyle(color.flatMap(Color.init(hex:)) ?? .secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(verbatim: name).font(.body.weight(unread ? .semibold : .regular))
-                    if busy { ProgressView().controlSize(.mini) }
-                }
-                if !preview.isEmpty {
-                    Text(verbatim: preview).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            Spacer()
-            if unread { Circle().fill(Color.accentColor).frame(width: 8, height: 8) }
         }
     }
 }

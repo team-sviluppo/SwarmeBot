@@ -37,12 +37,30 @@ struct LocalBot: Codable, Hashable, Identifiable, Sendable {
     /// The system prompt; empty means none.
     var instructions: String = ""
     var connectorIds: [String] = []
-    /// The Hermes session the chat continues, once one was named.
+    /// The Hermes session the first chat continues (later chats keep theirs in `chats`).
     var sessionId: String?
     var createdAt: Date
-    var color: String = "#1084FE"
+    /// A mascot palette name (older bots: a hex, shown as blue).
+    var color: String = "blue"
+    /// Every chat of this bot, newest first. Nil on bots saved before there
+    /// were several: their one chat is keyed by the bot's id.
+    var chats: [LocalChatSummary]?
+    /// The chat shown; nil is the first one (keyed by the bot's id).
+    var currentChat: String?
 
     var apiKeyAccount: String { "bot.\(id).apiKey" }
+    /// Where the shown chat's messages are kept (`LocalMessage.botId`).
+    var currentChatKey: String { currentChat ?? id }
+}
+
+/// One of a bot's chats, as the chats list shows it.
+struct LocalChatSummary: Codable, Hashable, Identifiable, Sendable {
+    /// The messages' key; the first chat's is the bot's own id.
+    var id: String
+    var title: String
+    var createdAt: Date
+    /// The Hermes session this chat continues.
+    var sessionId: String?
 }
 
 struct LocalToolCall: Codable, Hashable, Sendable {
@@ -56,6 +74,7 @@ struct LocalMessage: Codable, Hashable, Identifiable, Sendable {
     enum Role: String, Codable, Sendable { case user, bot, tool, note }
 
     var id: String
+    /// The chat this message belongs to (`LocalChatSummary.id`; the bot's id for its first chat).
     var botId: String
     var role: Role
     var text: String

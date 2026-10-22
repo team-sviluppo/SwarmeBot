@@ -44,6 +44,11 @@ targets:
     platform: iOS
     sources:
       - path: SwarmeBot
+      # the Mac app's mascots, the same files (not copies)
+      - path: ../Sources/SwarmeBot/Mascot/SwarmeAvatar.swift
+      - path: ../Sources/SwarmeBot/Mascot/SwarmeFaceData.swift
+      - path: ../Sources/SwarmeBot/Mascot/SwarmeModel.swift
+      - path: ../Sources/SwarmeBot/Mascot/MascotState.swift
     dependencies:
       - package: SwarmeBot
         product: AgentCore

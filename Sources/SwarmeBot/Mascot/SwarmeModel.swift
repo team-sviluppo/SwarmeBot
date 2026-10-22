@@ -4,6 +4,8 @@
 import SwiftUI
 #if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
 #endif
 
 struct SwarmeBodyMotion {
@@ -108,11 +110,18 @@ enum SwarmePalette {
     static func bubble(_ name: String) -> Color {
         let dark = bubbleShades[name] ?? bubbleShades["green"]!
         let light = bubbleTints[name] ?? bubbleTints["green"]!
+        #if canImport(AppKit)
         func ns(_ s: (r: Double, g: Double, b: Double)) -> NSColor { NSColor(srgbRed: s.r, green: s.g, blue: s.b, alpha: 1) }
         let darkColor = ns(dark), lightColor = ns(light)
         return Color(nsColor: NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? darkColor : lightColor
         })
+        #else
+        // the iOS app (iOS/project.yml compiles this file too)
+        func ui(_ s: (r: Double, g: Double, b: Double)) -> UIColor { UIColor(red: s.r, green: s.g, blue: s.b, alpha: 1) }
+        let darkColor = ui(dark), lightColor = ui(light)
+        return Color(uiColor: UIColor { traits in traits.userInterfaceStyle == .dark ? darkColor : lightColor })
+        #endif
     }
 
     private static let bubbleShades: [String: (r: Double, g: Double, b: Double)] = {

@@ -9,6 +9,7 @@ struct LocalBotEditor: View {
     var existing: LocalBot?
 
     @State private var name = ""
+    @State private var color = "blue"
     @State private var kind: LocalBotKind = .endpoint
     @State private var baseUrl = ""
     @State private var apiKey = ""
@@ -26,6 +27,24 @@ struct LocalBotEditor: View {
         NavigationStack {
             Form {
                 Section {
+                    HStack {
+                        Spacer()
+                        SwarmeAvatar(color: color, size: 88, state: .happy, trackPointer: false)
+                        Spacer()
+                    }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(Self.palette, id: \.self) { name in
+                                Button { color = name } label: {
+                                    Circle().fill(SwarmePalette.color(name)).frame(width: 30, height: 30)
+                                        .overlay { if name == color { Circle().stroke(Theme.ink, lineWidth: 2).padding(-4) } }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(Text(verbatim: name))
+                            }
+                        }
+                        .padding(6)
+                    }
                     TextField(tr("Nome"), text: $name)
                     Picker(tr("Modello"), selection: $kind) {
                         Text(tr("API compatibile OpenAI")).tag(LocalBotKind.endpoint)
@@ -136,6 +155,9 @@ struct LocalBotEditor: View {
         }
     }
 
+    /// The Mac's mascot colours (`SwarmePaletteData`).
+    static let palette = ["green", "blue", "red", "orange", "yellow", "purple", "pink", "cyan", "teal", "coral", "white"]
+
     private var canSave: Bool {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         return kind != .endpoint || (URL(string: baseUrl)?.scheme != nil && !modelId.isEmpty)
@@ -159,6 +181,7 @@ struct LocalBotEditor: View {
             return
         }
         name = existing.name
+        color = existing.paletteColor
         kind = existing.kind
         baseUrl = existing.endpoint?.baseUrl ?? ""
         modelId = existing.endpoint?.model ?? ""
@@ -172,6 +195,7 @@ struct LocalBotEditor: View {
     private func save() {
         var bot = existing ?? LocalBot(id: newId(), name: "", kind: kind, createdAt: Date())
         bot.name = name.trimmingCharacters(in: .whitespaces)
+        bot.color = color
         if bot.kind != kind { bot.sessionId = nil }
         bot.kind = kind
         bot.instructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)

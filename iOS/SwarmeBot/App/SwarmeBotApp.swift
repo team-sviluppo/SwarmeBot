@@ -13,6 +13,9 @@ struct SwarmeBotApp: App {
                 .environment(model)
                 // dates, numbers and system controls in the app's language
                 .environment(\.locale, localizer.language.locale)
+                // the Mac app's dark look (Grok style)
+                .preferredColorScheme(.dark)
+                .tint(Theme.ink)
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
