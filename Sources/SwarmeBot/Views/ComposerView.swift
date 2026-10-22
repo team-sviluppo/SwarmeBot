@@ -355,7 +355,7 @@ private struct SkillSuggestionList: View {
         .frame(maxWidth: 520, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.raised))
         .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline.opacity(0.4)))
-        .shadow(color: .black.opacity(0.35), radius: 12, y: 8)
+        .shadow(color: Theme.shadow.opacity(0.35), radius: 12, y: 8)
     }
 }
 
@@ -387,7 +387,7 @@ private struct MentionList: View {
         .frame(width: 288)
         .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.raised))
         .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline.opacity(0.4)))
-        .shadow(color: .black.opacity(0.35), radius: 12, y: 8)
+        .shadow(color: Theme.shadow.opacity(0.35), radius: 12, y: 8)
     }
 }
 
@@ -658,12 +658,12 @@ struct ComposerTextView: NSViewRepresentable {
         field.defaultParagraphStyle = PlaceholderTextView.paragraph
         field.typingAttributes = [
             .font: NSFont.systemFont(ofSize: Theme.bodySize),
-            .foregroundColor: NSColor(Theme.ink),
+            .foregroundColor: Theme.nsInk,
             .paragraphStyle: PlaceholderTextView.paragraph,
             .baselineOffset: PlaceholderTextView.baselineOffset,
         ]
-        field.textColor = NSColor(Theme.ink)
-        field.insertionPointColor = NSColor(Theme.accent)
+        field.textColor = Theme.nsInk
+        field.insertionPointColor = Theme.nsAccent
         field.textContainerInset = .zero
         field.textContainer?.lineFragmentPadding = 0
         field.isAutomaticQuoteSubstitutionEnabled = false
@@ -775,7 +775,7 @@ final class PlaceholderTextView: NSTextView {
         guard string.isEmpty else { return }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font ?? .systemFont(ofSize: Theme.bodySize),
-            .foregroundColor: NSColor(Theme.secondary),
+            .foregroundColor: Theme.nsSecondary,
             .paragraphStyle: Self.paragraph,
             .baselineOffset: Self.baselineOffset,
         ]

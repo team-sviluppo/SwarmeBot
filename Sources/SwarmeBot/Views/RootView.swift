@@ -88,7 +88,7 @@ struct RootView: View {
         .overlay {
             if model.showPalette {
                 ZStack(alignment: .top) {
-                    Color.black.opacity(0.5)
+                    Theme.scrim
                         .onTapGesture { model.showPalette = false }
                     GeometryReader { geo in
                         CommandPalette()

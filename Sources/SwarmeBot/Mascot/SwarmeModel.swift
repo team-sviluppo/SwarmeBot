@@ -104,9 +104,15 @@ enum SwarmePalette {
     /// The bot's reply bubble: its own colour, darkened (hue kept) just
     /// enough for `Theme.ink` on it to reach WCAG AA, 4.5:1. Every shade but
     /// the darkest needs some: white comes out mid grey, yellow olive.
+    /// In the light look the ink is dark, so the colour is lightened instead.
     static func bubble(_ name: String) -> Color {
-        let shade = bubbleShades[name] ?? bubbleShades["green"]!
-        return Color(.sRGB, red: shade.r, green: shade.g, blue: shade.b, opacity: 1)
+        let dark = bubbleShades[name] ?? bubbleShades["green"]!
+        let light = bubbleTints[name] ?? bubbleTints["green"]!
+        func ns(_ s: (r: Double, g: Double, b: Double)) -> NSColor { NSColor(srgbRed: s.r, green: s.g, blue: s.b, alpha: 1) }
+        let darkColor = ns(dark), lightColor = ns(light)
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? darkColor : lightColor
+        })
     }
 
     private static let bubbleShades: [String: (r: Double, g: Double, b: Double)] = {
@@ -116,6 +122,20 @@ enum SwarmePalette {
             var k = 1.0
             while k > 0, contrast(ink, luminance((v.r * k, v.g * k, v.b * k))) < 4.5 { k -= 0.01 }
             return (v.r * k / 255, v.g * k / 255, v.b * k / 255)
+        }
+    }()
+
+    /// The light look's bubble: the colour mixed with white until the light
+    /// theme's ink (`#18181B`) on it reaches 4.5:1, and at least halfway,
+    /// so every bot gets a soft tint rather than its full-strength body colour.
+    private static let bubbleTints: [String: (r: Double, g: Double, b: Double)] = {
+        let ink = luminance(rgb("#18181B"))
+        return SwarmePaletteData.hex.mapValues { hex in
+            let v = rgb(hex)
+            var t = 0.55
+            func mixed(_ c: CGFloat) -> CGFloat { c + (255 - c) * t }
+            while t < 1, contrast(ink, luminance((mixed(v.r), mixed(v.g), mixed(v.b)))) < 4.5 { t += 0.01 }
+            return (mixed(v.r) / 255, mixed(v.g) / 255, mixed(v.b) / 255)
         }
     }()
 

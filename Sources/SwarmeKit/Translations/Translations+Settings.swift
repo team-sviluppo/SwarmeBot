@@ -3,6 +3,10 @@ extension Translations {
     static let settings: [String: String] = [
         "Lingua": "Language",
         "Lingua dell'app": "App language",
+        "Tema": "Theme",
+        "Scuro": "Dark",
+        "Chiaro": "Light",
+        "Sistema": "System",
 
         // Settings window tabs
         "Generale": "General",

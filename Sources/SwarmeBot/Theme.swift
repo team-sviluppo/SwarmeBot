@@ -3,34 +3,53 @@
 // Flat and opaque on purpose: no system vibrancy on the sidebar or the
 // inspector. The look is near-black panels with grey bubbles, and a
 // translucent sidebar pulls it toward stock macOS and away from that.
+//
+// Every colour is dynamic: the `dark` value is the original palette, the
+// `light` one its counterpart. They resolve by the appearance of the window
+// they are drawn in, which the Settings choice (dark, light, system) sets on
+// every scene through `appAppearance()`.
+import AppKit
+import SwarmeKit
 import SwiftUI
 
 enum Theme {
-    static let app = Color(hex: "#070707")
-    static let panel = Color(hex: "#111111")
-    static let card = Color(hex: "#262626")
-    static let raised = Color(hex: "#2F2F2F")
-    static let raisedHover = Color(hex: "#3D3D3D")
+    /// AppKit views (the composer's text view) need an NSColor that stays dynamic;
+    /// `NSColor(Color)` would freeze it to the appearance current at the call.
+    static let nsInk = NSColor.dynamic(dark: "#FCFCFC", light: "#18181B")
+    static let nsSecondary = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.6, light: "#18181B", lightAlpha: 0.62)
+    static let nsAccent = NSColor.dynamic(dark: "#1084FE", light: "#0A74E6")
+
+    static let app = Color(dark: "#070707", light: "#FFFFFF")
+    static let panel = Color(dark: "#111111", light: "#F4F4F6")
+    static let card = Color(dark: "#262626", light: "#EAEAED")
+    static let raised = Color(dark: "#2F2F2F", light: "#E6E6EA")
+    static let raisedHover = Color(dark: "#3D3D3D", light: "#D8D8DD")
     /// Old name for `raisedHover`.
     static var hover: Color { raisedHover }
-    static let inset = Color(hex: "#191919")
-    static let hairline = Color(hex: "#333333")
-    static let ink = Color(hex: "#FCFCFC")
-    static let secondary = Color(hex: "#FCFCFC").opacity(0.6)
-    static let tertiary = Color(hex: "#FCFCFC").opacity(0.42)
-    static let accent = Color(hex: "#1084FE")
+    static let inset = Color(dark: "#191919", light: "#EFEFF2")
+    static let hairline = Color(dark: "#333333", light: "#D6D6DB")
+    static let ink = Color(nsColor: nsInk)
+    static let secondary = Color(nsColor: nsSecondary)
+    static let tertiary = Color(dark: "#FCFCFC", darkAlpha: 0.42, light: "#18181B", lightAlpha: 0.45)
+    static let accent = Color(nsColor: nsAccent)
     /// Bubbles as in Grok Bot: the bot's a step above the window, yours a step above that.
-    static let bubbleUser = Color(hex: "#2E2E2E")
-    static let bubbleBot = Color(hex: "#1C1C1C")
-    static let success = Color(hex: "#38D591")
-    static let danger = Color(hex: "#FF5667")
-    static let warning = Color(hex: "#FF9800")
-    static let accentBorder = Color(hex: "#459FFE")
-    static let focus = Color(hex: "#459FFE")
-    static let accentText = Color(hex: "#7FC0FF")
+    static let bubbleUser = Color(dark: "#2E2E2E", light: "#E8E8EC")
+    static let bubbleBot = Color(dark: "#1C1C1C", light: "#F3F3F6")
+    static let success = Color(dark: "#38D591", light: "#12A06A")
+    static let danger = Color(dark: "#FF5667", light: "#E0334A")
+    static let warning = Color(dark: "#FF9800", light: "#D97F00")
+    static let accentBorder = Color(dark: "#459FFE", light: "#1084FE")
+    static let focus = Color(dark: "#459FFE", light: "#1084FE")
+    static let accentText = Color(dark: "#7FC0FF", light: "#0A64C8")
     static let accentInk = Color.white
     static let dangerInk = Color.white
-    static let scrollbar = Color(hex: "#3D3D3D")
+    static let scrollbar = Color(dark: "#3D3D3D", light: "#C4C4CA")
+    /// Drop shadows: full black on the dark look, softer on the light one.
+    static let shadow = Color(dark: "#000000", light: "#000000", lightAlpha: 0.45)
+    /// Behind the command palette.
+    static let scrim = Color.black.opacity(0.5)
+    /// The session-limit chip's yellow: orange `warning` reads as yellow on the dark header only.
+    static let caution = Color(dark: "#F5C842", light: "#B58900")
 
     /// Chat text, matched to Grok Bot: 14 pt regular, ~20 pt line.
     static let bodySize: CGFloat = 14

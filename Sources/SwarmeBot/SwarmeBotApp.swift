@@ -11,7 +11,7 @@ struct SwarmeBotApp: App {
             RootView()
                 .environment(delegate.model)
                 .appLanguage()
-                .preferredColorScheme(.dark)
+                .appAppearance()
                 .frame(minWidth: 900, minHeight: 600)
         }
         .windowStyle(.hiddenTitleBar)
@@ -22,7 +22,7 @@ struct SwarmeBotApp: App {
             AutomationsView()
                 .environment(delegate.model)
                 .appLanguage()
-                .preferredColorScheme(.dark)
+                .appAppearance()
         }
         .defaultSize(width: 900, height: 600)
 
@@ -30,7 +30,7 @@ struct SwarmeBotApp: App {
             TeamLibraryView()
                 .environment(delegate.model)
                 .appLanguage()
-                .preferredColorScheme(.dark)
+                .appAppearance()
         }
         .defaultSize(width: 720, height: 560)
 
@@ -38,7 +38,7 @@ struct SwarmeBotApp: App {
             SettingsView()
                 .environment(delegate.model)
                 .appLanguage()
-                .preferredColorScheme(.dark)
+                .appAppearance()
         }
     }
 }

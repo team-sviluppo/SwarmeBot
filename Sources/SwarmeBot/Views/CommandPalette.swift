@@ -89,7 +89,7 @@ struct CommandPalette: View {
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.card))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.hairline.opacity(0.5)))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.6), radius: 25, y: 25)
+        .shadow(color: Theme.shadow.opacity(0.6), radius: 25, y: 25)
         .padding(.horizontal, 24)
         .onAppear { focused = true }
         .onExitCommand { dismiss() }
