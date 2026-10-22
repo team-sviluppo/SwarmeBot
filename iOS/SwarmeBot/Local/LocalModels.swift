@@ -17,16 +17,33 @@ enum LocalBotKind: String, Codable, CaseIterable, Identifiable, Sendable {
     var takesTools: Bool { self != .apple }
 }
 
-struct EndpointConfig: Codable, Hashable, Sendable {
+/// An OpenAI-compatible server (LiteLLM, vLLM, Hermes Agent, a hosted
+/// proxy), set once in Impostazioni and chosen by any number of bots.
+struct LocalServer: Codable, Hashable, Identifiable, Sendable {
+    var id: String
+    var name: String
     /// Up to and including `/v1`.
     var baseUrl: String
-    var model: String
     /// Extra headers on every request; values are not secrets (the key is
     /// in the Keychain).
     var headers: [String: String] = [:]
+    var createdAt: Date
+
+    var apiKeyAccount: String { "server.\(id).apiKey" }
+}
+
+/// What a bot on an OpenAI-compatible server uses of it.
+struct EndpointConfig: Codable, Hashable, Sendable {
+    /// The `LocalServer`; nil only on bots saved before there were servers.
+    var serverId: String?
+    var model: String
     /// Send images as `image_url` parts: only the user knows whether the
     /// model behind a compatible API can see.
     var images: Bool = false
+    /// Before servers, a bot kept the address and headers itself (and its
+    /// key in the Keychain); `LocalBots` moves them to a server at launch.
+    var baseUrl: String?
+    var headers: [String: String]?
 }
 
 struct LocalBot: Codable, Hashable, Identifiable, Sendable {
@@ -42,12 +59,17 @@ struct LocalBot: Codable, Hashable, Identifiable, Sendable {
     var createdAt: Date
     /// A mascot palette name (older bots: a hex, shown as blue).
     var color: String = "blue"
+    /// The mascot's shape, a `SwarmeSilhouetteData` id; nil on older bots.
+    var silhouette: String?
     /// Every chat of this bot, newest first. Nil on bots saved before there
     /// were several: their one chat is keyed by the bot's id.
     var chats: [LocalChatSummary]?
     /// The chat shown; nil is the first one (keyed by the bot's id).
     var currentChat: String?
+    /// A reply came while its chat was not on screen.
+    var unread: Bool?
 
+    /// Where a bot kept its key before servers.
     var apiKeyAccount: String { "bot.\(id).apiKey" }
     /// Where the shown chat's messages are kept (`LocalMessage.botId`).
     var currentChatKey: String { currentChat ?? id }
@@ -81,6 +103,8 @@ struct LocalMessage: Codable, Hashable, Identifiable, Sendable {
     var at: Date
     /// Images the user attached, as files in the app's attachments folder.
     var images: [String] = []
+    /// PDFs the user attached, as their text; nil on older messages.
+    var documents: [AttachedDocument]?
     var tool: LocalToolCall?
     /// A reply cut short by stop or by the app going away.
     var interrupted: Bool = false

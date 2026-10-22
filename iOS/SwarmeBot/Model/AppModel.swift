@@ -13,23 +13,92 @@ final class AppModel {
     var lastError: String?
     /// A chat to show, asked by a tapped notification.
     var open: Route?
+    /// The same for one of the phone's bots.
+    var openPhoneBot: String?
     /// Settings from the Mac waiting to be looked at (a QR or a file).
     var pendingImport: ImportSource?
 
+    /// While the app is off screen: the streams kept open, a turn on the phone finishing.
+    @ObservationIgnored private var grace: (id: UIBackgroundTaskIdentifier, task: Task<Void, Never>)?
+
     init() {
         sessions = ServerStore.load().map { RemoteSession(server: $0) }
+        for session in sessions { listen(session) }
     }
 
     func session(_ id: String) -> RemoteSession? { sessions.first { $0.id == id } }
 
+    /// The unread chats, everywhere: the app icon's badge.
+    var unreadCount: Int {
+        sessions.reduce(local.unreadCount) { $0 + $1.state.unreadCount }
+    }
+
+    private func listen(_ session: RemoteSession) {
+        session.onNotify = { [weak session] frame in
+            guard let session else { return }
+            Notifier.shared.deliver(frame, from: session)
+        }
+    }
+
     // MARK: - Lifecycle
 
     func becameActive() {
+        Notifier.shared.active = true
+        endGrace()
         for session in sessions { session.resume() }
     }
 
+    /// The streams stay open as long as iOS lets the app run (about half a
+    /// minute), so a turn ending soon after still tells; a turn on the phone
+    /// carries on as long as that. Then the background refreshes take over.
     func wentToBackground() {
-        for session in sessions { session.pause() }
+        Notifier.shared.active = false
+        guard grace == nil else { return }
+        let id = UIApplication.shared.beginBackgroundTask(withName: "finish turns") { [weak self] in
+            // iOS calls it on the main thread, just before suspending the app
+            MainActor.assumeIsolated { self?.settleInBackground() }
+        }
+        let task = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            while !Task.isCancelled, self?.local.isBusy == true { try? await Task.sleep(for: .seconds(1)) }
+            if !Task.isCancelled { self?.settleInBackground() }
+        }
+        grace = (id, task)
+        if !sessions.isEmpty { Notifier.scheduleRefresh() }
+    }
+
+    private func settleInBackground() {
+        for session in sessions {
+            session.pause()
+            Notifier.shared.remember(session)
+        }
+        Notifier.shared.setBadge(unreadCount)
+        endGrace()
+    }
+
+    private func endGrace() {
+        guard let grace else { return }
+        self.grace = nil
+        grace.task.cancel()
+        UIApplication.shared.endBackgroundTask(grace.id)
+    }
+
+    /// An app refresh iOS granted: each server's bots, a notification for
+    /// every chat that turned unread since, and the badge.
+    func refreshInBackground() async {
+        if !sessions.isEmpty { Notifier.scheduleRefresh() }
+        var unread = local.unreadCount
+        for session in sessions {
+            guard let fleet = await session.fetchFleet() else {
+                unread += session.state.unreadCount
+                continue
+            }
+            Notifier.shared.reconcile(session, bots: fleet.bots)
+            var state = CompanionState()
+            state.hydrate(fleet)
+            unread += state.unreadCount
+        }
+        Notifier.shared.setBadge(unread)
     }
 
     // MARK: - Pairing
@@ -58,10 +127,11 @@ final class AppModel {
         let replaced = sessions.filter { $0.server.chatURL == server.chatURL }
         for old in replaced { remove(old) }
         let session = RemoteSession(server: server)
+        listen(session)
         sessions.append(session)
         ServerStore.save(sessions.map(\.server))
         session.resume()
-        PushManager.shared.requestPermission()
+        Notifier.shared.requestPermission()
         Task { await PushManager.shared.register(session) }
         return session
     }

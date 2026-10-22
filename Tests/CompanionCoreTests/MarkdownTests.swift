@@ -1,6 +1,6 @@
 // The block splitter.
 //
-// The view half — fonts, bullets, the caret — needs a simulator to judge and
+// The view half — fonts, bullets, tables — needs a simulator to judge and
 // is not tested here. The split is the part with decisions in it, and every
 // decision below is one the desktop's react-markdown + remark-gfm already
 // made, so the two clients wrap the same reply the same way.

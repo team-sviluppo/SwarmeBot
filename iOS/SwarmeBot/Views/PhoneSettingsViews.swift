@@ -1,5 +1,5 @@
-// Impostazioni for the phone's own bots: the MCP connectors over HTTP and
-// the on-device models.
+// Impostazioni for the phone's own bots: the OpenAI-compatible servers, the MCP
+// connectors over HTTP and the on-device models.
 import AgentCore
 import SwiftUI
 
@@ -228,6 +228,143 @@ struct ModelsView: View {
         case let .failed(message):
             Text(verbatim: message).foregroundStyle(.red)
             Button(tr("Riprova")) { gemma.startDownload() }
+        }
+    }
+}
+
+/// The OpenAI-compatible servers the phone's bots choose from.
+struct ServersView: View {
+    @Environment(AppModel.self) private var model
+    @State private var editing: LocalServer?
+    @State private var adding = false
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(model.local.servers) { server in
+                    Button { editing = server } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: server.name).foregroundStyle(.primary)
+                            Text(verbatim: server.baseUrl).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Button(tr("Aggiungi un server"), systemImage: "plus") { adding = true }
+            } footer: {
+                Text(tr("Un server che parla l'API di OpenAI: LiteLLM, vLLM, Hermes Agent, un proxy. Lo configuri una volta, poi ogni bot sceglie quale usare."))
+            }
+        }
+        .navigationTitle(tr("Server compatibili OpenAI"))
+        .sheet(item: $editing) { ServerEditor(existing: $0) }
+        .sheet(isPresented: $adding) { ServerEditor(existing: nil) }
+    }
+}
+
+struct ServerEditor: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var existing: LocalServer?
+    /// A new server was saved (the bot editor picks it).
+    var created: (LocalServer) -> Void = { _ in }
+
+    @State private var name = ""
+    @State private var baseUrl = ""
+    @State private var apiKey = ""
+    @State private var headersText = ""
+    @State private var status: String?
+    @State private var working = false
+    @State private var confirmDelete = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(tr("Nome"), text: $name)
+                    TextField(tr("Indirizzo, fino a /v1"), text: $baseUrl)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                    SecureField(tr("Chiave API"), text: $apiKey)
+                    TextField(tr("Header, uno per riga: Nome: valore"), text: $headersText, axis: .vertical)
+                        .lineLimit(1...6)
+                        .font(.footnote.monospaced())
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } footer: {
+                    Text(tr("La chiave resta nel Portachiavi di questo telefono."))
+                }
+                Section {
+                    Button(tr("Prova la connessione")) { Task { await test() } }.disabled(working || !valid)
+                    if working { ProgressView() }
+                    if let status { Text(verbatim: status).font(.footnote) }
+                }
+                if let existing {
+                    let users = model.local.bots(on: existing)
+                    Section {
+                        Button(tr("Elimina il server"), role: .destructive) { confirmDelete = true }
+                    } footer: {
+                        if !users.isEmpty { Text(tr("Lo usano: %@", users.map(\.name).joined(separator: ", "))) }
+                    }
+                    .confirmationDialog(tr("Eliminare %@?", existing.name), isPresented: $confirmDelete, titleVisibility: .visible) {
+                        Button(tr("Elimina"), role: .destructive) {
+                            model.local.delete(existing)
+                            dismiss()
+                        }
+                    } message: {
+                        if !users.isEmpty { Text(tr("I bot che lo usano restano senza server finché non ne scegli un altro.")) }
+                    }
+                }
+            }
+            .navigationTitle(existing == nil ? tr("Nuovo server") : (existing?.name ?? ""))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(tr("Annulla")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(tr("Salva")) { save() }.disabled(!valid) }
+            }
+            .onAppear(perform: load)
+        }
+    }
+
+    private var valid: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: baseUrl.trimmingCharacters(in: .whitespaces))?.scheme != nil
+    }
+
+    private var headers: [String: String] {
+        var out: [String: String] = [:]
+        for line in headersText.split(separator: "\n") {
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let key = line[..<colon].trimmingCharacters(in: .whitespaces)
+            if !key.isEmpty { out[key] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces) }
+        }
+        return out
+    }
+
+    private func load() {
+        guard let existing else { return }
+        name = existing.name
+        baseUrl = existing.baseUrl
+        apiKey = Keychain.get(existing.apiKeyAccount) ?? ""
+        headersText = existing.headers.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: "\n")
+    }
+
+    private func save() {
+        var server = existing ?? LocalServer(id: newId(), name: "", baseUrl: "", createdAt: Date())
+        server.name = name.trimmingCharacters(in: .whitespaces)
+        server.baseUrl = baseUrl.trimmingCharacters(in: .whitespaces)
+        server.headers = headers
+        model.local.save(server, apiKey: apiKey)
+        if existing == nil { created(server) }
+        dismiss()
+    }
+
+    private func test() async {
+        working = true
+        defer { working = false }
+        do {
+            let models = try await LocalBots.models(baseUrl: baseUrl, apiKey: apiKey, headers: headers)
+            status = models.isEmpty ? tr("L'endpoint non ha elencato modelli.") : tr("Connesso: %@", models.joined(separator: ", "))
+        } catch {
+            status = Redact.text(error.localizedDescription)
         }
     }
 }

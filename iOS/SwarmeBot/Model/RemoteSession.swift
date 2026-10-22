@@ -147,6 +147,13 @@ final class RemoteSession: Identifiable {
         FleetCache.save(state, serverId: server.id)
     }
 
+    /// The bots and rooms, for a refresh in the background: the shown state
+    /// stays as it is (the stream resumes it when the app is back).
+    func fetchFleet() async -> Fleet? {
+        guard let client, status != .unpaired else { return nil }
+        return try? await client.fleet(messages: 1)
+    }
+
     private func advance(to seq: Int?) {
         guard let seq, let cursor, let streamId = cursor.split(separator: ":").first else { return }
         self.cursor = "\(streamId):\(seq)"
@@ -185,6 +192,7 @@ final class RemoteSession: Identifiable {
     func send(_ text: String, to chat: ChatRef) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        Notifier.shared.requestPermission()
         await perform { client in
             switch chat {
             case let .bot(id): try await client.send(text: trimmed, toBot: id)

@@ -4,6 +4,7 @@
 import CompanionCore
 import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A remote bot's mascot. Uploaded pictures are not shown yet: the mascot
 /// in the bot's colour and shape stands in.
@@ -18,14 +19,15 @@ struct RemoteBotAvatar: View {
     }
 }
 
-/// A phone bot's mascot: its colour, the default shape.
+/// A phone bot's mascot: its colour and shape, its own resting face.
 struct LocalBotAvatar: View {
     let bot: LocalBot
     var size: CGFloat = 52
     var busy = false
 
     var body: some View {
-        SwarmeAvatar(color: bot.paletteColor, size: size, state: busy ? .working : .idle, animated: true, trackPointer: false)
+        SwarmeAvatar(color: bot.paletteColor, size: size, state: busy ? .working : SwarmeState.restingFace(for: bot.id),
+                     silhouette: bot.shape, animated: true, trackPointer: false)
     }
 }
 
@@ -118,31 +120,76 @@ struct ActivityLine: View {
     }
 }
 
-/// The floating composer: "+" for a picture, the field, send (or stop).
+/// The floating composer: "+" for a picture or a PDF, what is attached, the field, send (or stop).
 struct ComposerBar: View {
     @Binding var text: String
     let placeholder: String
-    var canAttach = true
+    var takesImages = true
     @Binding var photo: PhotosPickerItem?
-    var attachedCount = 0
+    /// A PDF the user picked; nil when the chat takes none.
+    var attachPDF: ((URL) -> Void)? = nil
+    /// What goes with the next message, as chips ("📄 report.pdf").
+    var attached: [String] = []
+    var detach: (Int) -> Void = { _ in }
     var busy = false
     var enabled = true
     let send: () -> Void
     var stop: (() -> Void)? = nil
 
-    private var empty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachedCount == 0 }
+    @State private var pickingPhoto = false
+    @State private var pickingPDF = false
+    private var empty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attached.isEmpty }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !attached.isEmpty { chips }
+            bar
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+        .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
+        .fileImporter(isPresented: $pickingPDF, allowedContentTypes: [.pdf]) { result in
+            if case let .success(url) = result { attachPDF?(url) }
+        }
+    }
+
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(attached.enumerated()), id: \.offset) { index, label in
+                    HStack(spacing: 6) {
+                        Text(verbatim: label).lineLimit(1)
+                        Button { detach(index) } label: { Image(systemName: "xmark.circle.fill") }
+                            .accessibilityLabel(tr("Togli"))
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(Theme.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Theme.pill, in: Capsule())
+                }
+            }
+        }
+    }
+
+    private var bar: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            if canAttach {
-                PhotosPicker(selection: $photo, matching: .images) {
-                    Image(systemName: attachedCount > 0 ? "photo.badge.checkmark" : "plus")
+            if takesImages || attachPDF != nil {
+                Menu {
+                    if takesImages {
+                        Button(tr("Foto"), systemImage: "photo") { pickingPhoto = true }
+                    }
+                    if attachPDF != nil {
+                        Button(tr("PDF"), systemImage: "doc.text") { pickingPDF = true }
+                    }
+                } label: {
+                    Image(systemName: "plus")
                         .font(.title3.weight(.medium))
                         .foregroundStyle(Theme.ink)
                         .frame(width: 50, height: 50)
                         .background(Theme.pill, in: Circle())
                 }
-                .accessibilityLabel(tr("Allega un'immagine"))
+                .accessibilityLabel(tr("Allega"))
             }
             HStack(alignment: .bottom, spacing: 8) {
                 TextField(placeholder, text: $text, axis: .vertical)
@@ -170,14 +217,51 @@ struct ComposerBar: View {
             .padding(.trailing, 6)
             .background(Theme.pill, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 6)
+    }
+}
+
+/// A transcript that stays on its last line while the reader is there: when
+/// the room for it changes (the keyboard, the composer growing) or the content
+/// does (a reply streaming, a bubble laid out again), and when a message
+/// arrives. Scrolled up to read, it stays put until the next message.
+private struct StickToBottom<Last: Equatable>: ViewModifier {
+    let last: Last
+    @State private var position = ScrollPosition(edge: .bottom)
+
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position)
+            .defaultScrollAnchor(.bottom)
+            .onScrollGeometryChange(for: ScrollGeometry.self, of: { $0 }) { old, new in
+                let resized = old.contentSize != new.contentSize || old.containerSize != new.containerSize
+                    || old.contentInsets != new.contentInsets
+                if resized, Self.atBottom(old) { position.scrollTo(edge: .bottom) }
+            }
+            .onChange(of: last) { _, _ in withAnimation { position.scrollTo(edge: .bottom) } }
+    }
+
+    private static func atBottom(_ geometry: ScrollGeometry) -> Bool {
+        let end = geometry.contentSize.height + geometry.contentInsets.bottom - geometry.containerSize.height
+        return geometry.contentOffset.y >= end - 32
+    }
+}
+
+extension View {
+    func stickToBottom<Last: Equatable>(last: Last) -> some View {
+        modifier(StickToBottom(last: last))
     }
 }
 
 extension LocalBot {
     /// The mascot's colour: a palette name (older bots kept a hex).
     var paletteColor: String { color.hasPrefix("#") ? "blue" : color }
+
+    /// The mascot's shape; older bots get one from their id, so they differ too.
+    var shape: String {
+        if let silhouette, SwarmeSilhouette.ids.contains(silhouette) { return silhouette }
+        let ids = SwarmeSilhouette.ids
+        return ids[Int(id.utf8.reduce(UInt32(5381)) { $0 &* 33 &+ UInt32($1) } % UInt32(ids.count))]
+    }
 }
 
 extension Date {

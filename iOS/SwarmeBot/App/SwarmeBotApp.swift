@@ -21,10 +21,16 @@ struct SwarmeBotApp: App {
             switch phase {
             case .active:
                 PushManager.shared.start(model)
+                // after OneSignal, which wraps the delegate it is given
+                Notifier.shared.start(model)
                 model.becameActive()
             case .background: model.wentToBackground()
             default: break
             }
+        }
+        // the servers' bots checked now and then with the app closed (no push needed)
+        .backgroundTask(.appRefresh(Notifier.refreshTask)) {
+            await model.refreshInBackground()
         }
     }
 }

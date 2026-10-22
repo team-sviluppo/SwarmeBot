@@ -10,63 +10,65 @@ struct LocalChatView: View {
     @State private var draft = ""
     @State private var images: [(data: Data, mime: String)] = []
     @State private var photo: PhotosPickerItem?
+    @State private var documents: [AttachedDocument] = []
+    @State private var attachError: String?
     @State private var editing = false
     @State private var showChats = false
+    @State private var deleting: LocalBot?
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     private var bot: LocalBot? { model.local.bot(botId) }
     private var chat: LocalChat { model.local.chat(botId) }
     private var color: String { bot?.paletteColor ?? "blue" }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if chat.messages.isEmpty, !chat.busy {
-                        VStack(spacing: 12) {
-                            if let bot { LocalBotAvatar(bot: bot, size: 96) }
-                            Text(tr("Questa chat resta su questo telefono.")).font(.footnote).foregroundStyle(Theme.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 80)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                if chat.messages.isEmpty, !chat.busy {
+                    VStack(spacing: 12) {
+                        if let bot { LocalBotAvatar(bot: bot, size: 96) }
+                        Text(tr("Questa chat resta su questo telefono.")).font(.footnote).foregroundStyle(Theme.secondary)
                     }
-                    ForEach(chat.messages) { message in
-                        LocalMessageRow(message: message, color: color, image: chat.image).id(message.id)
-                    }
-                    if chat.busy {
-                        if chat.streaming.isEmpty {
-                            ActivityLine(text: tr("Sta pensando…"), running: true).id("live")
-                        } else {
-                            ChatBubble(text: chat.streaming, isUser: false, color: color).id("live")
-                        }
-                    }
-                    if let error = chat.lastError {
-                        ActivityLine(text: error, failed: true)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 80)
+                }
+                ForEach(chat.messages) { message in
+                    LocalMessageRow(message: message, color: color, image: chat.image).id(message.id)
+                }
+                if chat.busy {
+                    if chat.streaming.isEmpty {
+                        ActivityLine(text: tr("Sta pensando…"), running: true).id("live")
+                    } else {
+                        ChatBubble(text: chat.streaming, isUser: false, color: color).id("live")
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                if let error = chat.lastError {
+                    ActivityLine(text: error, failed: true)
+                }
             }
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            .onChange(of: chat.messages.last?.id) { _, id in withAnimation { proxy.scrollTo(id, anchor: .bottom) } }
-            .onChange(of: chat.streaming.count) { _, _ in proxy.scrollTo("live", anchor: .bottom) }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .stickToBottom(last: chat.messages.last?.id)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 4) {
-                if !images.isEmpty {
-                    HStack {
-                        Label(tr("%@ immagini allegate", String(images.count)), systemImage: "photo")
-                        Button(tr("Togli"), role: .destructive) { images = [] }
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(Theme.secondary)
+                if let attachError {
+                    Text(verbatim: attachError).font(.caption).foregroundStyle(Theme.danger).padding(.horizontal, 16)
                 }
-                ComposerBar(text: $draft, placeholder: tr("Chiedi a %@", bot?.name ?? ""), canAttach: takesImages, photo: $photo,
-                            attachedCount: images.count, busy: chat.busy,
+                ComposerBar(text: $draft, placeholder: tr("Chiedi a %@", bot?.name ?? ""), takesImages: takesImages, photo: $photo,
+                            attachPDF: attachPDF,
+                            attached: images.map { _ in "🖼 " + tr("Immagine") } + documents.map { "📄 " + $0.name },
+                            detach: { index in
+                                if index < images.count { images.remove(at: index) } else { documents.remove(at: index - images.count) }
+                            },
+                            busy: chat.busy,
                             send: {
-                                chat.send(draft, images: images)
+                                chat.send(draft, images: images, documents: documents)
                                 draft = ""
                                 images = []
+                                documents = []
                             },
                             stop: { chat.stop() })
             }
@@ -84,11 +86,23 @@ struct LocalChatView: View {
                     Button(tr("Nuova chat"), systemImage: "square.and.pencil") { model.local.newChat(botId) }
                     Button(tr("Chat precedenti"), systemImage: "clock.arrow.circlepath") { showChats = true }
                     Button(tr("Modifica il bot"), systemImage: "slider.horizontal.3") { editing = true }
+                    Divider()
+                    Button(tr("Elimina il bot"), systemImage: "trash", role: .destructive) { deleting = bot }
                 } label: {
                     Image(systemName: "ellipsis")
                 }
             }
         }
+        .deleteBotDialog($deleting)
+        .onAppear {
+            Notifier.shared.onScreen = Notifier.key(phoneBot: botId)
+            model.local.markRead(botId)
+        }
+        .onDisappear { if Notifier.shared.onScreen == Notifier.key(phoneBot: botId) { Notifier.shared.onScreen = nil } }
+        // back in front on this chat: what came meanwhile is read now
+        .onChange(of: scenePhase) { _, phase in if phase == .active { model.local.markRead(botId) } }
+        // deleted here or from its settings: back to the list
+        .onChange(of: bot == nil) { _, gone in if gone { dismiss() } }
         .sheet(isPresented: $editing) {
             if let bot { LocalBotEditor(existing: bot) }
         }
@@ -109,6 +123,15 @@ struct LocalChatView: View {
                       let jpeg = picture.jpegData(compressionQuality: 0.85) else { return }
                 images.append((jpeg, "image/jpeg"))
             }
+        }
+    }
+
+    private func attachPDF(_ url: URL) {
+        do {
+            documents.append(try AttachedDocument.pdf(at: url))
+            attachError = nil
+        } catch {
+            attachError = error.localizedDescription
         }
     }
 
@@ -136,6 +159,14 @@ private struct LocalMessageRow: View {
                         Image(uiImage: picture).resizable().scaledToFit().frame(maxWidth: 220, maxHeight: 220)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     }
+                }
+                ForEach(message.documents ?? [], id: \.self) { document in
+                    Label(document.name, systemImage: "doc.text")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Theme.pill, in: Capsule())
                 }
                 if !message.text.isEmpty { ChatBubble(text: message.text, isUser: true, color: color) }
             }

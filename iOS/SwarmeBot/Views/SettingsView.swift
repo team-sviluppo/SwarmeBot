@@ -1,5 +1,6 @@
 // Impostazioni: the app's language and the paired servers.
 import SwiftUI
+import UserNotifications
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
@@ -17,16 +18,9 @@ struct SettingsView: View {
                         }
                     }
                 }
-                if PushManager.shared.isConfigured {
-                    Section {
-                        Button(tr("Attiva le notifiche")) { PushManager.shared.requestPermission() }
-                    } header: {
-                        Text(tr("Notifiche"))
-                    } footer: {
-                        Text(tr("I server abbinati avvisano quando un bot finisce o chiede un permesso. Le notifiche dicono quale bot e cosa è successo, mai il testo della chat."))
-                    }
-                }
+                NotificationsSection()
                 Section(tr("Sul telefono")) {
+                    NavigationLink(tr("Server compatibili OpenAI")) { ServersView() }
                     NavigationLink(tr("Connettori")) { ConnectorsView() }
                     NavigationLink(tr("Modelli sul telefono")) { ModelsView() }
                 }
@@ -60,5 +54,43 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+/// Whether the phone may tell: ask, or send to the system's settings once refused.
+private struct NotificationsSection: View {
+    @State private var status: UNAuthorizationStatus?
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        Section {
+            switch status {
+            case .notDetermined:
+                Button(tr("Attiva le notifiche")) {
+                    Task {
+                        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+                        PushManager.shared.requestPermission()
+                        await refresh()
+                    }
+                }
+            case .denied:
+                Button(tr("Apri le impostazioni di iOS")) {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
+                }
+            case .some:
+                Label(tr("Notifiche attive"), systemImage: "checkmark")
+            case nil:
+                EmptyView()
+            }
+        } header: {
+            Text(tr("Notifiche"))
+        } footer: {
+            Text(tr("Il telefono avvisa quando un bot finisce o chiede un permesso, e l'icona dell'app conta le chat non lette. Con l'app chiusa, i bot dei server si controllano quando iOS lo concede: l'avviso può arrivare in ritardo."))
+        }
+        .task(id: scenePhase) { await refresh() }
+    }
+
+    private func refresh() async {
+        status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 }

@@ -12,8 +12,11 @@ struct ChatView: View {
     @State private var draft = ""
     @State private var attachments: [String] = []
     @State private var photo: PhotosPickerItem?
+    @State private var documents: [AttachedDocument] = []
+    @State private var attachError: String?
     @State private var sending = false
     @State private var showChats = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private var bot: Bot? {
         if case let .bot(id) = chat { return session.state.bot(id) }
@@ -29,6 +32,7 @@ struct ChatView: View {
     private var title: String { bot?.name ?? room?.name ?? tr("Chat") }
     private var busy: Bool { bot.map(session.isBusy) ?? (room?.busyBotId != nil) }
     private var color: String { bot?.color ?? "blue" }
+    private var screenKey: String { Notifier.key(server: session.id, chat: chat) }
 
     var body: some View {
         Group {
@@ -76,6 +80,16 @@ struct ChatView: View {
             await session.ensureLoaded(threadId)
             await session.markRead(chat)
         }
+        // a reply that ends here is read: no notification, no badge
+        .onChange(of: busy) { _, working in
+            if !working, scenePhase == .active { Task { await session.markRead(chat) } }
+        }
+        // back in front on this chat: what came meanwhile is read now
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await session.markRead(chat) } }
+        }
+        .onAppear { Notifier.shared.onScreen = screenKey }
+        .onDisappear { if Notifier.shared.onScreen == screenKey { Notifier.shared.onScreen = nil } }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             Task { await attach(item) }
@@ -91,37 +105,31 @@ struct ChatView: View {
     private func transcript(_ threadId: String) -> some View {
         let messages = session.transcript(threadId)
         let live = session.state.streaming[threadId]
-        return ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if session.state.hasMore[threadId] == true {
-                        Button(tr("Messaggi precedenti")) { Task { await session.loadOlder(threadId) } }
-                            .font(.footnote)
-                            .foregroundStyle(Theme.secondary)
-                            .frame(maxWidth: .infinity)
-                    }
-                    ForEach(messages) { message in
-                        MessageRow(message: message, color: message.from?.color ?? color, inRoom: room != nil) { card, choice in
-                            Task { await session.answer(threadId: threadId, card: card, choice: choice) }
-                        }
-                        .id(message.id)
-                    }
-                    if let live, !live.isEmpty {
-                        ChatBubble(text: live, isUser: false, color: color).id("live")
-                    } else if busy {
-                        ActivityLine(text: tr("Sta lavorando…"), running: true).id("live")
-                    }
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                if session.state.hasMore[threadId] == true {
+                    Button(tr("Messaggi precedenti")) { Task { await session.loadOlder(threadId) } }
+                        .font(.footnote)
+                        .foregroundStyle(Theme.secondary)
+                        .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                ForEach(messages) { message in
+                    MessageRow(message: message, color: message.from?.color ?? color, inRoom: room != nil) { card, choice in
+                        Task { await session.answer(threadId: threadId, card: card, choice: choice) }
+                    }
+                    .id(message.id)
+                }
+                if let live, !live.isEmpty {
+                    ChatBubble(text: live, isUser: false, color: color).id("live")
+                } else if busy {
+                    ActivityLine(text: tr("Sta lavorando…"), running: true).id("live")
+                }
             }
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            .onChange(of: messages.last?.id) { _, id in
-                withAnimation { proxy.scrollTo(id, anchor: .bottom) }
-            }
-            .onChange(of: live?.count) { _, _ in proxy.scrollTo("live", anchor: .bottom) }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .stickToBottom(last: messages.last?.id)
     }
 
     // MARK: Composer
@@ -133,7 +141,14 @@ struct ChatView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.secondary)
             }
-            ComposerBar(text: $draft, placeholder: tr("Chiedi a %@", title), photo: $photo, attachedCount: attachments.count,
+            if let attachError {
+                Text(verbatim: attachError).font(.caption).foregroundStyle(Theme.danger)
+            }
+            ComposerBar(text: $draft, placeholder: tr("Chiedi a %@", title), photo: $photo, attachPDF: attachPDF,
+                        attached: attachments.map { _ in "🖼 " + tr("Immagine") } + documents.map { "📄 " + $0.name },
+                        detach: { index in
+                            if index < attachments.count { attachments.remove(at: index) } else { documents.remove(at: index - attachments.count) }
+                        },
                         busy: busy, enabled: session.isLive && !sending,
                         send: { Task { await send() } }, stop: { Task { await session.interrupt(chat) } })
         }
@@ -146,12 +161,23 @@ struct ChatView: View {
         if let tag = await session.attach(jpeg, mime: "image/jpeg") { attachments.append(tag) }
     }
 
+    /// The PDF's text goes in the prompt: the engine takes only images as files.
+    private func attachPDF(_ url: URL) {
+        do {
+            documents.append(try AttachedDocument.pdf(at: url))
+            attachError = nil
+        } catch {
+            attachError = error.localizedDescription
+        }
+    }
+
     private func send() async {
         sending = true
         defer { sending = false }
-        let text = (attachments + [draft]).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = (documents.map(\.promptBlock) + attachments + [draft]).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         draft = ""
         attachments = []
+        documents = []
         await session.send(text, to: chat)
     }
 }
@@ -184,7 +210,7 @@ struct MessageRow: View {
 
     /// The prompt as the user typed it: attachment tags become a picture.
     static func visibleText(_ text: String) -> String {
-        text.replacingOccurrences(of: #"<attached-image path="[^"]*"/>"#, with: "🖼", options: .regularExpression)
+        AttachedDocument.displayed(text).replacingOccurrences(of: #"<attached-image path="[^"]*"/>"#, with: "🖼", options: .regularExpression)
     }
 }
 

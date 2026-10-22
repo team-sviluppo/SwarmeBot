@@ -82,6 +82,12 @@ struct RootView: View {
             path.append(route)
             model.open = nil
         }
+        .onChange(of: model.openPhoneBot) { _, botId in
+            guard let botId else { return }
+            if model.local.bot(botId) != nil { path.append(LocalRoute(botId: botId)) }
+            model.openPhoneBot = nil
+        }
+        .onChange(of: model.unreadCount, initial: true) { _, count in Notifier.shared.setBadge(count) }
         #if DEBUG
         .task {
             // UI checks on the simulator: `-pairLink swarmebot://pair?…` pairs without the camera
@@ -98,14 +104,16 @@ struct RootView: View {
             if !model.local.bots.contains(where: { $0.kind == kind }) {
                 var bot = LocalBot(id: newId(), name: "Bot di prova (\(kind.rawValue))", kind: kind, createdAt: Date())
                 if let base = defaults.string(forKey: "seedEndpoint"), kind == .endpoint {
-                    bot.endpoint = EndpointConfig(baseUrl: base, model: "fake/echo-1")
+                    let server = LocalServer(id: newId(), name: "Server di prova", baseUrl: base, createdAt: Date())
+                    model.local.save(server, apiKey: "test-key")
+                    bot.endpoint = EndpointConfig(serverId: server.id, model: "fake/echo-1")
                 }
                 if let url = UserDefaults.standard.string(forKey: "seedConnector") {
                     let connector = LocalConnector(id: newId(), name: "Fake MCP", url: url, auth: .none, createdAt: Date())
                     model.local.save(connector, headers: [:])
                     bot.connectorIds = [connector.id]
                 }
-                model.local.save(bot, apiKey: "test-key")
+                model.local.save(bot)
             }
             guard let bot = model.local.bots.last(where: { $0.kind == kind }) else { return }
             path.append(LocalRoute(botId: bot.id))
@@ -287,23 +295,33 @@ private struct PhoneSection: View {
     @Environment(AppModel.self) private var model
     let search: String
     @State private var collapsed = false
+    @State private var editing: LocalBot?
+    @State private var deleting: LocalBot?
 
     var body: some View {
         let bots = model.local.bots.filter { matches(search, $0.name, last($0)?.text ?? "") }
-        if !bots.isEmpty {
-            SectionHeader(title: tr("Sul telefono"), collapsed: $collapsed)
-            if !collapsed {
-                ForEach(bots) { bot in
-                    NavigationLink(value: LocalRoute(botId: bot.id)) {
-                        ChatRow(name: bot.name, badge: badge(bot.kind), preview: last(bot)?.text.replacingOccurrences(of: "\n", with: " ") ?? "",
-                                date: last(bot)?.at, unread: false, busy: model.local.chat(bot.id).busy) {
-                            LocalBotAvatar(bot: bot, size: 56, busy: model.local.chat(bot.id).busy)
+        Group {
+            if !bots.isEmpty {
+                SectionHeader(title: tr("Sul telefono"), collapsed: $collapsed)
+                if !collapsed {
+                    ForEach(bots) { bot in
+                        NavigationLink(value: LocalRoute(botId: bot.id)) {
+                            ChatRow(name: bot.name, badge: badge(bot.kind), preview: last(bot)?.text.replacingOccurrences(of: "\n", with: " ") ?? "",
+                                    date: last(bot)?.at, unread: bot.unread == true, busy: model.local.chat(bot.id).busy) {
+                                LocalBotAvatar(bot: bot, size: 56, busy: model.local.chat(bot.id).busy)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(tr("Modifica il bot"), systemImage: "slider.horizontal.3") { editing = bot }
+                            Button(tr("Elimina il bot"), systemImage: "trash", role: .destructive) { deleting = bot }
                         }
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
+        .sheet(item: $editing) { LocalBotEditor(existing: $0) }
+        .deleteBotDialog($deleting)
     }
 
     private func last(_ bot: LocalBot) -> LocalMessage? {

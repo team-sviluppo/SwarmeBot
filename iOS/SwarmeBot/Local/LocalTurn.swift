@@ -24,6 +24,8 @@ struct TurnOutcome {
 
 struct TurnInput {
     var bot: LocalBot
+    /// An endpoint bot's server.
+    var server: LocalServer?
     /// The settled chat before this turn, oldest first.
     var history: [LocalMessage]
     var latest: LocalMessage
@@ -42,9 +44,15 @@ struct DriverError: LocalizedError {
     var errorDescription: String? { message }
 }
 
+/// What the user wrote, after the text of the PDFs they attached.
+func promptText(_ message: LocalMessage) -> String {
+    ((message.documents ?? []).map(\.promptBlock) + [message.text]).filter { !$0.isEmpty }.joined(separator: "\n\n")
+}
+
 /// The text a past message contributes to a model's context.
 func transcriptText(_ message: LocalMessage) -> String {
-    message.images.isEmpty ? message.text : message.text + "\n" + message.images.map { _ in "[immagine allegata]" }.joined(separator: " ")
+    let text = promptText(message)
+    return message.images.isEmpty ? text : text + "\n" + message.images.map { _ in "[immagine allegata]" }.joined(separator: " ")
 }
 
 // MARK: - Endpoint
@@ -58,23 +66,25 @@ final class EndpointDriver: LocalDriver {
 
     /// One endpoint object per bot and address: it remembers what the
     /// endpoint proved about sessions and tools while the app runs.
-    private func endpoint(for bot: LocalBot, _ config: EndpointConfig) -> OpenAIChatEndpoint {
-        let key = "\(bot.id)|\(config.baseUrl)"
-        let apiKey = Keychain.get(bot.apiKeyAccount) ?? ""
+    private func endpoint(for bot: LocalBot, _ server: LocalServer) -> OpenAIChatEndpoint {
+        let key = "\(bot.id)|\(server.baseUrl)"
+        let apiKey = Keychain.get(server.apiKeyAccount) ?? ""
         if let known = endpoints[key] {
             known.apiKey = apiKey
-            known.headers = config.headers
+            known.headers = server.headers
             return known
         }
-        let created = OpenAIChatEndpoint(baseUrl: config.baseUrl.trimmingSuffix("/"), apiKey: apiKey, headers: config.headers)
+        let created = OpenAIChatEndpoint(baseUrl: server.baseUrl.trimmingSuffix("/"), apiKey: apiKey, headers: server.headers)
         created.missingURLMessage = tr("L'indirizzo dell'endpoint non è valido.")
         endpoints[key] = created
         return created
     }
 
     func run(_ input: TurnInput, sink: TurnSink) async throws -> TurnOutcome {
-        guard let config = input.bot.endpoint else { throw DriverError(message: tr("Questo bot non ha un endpoint configurato.")) }
-        let endpoint = endpoint(for: input.bot, config)
+        guard let config = input.bot.endpoint, let server = input.server else {
+            throw DriverError(message: tr("Questo bot non ha un server: sceglilo in Modifica il bot."))
+        }
+        let endpoint = endpoint(for: input.bot, server)
         // `/v1/capabilities` once per endpoint while the app runs, as the engine does on a catalog read
         if probed.insert(ObjectIdentifier(endpoint).debugDescription).inserted { endpoint.applyProbe(await endpoint.probeHermes()) }
         let session = endpoint.session(cursor: input.bot.sessionId)
@@ -86,9 +96,9 @@ final class EndpointDriver: LocalDriver {
             case .tool, .note: return nil
             }
         }
-        var content: JSON = .string(input.latest.text)
+        var content: JSON = .string(promptText(input.latest))
         if config.images, !input.images.isEmpty {
-            var parts: [JSON] = [["type": "text", "text": .string(input.latest.text)]]
+            var parts: [JSON] = [["type": "text", "text": .string(promptText(input.latest))]]
             for image in input.images {
                 parts.append(["type": "image_url", "image_url": ["url": .string("data:\(image.mime);base64,\(image.data.base64EncodedString())")]])
             }

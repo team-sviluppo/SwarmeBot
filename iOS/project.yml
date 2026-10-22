@@ -101,7 +101,9 @@ targets:
         # pushes are off unless the build names its OneSignal app and relay (iOS/Local.xcconfig)
         SwarmeBotPushAppId: $(SWARMEBOT_PUSH_APP_ID)
         SwarmeBotPushRelay: $(SWARMEBOT_PUSH_RELAY)
-        UIBackgroundModes: [remote-notification]
+        # `fetch`: the app refresh that checks the servers' bots with the app closed (Notifier)
+        UIBackgroundModes: [remote-notification, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [it.hextra.swarmebot.refresh]
         # settings exported from the Mac (plan §7)
         CFBundleDocumentTypes:
           - CFBundleTypeName: SwarmeBot configuration

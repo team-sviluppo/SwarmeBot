@@ -49,7 +49,7 @@ final class PushManager: NSObject {
             ], intentIdentifiers: []),
             UNNotificationCategory(identifier: "chat", actions: [], intentIdentifiers: []),
         ])
-        center.delegate = self
+        // the delegate is the Notifier's, which hands the answers back here
         Task { await registerEverywhere() }
     }
 
@@ -130,16 +130,12 @@ extension PushManager: OSPushSubscriptionObserver {
     }
 }
 
-extension PushManager: UNUserNotificationCenterDelegate {
+extension PushManager {
     /// Consenti/Nega on an approval; the plain tap is OneSignal's click.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    func handle(_ response: UNNotificationResponse) async {
         let action = response.actionIdentifier
         guard action == Self.allowAction || action == Self.denyAction else { return }
         let data = Self.data(response.notification.request.content.userInfo)
         await answer(data, allow: action == Self.allowAction)
-    }
-
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .list]
     }
 }

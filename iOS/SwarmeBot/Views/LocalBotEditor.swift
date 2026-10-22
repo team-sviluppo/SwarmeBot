@@ -1,5 +1,5 @@
-// A phone bot's settings: its kind (endpoint, Gemma, Apple), the endpoint
-// with its key and headers, instructions, and the connectors it may use.
+// A phone bot's settings: its kind (endpoint, Gemma, Apple), the server and
+// model it uses, instructions, and the connectors it may use.
 import AgentCore
 import SwiftUI
 
@@ -10,18 +10,18 @@ struct LocalBotEditor: View {
 
     @State private var name = ""
     @State private var color = "blue"
+    @State private var silhouette = SwarmeSilhouette.ids.randomElement() ?? SwarmeSilhouetteData.defaultId
     @State private var kind: LocalBotKind = .endpoint
-    @State private var baseUrl = ""
-    @State private var apiKey = ""
+    @State private var serverId: String?
     @State private var modelId = ""
-    @State private var headersText = ""
+    @State private var addingServer = false
     @State private var images = false
     @State private var instructions = ""
     @State private var connectorIds: Set<String> = []
     @State private var models: [String] = []
     @State private var loadingModels = false
     @State private var error: String?
-    @State private var confirmDelete = false
+    @State private var deleting: LocalBot?
 
     var body: some View {
         NavigationStack {
@@ -29,7 +29,7 @@ struct LocalBotEditor: View {
                 Section {
                     HStack {
                         Spacer()
-                        SwarmeAvatar(color: color, size: 88, state: .happy, trackPointer: false)
+                        SwarmeAvatar(color: color, size: 88, state: .happy, silhouette: silhouette, trackPointer: false)
                         Spacer()
                     }
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -44,6 +44,23 @@ struct LocalBotEditor: View {
                             }
                         }
                         .padding(6)
+                    }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(SwarmeSilhouette.ids, id: \.self) { id in
+                                Button { silhouette = id } label: {
+                                    SwarmeAvatar(color: color, size: 40, state: .idle, silhouette: id, animated: false, trackPointer: false, effects: false)
+                                        .padding(4)
+                                        .background(id == silhouette ? Theme.raised : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .overlay {
+                                            if id == silhouette { RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.ink, lineWidth: 1.5) }
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(Text(verbatim: id))
+                            }
+                        }
+                        .padding(4)
                     }
                     TextField(tr("Nome"), text: $name)
                     Picker(tr("Modello"), selection: $kind) {
@@ -79,16 +96,11 @@ struct LocalBotEditor: View {
                 }
                 if let existing {
                     Section {
-                        Button(tr("Elimina il bot"), role: .destructive) { confirmDelete = true }
-                    }
-                    .confirmationDialog(tr("Eliminare %@?", existing.name), isPresented: $confirmDelete, titleVisibility: .visible) {
-                        Button(tr("Elimina"), role: .destructive) {
-                            model.local.delete(existing)
-                            dismiss()
-                        }
+                        Button(tr("Elimina il bot"), role: .destructive) { deleting = existing }
                     }
                 }
             }
+            .deleteBotDialog($deleting) { dismiss() }
             .navigationTitle(existing == nil ? tr("Nuovo bot") : tr("Modifica il bot"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -122,11 +134,13 @@ struct LocalBotEditor: View {
 
     private var endpointSection: some View {
         Section {
-            TextField(tr("Indirizzo, fino a /v1"), text: $baseUrl)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-            SecureField(tr("Chiave API"), text: $apiKey)
+            Picker(tr("Server"), selection: $serverId) {
+                if serverId == nil { Text(tr("Scegli…")).tag(String?.none) }
+                ForEach(model.local.servers) { server in
+                    Text(verbatim: server.name).tag(Optional(server.id))
+                }
+            }
+            Button(tr("Aggiungi un server"), systemImage: "plus") { addingServer = true }
             HStack {
                 TextField(tr("Modello"), text: $modelId)
                     .textInputAutocapitalization(.never)
@@ -136,96 +150,106 @@ struct LocalBotEditor: View {
                 } else {
                     Menu {
                         ForEach(models, id: \.self) { id in Button { modelId = id } label: { Text(verbatim: id) } }
-                        Button(tr("Leggi i modelli dall'endpoint")) { Task { await fetchModels() } }
+                        Button(tr("Leggi i modelli dal server")) { Task { await fetchModels() } }
                     } label: {
                         Image(systemName: "list.bullet")
                     }
+                    .disabled(server == nil)
                 }
             }
             Toggle(tr("Invia le immagini"), isOn: $images)
-            TextField(tr("Header, uno per riga: Nome: valore"), text: $headersText, axis: .vertical)
-                .lineLimit(1...6)
-                .font(.footnote.monospaced())
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
         } header: {
-            Text(tr("Endpoint"))
+            Text(tr("Server compatibile OpenAI"))
         } footer: {
-            Text(tr("La chiave resta nel Portachiavi di questo telefono."))
+            Text(tr("Indirizzo, chiave e header stanno nel server: si cambiano in Impostazioni › Server compatibili OpenAI."))
         }
+        .sheet(isPresented: $addingServer) {
+            ServerEditor(existing: nil) { serverId = $0.id }
+        }
+        .onChange(of: serverId) { _, _ in models = [] }
     }
+
+    private var server: LocalServer? { model.local.servers.first { $0.id == serverId } }
 
     /// The Mac's mascot colours (`SwarmePaletteData`).
     static let palette = ["green", "blue", "red", "orange", "yellow", "purple", "pink", "cyan", "teal", "coral", "white"]
 
     private var canSave: Bool {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
-        return kind != .endpoint || (URL(string: baseUrl)?.scheme != nil && !modelId.isEmpty)
-    }
-
-    private var headers: [String: String] {
-        var out: [String: String] = [:]
-        for line in headersText.split(separator: "\n") {
-            guard let colon = line.firstIndex(of: ":") else { continue }
-            let key = line[..<colon].trimmingCharacters(in: .whitespaces)
-            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-            if !key.isEmpty { out[key] = value }
-        }
-        return out
+        return kind != .endpoint || (server != nil && !modelId.isEmpty)
     }
 
     private func load() {
         guard let existing else {
             name = tr("Assistente")
             kind = GemmaModel.isComplete && GemmaModel.unavailableReason == nil ? .gemma : .endpoint
+            serverId = model.local.servers.first?.id
             return
         }
         name = existing.name
         color = existing.paletteColor
+        silhouette = existing.shape
         kind = existing.kind
-        baseUrl = existing.endpoint?.baseUrl ?? ""
+        serverId = existing.endpoint?.serverId
         modelId = existing.endpoint?.model ?? ""
         images = existing.endpoint?.images ?? false
-        headersText = (existing.endpoint?.headers ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: "\n")
         instructions = existing.instructions
         connectorIds = Set(existing.connectorIds)
-        apiKey = Keychain.get(existing.apiKeyAccount) ?? ""
     }
 
     private func save() {
         var bot = existing ?? LocalBot(id: newId(), name: "", kind: kind, createdAt: Date())
         bot.name = name.trimmingCharacters(in: .whitespaces)
         bot.color = color
+        bot.silhouette = silhouette
         if bot.kind != kind { bot.sessionId = nil }
         bot.kind = kind
         bot.instructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
         bot.connectorIds = model.local.connectors.map(\.id).filter(connectorIds.contains)
         if kind == .endpoint {
-            let config = EndpointConfig(baseUrl: baseUrl.trimmingCharacters(in: .whitespaces), model: modelId, headers: headers, images: images)
-            if config.baseUrl != bot.endpoint?.baseUrl { bot.sessionId = nil }
+            let config = EndpointConfig(serverId: serverId, model: modelId, images: images)
+            if config.serverId != bot.endpoint?.serverId { bot.sessionId = nil }
             bot.endpoint = config
         }
-        model.local.save(bot, apiKey: kind == .endpoint ? apiKey : nil)
+        model.local.save(bot)
         dismiss()
     }
 
     private func fetchModels() async {
-        guard let url = URL(string: baseUrl.trimmingCharacters(in: .whitespaces).trimmingSuffix("/") + "/models") else { return }
+        guard let server else { return }
         loadingModels = true
         defer { loadingModels = false }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 15
-        if !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
-        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200...299).contains(status) else { throw DriverError(message: "HTTP \(status)") }
-            models = (try JSON.parse(data))["data"]?.array?.compactMap { $0["id"]?.string } ?? []
+            models = try await LocalBots.models(baseUrl: server.baseUrl, apiKey: Keychain.get(server.apiKeyAccount) ?? "", headers: server.headers)
             if modelId.isEmpty, let first = models.first { modelId = first }
             error = models.isEmpty ? tr("L'endpoint non ha elencato modelli.") : nil
         } catch {
             self.error = tr("Modelli non letti: %@", error.localizedDescription)
+        }
+    }
+}
+
+extension View {
+    /// Asks before deleting a phone bot: its chats exist on this phone only.
+    func deleteBotDialog(_ bot: Binding<LocalBot?>, deleted: @escaping () -> Void = {}) -> some View {
+        modifier(DeleteBotDialog(bot: bot, deleted: deleted))
+    }
+}
+
+private struct DeleteBotDialog: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var bot: LocalBot?
+    let deleted: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(tr("Eliminare %@?", bot?.name ?? ""), isPresented: Binding(get: { bot != nil }, set: { if !$0 { bot = nil } }),
+                                   titleVisibility: .visible, presenting: bot) { target in
+            Button(tr("Elimina"), role: .destructive) {
+                model.local.delete(target)
+                deleted()
+            }
+        } message: { _ in
+            Text(tr("Le sue chat sono solo su questo telefono: si perdono anche quelle."))
         }
     }
 }

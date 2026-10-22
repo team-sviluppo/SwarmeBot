@@ -12,6 +12,7 @@ import Observation
 final class LocalBots {
     private(set) var bots: [LocalBot] = []
     private(set) var connectors: [LocalConnector] = []
+    private(set) var servers: [LocalServer] = []
     var lastError: String?
 
     @ObservationIgnored let store: LocalStore?
@@ -25,6 +26,7 @@ final class LocalBots {
         self.store = store
         bots = store?.bots() ?? []
         connectors = store?.connectors() ?? []
+        servers = store?.servers() ?? []
         // bots from before several chats: their one chat becomes the first of the list
         for var bot in bots where bot.chats == nil {
             let first = store?.messages(bot: bot.id).first { $0.role == .user }
@@ -32,6 +34,31 @@ final class LocalBots {
                                           sessionId: bot.sessionId)]
             save(bot)
         }
+        moveEndpointsToServers()
+    }
+
+    /// Bots from before servers kept address, headers and key themselves:
+    /// each different one becomes a server, shared by the bots that had it.
+    private func moveEndpointsToServers() {
+        for var bot in bots where bot.kind == .endpoint {
+            guard var config = bot.endpoint, config.serverId == nil, let baseUrl = config.baseUrl else { continue }
+            let key = Keychain.get(bot.apiKeyAccount) ?? ""
+            let headers = config.headers ?? [:]
+            let server = servers.first { $0.baseUrl == baseUrl && $0.headers == headers && (Keychain.get($0.apiKeyAccount) ?? "") == key }
+                ?? addServer(name: URL(string: baseUrl)?.host ?? baseUrl, baseUrl: baseUrl, headers: headers, apiKey: key)
+            config.serverId = server.id
+            config.baseUrl = nil
+            config.headers = nil
+            bot.endpoint = config
+            save(bot)
+            Keychain.remove(bot.apiKeyAccount)
+        }
+    }
+
+    private func addServer(name: String, baseUrl: String, headers: [String: String], apiKey: String) -> LocalServer {
+        let server = LocalServer(id: newId(), name: name, baseUrl: baseUrl, headers: headers, createdAt: Date())
+        save(server, apiKey: apiKey)
+        return server
     }
 
     static func title(_ text: String) -> String {
@@ -39,6 +66,34 @@ final class LocalBots {
     }
 
     func bot(_ id: String) -> LocalBot? { bots.first { $0.id == id } }
+
+    var unreadCount: Int { bots.filter { $0.unread == true }.count }
+
+    /// A turn runs in one of the chats.
+    var isBusy: Bool { chats.values.contains(where: \.busy) }
+
+    /// The bot's chat is on screen: its replies are read.
+    func markRead(_ botId: String) {
+        guard var bot = bot(botId), bot.unread == true else { return }
+        bot.unread = nil
+        save(bot)
+    }
+
+    /// A turn ended with a reply: unread and told about, unless its chat is on screen.
+    func replied(_ botId: String, text: String) {
+        guard var bot = bot(botId) else { return }
+        let notifier = Notifier.shared
+        guard !(notifier.active && notifier.onScreen == Notifier.key(phoneBot: botId)) else { return }
+        bot.unread = true
+        save(bot)
+        notifier.deliver(phoneBot: bot, reply: text)
+    }
+
+    /// The server an endpoint bot talks to.
+    func server(for bot: LocalBot) -> LocalServer? {
+        guard let id = bot.endpoint?.serverId else { return nil }
+        return servers.first { $0.id == id }
+    }
 
     /// The chat a bot shows now.
     func chat(_ botId: String) -> LocalChat {
@@ -101,12 +156,7 @@ final class LocalBots {
 
     // MARK: Bots
 
-    func save(_ bot: LocalBot, apiKey: String? = nil) {
-        if let apiKey {
-            if apiKey.isEmpty { Keychain.remove(bot.apiKeyAccount) } else {
-                do { try Keychain.set(apiKey, for: bot.apiKeyAccount) } catch { lastError = error.localizedDescription }
-            }
-        }
+    func save(_ bot: LocalBot) {
         store?.save(bot)
         if let index = bots.firstIndex(where: { $0.id == bot.id }) { bots[index] = bot } else { bots.append(bot) }
     }
@@ -118,10 +168,47 @@ final class LocalBots {
         }
         chats.removeValue(forKey: bot.id)?.stop()
         store?.delete(bot: bot.id)
-        Keychain.remove(bot.apiKeyAccount)
         bots.removeAll { $0.id == bot.id }
     }
 
+
+    // MARK: Servers
+
+    func save(_ server: LocalServer, apiKey: String? = nil) {
+        if let apiKey {
+            if apiKey.isEmpty { Keychain.remove(server.apiKeyAccount) } else {
+                do { try Keychain.set(apiKey, for: server.apiKeyAccount) } catch { lastError = error.localizedDescription }
+            }
+        }
+        store?.save(server)
+        if let index = servers.firstIndex(where: { $0.id == server.id }) { servers[index] = server } else { servers.append(server) }
+    }
+
+    /// The bots on it stay, without a server, until one is chosen for them.
+    func delete(_ server: LocalServer) {
+        Keychain.remove(server.apiKeyAccount)
+        store?.delete(server: server.id)
+        servers.removeAll { $0.id == server.id }
+    }
+
+    func bots(on server: LocalServer) -> [LocalBot] {
+        bots.filter { $0.endpoint?.serverId == server.id }
+    }
+
+    /// `GET /models`: the ids a server offers.
+    static func models(baseUrl: String, apiKey: String, headers: [String: String]) async throws -> [String] {
+        guard let url = URL(string: baseUrl.trimmingCharacters(in: .whitespaces).trimmingSuffix("/") + "/models"), url.scheme != nil else {
+            throw DriverError(message: tr("L'indirizzo dell'endpoint non è valido."))
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        if !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(status) else { throw DriverError(message: "HTTP \(status)") }
+        return (try JSON.parse(data))["data"]?.array?.compactMap { $0["id"]?.string } ?? []
+    }
 
     // MARK: Connectors
 
@@ -147,16 +234,21 @@ final class LocalBots {
 
     // MARK: From the Mac
 
-    /// What the Mac sent (plan §7): an endpoint becomes a bot, with its key in
-    /// the Keychain and the endpoint's first model when none came along; a
-    /// connector arrives as it is, an OAuth one without tokens.
+    /// What the Mac sent (plan §7): an endpoint becomes a server (the one
+    /// already here at that address and key, if any) and a bot on it, with
+    /// the server's first model when none came along; a connector arrives as
+    /// it is, an OAuth one without tokens.
     func importConfig(_ config: PhoneConfig) async {
         for endpoint in config.endpoints {
-            var bot = LocalBot(id: newId(), name: endpoint.name, kind: .endpoint, createdAt: Date())
+            let key = endpoint.apiKey ?? ""
+            let headers = endpoint.headers ?? [:]
+            let server = servers.first { $0.baseUrl == endpoint.baseUrl && $0.headers == headers && (Keychain.get($0.apiKeyAccount) ?? "") == key }
+                ?? addServer(name: endpoint.name, baseUrl: endpoint.baseUrl, headers: headers, apiKey: key)
             var model = endpoint.model ?? ""
-            if model.isEmpty { model = await Self.firstModel(endpoint) ?? "" }
-            bot.endpoint = EndpointConfig(baseUrl: endpoint.baseUrl, model: model, headers: endpoint.headers ?? [:])
-            save(bot, apiKey: endpoint.apiKey ?? "")
+            if model.isEmpty { model = (try? await Self.models(baseUrl: endpoint.baseUrl, apiKey: key, headers: headers))?.first ?? "" }
+            var bot = LocalBot(id: newId(), name: endpoint.name, kind: .endpoint, createdAt: Date())
+            bot.endpoint = EndpointConfig(serverId: server.id, model: model)
+            save(bot)
         }
         for incoming in config.connectors {
             let auth = LocalConnector.Auth(rawValue: incoming.auth) ?? .none
@@ -165,15 +257,6 @@ final class LocalBots {
                                            createdAt: Date())
             save(connector, headers: incoming.headers ?? [:])
         }
-    }
-
-    private static func firstModel(_ endpoint: PhoneConfig.Endpoint) async -> String? {
-        guard let url = URL(string: endpoint.baseUrl.trimmingSuffix("/") + "/models") else { return nil }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 10
-        if let key = endpoint.apiKey { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
-        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
-        return (try? JSON.parse(data))?["data"]?.array?.first?["id"]?.string
     }
 
     func toolBox(for bot: LocalBot) -> ToolBox? {
@@ -222,24 +305,27 @@ final class LocalChat {
 
     func image(_ name: String) -> Data? { owner?.store?.image(name) }
 
-    func send(_ text: String, images: [(data: Data, mime: String)] = []) {
+    func send(_ text: String, images: [(data: Data, mime: String)] = [], documents: [AttachedDocument] = []) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !busy, !trimmed.isEmpty || !images.isEmpty, let owner, var bot = owner.bot(botId) else { return }
+        guard !busy, !trimmed.isEmpty || !images.isEmpty || !documents.isEmpty, let owner, var bot = owner.bot(botId) else { return }
+        Notifier.shared.requestPermission()
         // the driver continues this chat's Hermes session
         bot.sessionId = bot.chats?.first { $0.id == key }?.sessionId ?? (key == bot.id ? bot.sessionId : nil)
         let chatKey = key
-        owner.update(botId, chat: chatKey, title: trimmed.isEmpty ? tr("Immagine") : trimmed)
+        owner.update(botId, chat: chatKey, title: !trimmed.isEmpty ? trimmed : documents.first?.name ?? tr("Immagine"))
         let history = messages
         var names: [String] = []
         for image in images {
             if let name = try? owner.store?.saveImage(image.data, ext: image.mime == "image/png" ? "png" : "jpg") { names.append(name) }
         }
-        let latest = LocalMessage(id: newId(), botId: key, role: .user, text: trimmed, at: Date(), images: names)
+        let latest = LocalMessage(id: newId(), botId: key, role: .user, text: trimmed, at: Date(), images: names,
+                                  documents: documents.isEmpty ? nil : documents)
         append(latest)
         busy = true
         streaming = ""
         lastError = nil
-        let input = TurnInput(bot: bot, history: history, latest: latest, images: images, tools: owner.toolBox(for: bot))
+        let input = TurnInput(bot: bot, server: owner.server(for: bot), history: history, latest: latest, images: images,
+                              tools: owner.toolBox(for: bot))
         let driver = owner.driver(bot.kind)
         turn = Task { [weak self] in
             guard let self else { return }
@@ -263,6 +349,7 @@ final class LocalChat {
             do {
                 let outcome = try await driver.run(input, sink: sink)
                 self.finish(text: outcome.text, interrupted: false)
+                if !outcome.text.isEmpty { self.owner?.replied(bot.id, text: outcome.text) }
                 if let sessionId = outcome.sessionId, sessionId != bot.sessionId {
                     self.owner?.update(bot.id, chat: chatKey, sessionId: sessionId)
                 }

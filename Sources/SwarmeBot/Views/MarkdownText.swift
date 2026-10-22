@@ -16,26 +16,20 @@ import SwarmeKit
 
 struct MarkdownText: View {
     let source: String
-    /// Draws a caret after the last block. The streaming bubble sets this so
-    /// the live reply and the settled one are the same view with the same
-    /// layout — a caret bolted on outside would put it on its own line the
-    /// moment the reply ends in a list item.
-    var caret: Bool = false
 
     var body: some View {
-        let blocks = Markdown.blocks(source)
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { item in
-                view(for: item.element, tail: caret && item.offset == blocks.count - 1)
+            ForEach(Array(Markdown.blocks(source).enumerated()), id: \.offset) { item in
+                view(for: item.element)
             }
         }
     }
 
     @ViewBuilder
-    private func view(for block: MarkdownBlock, tail: Bool) -> some View {
+    private func view(for block: MarkdownBlock) -> some View {
         switch block {
         case let .paragraph(text):
-            inline(text, tail: tail)
+            inline(text)
                 .font(.system(size: Theme.bodySize))
                 .lineSpacing(Theme.bodyLineSpacing)
                 .fixedSize(horizontal: false, vertical: true)
@@ -44,7 +38,7 @@ struct MarkdownText: View {
         case let .heading(level, text):
             // Three sizes, not six. A chat bubble is not a document, and an
             // h4 that looks exactly like body text is a heading that failed.
-            inline(text, tail: tail)
+            inline(text)
                 .font(.system(size: [16, 15, 14.5, 14, 14, 13.5, 13][min(level, 6)], weight: .semibold))
                 .foregroundStyle(level >= 6 ? Theme.ink.opacity(0.85) : Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -52,17 +46,17 @@ struct MarkdownText: View {
                 .padding(.top, level <= 2 ? 8 : 6)
 
         case let .bullet(indent, text):
-            marker("•", indent: indent, text: text, tail: tail)
+            marker("•", indent: indent, text: text)
 
         case let .ordered(indent, number, text):
-            marker("\(number).", indent: indent, text: text, tail: tail)
+            marker("\(number).", indent: indent, text: text)
 
         case let .quote(text):
             HStack(alignment: .top, spacing: 8) {
                 Rectangle()
                     .fill(Theme.ink.opacity(0.45))
                     .frame(width: 2)
-                inline(text, tail: tail)
+                inline(text)
                     .font(.system(size: Theme.bodySize))
                     .lineSpacing(Theme.bodyLineSpacing)
                     .foregroundStyle(Theme.ink.opacity(0.85))
@@ -71,7 +65,7 @@ struct MarkdownText: View {
             .fixedSize(horizontal: false, vertical: true)
 
         case let .code(language, text):
-            CodeBlock(language: language, text: text, caret: caretText(tail))
+            CodeBlock(language: language, text: text)
 
         case .rule:
             Rectangle().fill(Theme.ink.opacity(0.3)).frame(height: 1).padding(.vertical, 2)
@@ -81,21 +75,21 @@ struct MarkdownText: View {
             // at narrower and narrower caps, and only a table that still
             // does not fit scrolls sideways, like a code block.
             ViewThatFits(in: .horizontal) {
-                table(header: header, alignments: alignments, rows: rows, tail: tail, cap: nil)
-                table(header: header, alignments: alignments, rows: rows, tail: tail, cap: 220)
-                table(header: header, alignments: alignments, rows: rows, tail: tail, cap: 150)
+                table(header: header, alignments: alignments, rows: rows, cap: nil)
+                table(header: header, alignments: alignments, rows: rows, cap: 220)
+                table(header: header, alignments: alignments, rows: rows, cap: 150)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    table(header: header, alignments: alignments, rows: rows, tail: tail, cap: 150)
+                    table(header: header, alignments: alignments, rows: rows, cap: 150)
                 }
             }
         }
     }
 
-    private func table(header: [String], alignments: [MarkdownAlignment], rows: [[String]], tail: Bool, cap: CGFloat?) -> some View {
+    private func table(header: [String], alignments: [MarkdownAlignment], rows: [[String]], cap: CGFloat?) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
                 ForEach(Array(header.enumerated()), id: \.offset) { column, text in
-                    cell(text, alignment: alignments[column], cap: cap, tail: tail && rows.isEmpty && column == header.count - 1)
+                    cell(text, alignment: alignments[column], cap: cap)
                         .fontWeight(.semibold)
                         .background(Theme.ink.opacity(0.08))
                         .gridColumnAlignment(alignments[column].horizontal)
@@ -105,8 +99,7 @@ struct MarkdownText: View {
                 Rectangle().fill(Theme.ink.opacity(0.25)).frame(height: 1)
                 GridRow {
                     ForEach(Array(row.enumerated()), id: \.offset) { column, text in
-                        cell(text, alignment: alignments[column], cap: cap,
-                             tail: tail && index == rows.count - 1 && column == row.count - 1)
+                        cell(text, alignment: alignments[column], cap: cap)
                     }
                 }
             }
@@ -118,9 +111,9 @@ struct MarkdownText: View {
 
     /// Every cell fills its column and its row, so the header's tint and
     /// the alignment cover the whole cell, not just its text.
-    private func cell(_ text: String, alignment: MarkdownAlignment, cap: CGFloat?, tail: Bool) -> some View {
+    private func cell(_ text: String, alignment: MarkdownAlignment, cap: CGFloat?) -> some View {
         CappedWidth(cap: cap ?? .infinity) {
-            inline(text, tail: tail)
+            inline(text)
                 .font(.system(size: Theme.bodySize))
                 .lineSpacing(Theme.bodyLineSpacing)
                 .multilineTextAlignment(alignment.text)
@@ -131,13 +124,13 @@ struct MarkdownText: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Alignment(horizontal: alignment.horizontal, vertical: .top))
     }
 
-    private func marker(_ symbol: String, indent: Int, text: String, tail: Bool) -> some View {
+    private func marker(_ symbol: String, indent: Int, text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(symbol)
                 .font(.system(size: Theme.bodySize))
                 .foregroundStyle(Theme.ink)
                 .frame(width: 14, alignment: .trailing)
-            inline(text, tail: tail)
+            inline(text)
                 .font(.system(size: Theme.bodySize))
                 .lineSpacing(Theme.bodyLineSpacing)
                 .linkCursor(Self.parsed(text), size: Theme.bodySize, lineSpacing: Theme.bodyLineSpacing)
@@ -153,14 +146,11 @@ struct MarkdownText: View {
     /// Falling back to the raw string on a parse failure is the point: a
     /// half-typed link mid-stream should show as the characters the model has
     /// sent so far, not vanish until it closes the bracket.
-    private func inline(_ text: String, tail: Bool = false) -> Text {
-        let rendered: Text
+    private func inline(_ text: String) -> Text {
         if let attributed = Self.parsed(text) {
-            rendered = Text(attributed)
-        } else {
-            rendered = Text(text)
+            return Text(attributed)
         }
-        return rendered + caretText(tail)
+        return Text(text)
     }
 
     /// The inline run as drawn, nil when it does not parse (yet).
@@ -168,9 +158,6 @@ struct MarkdownText: View {
         (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))).map(styled)
     }
 
-    /// A figure space then a block, so the caret sits off the last glyph
-    /// rather than touching it. Empty when not streaming — an empty `Text`
-    /// concatenated in costs nothing and keeps the callers branch-free.
     /// Inline code in bold, in the text's own font: a dark mono chip on a
     /// coloured bubble read as a separate, confusing thing. Links in ink,
     /// bold and underlined. The bubble is the bot's colour darkened to 4.5:1
@@ -191,10 +178,6 @@ struct MarkdownText: View {
             }
         }
         return out
-    }
-
-    private func caretText(_ tail: Bool) -> Text {
-        tail ? Text("\u{2007}▍").foregroundStyle(Color.secondary) : Text("")
     }
 }
 
@@ -238,7 +221,6 @@ private extension MarkdownAlignment {
 private struct CodeBlock: View {
     let language: String?
     let text: String
-    let caret: Text
     @State private var copied = false
 
     var body: some View {
@@ -264,7 +246,7 @@ private struct CodeBlock: View {
             .padding(.vertical, 4)
             .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline.opacity(0.3)).frame(height: 1) }
             ScrollView(.horizontal, showsIndicators: false) {
-                (Text(text) + caret)
+                Text(text)
                     .font(.system(size: 13, design: .monospaced))
                     .lineSpacing(4)
                     .textSelection(.enabled)

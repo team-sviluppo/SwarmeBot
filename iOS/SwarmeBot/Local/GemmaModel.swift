@@ -212,7 +212,7 @@ final class GemmaModel: LocalDriver {
             }
         }
         let images: [UserInput.Image] = input.images.compactMap { CIImage(data: $0.data).map { .ciImage($0) } }
-        chat.append(.user(input.latest.text, images: images))
+        chat.append(.user(promptText(input.latest), images: images))
 
         var specs: [ToolSpec]?
         var routes: [String: ChatTool] = [:]
