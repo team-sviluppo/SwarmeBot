@@ -4,8 +4,9 @@
 // chat, and an approval answers Consenti/Nega from the lock screen.
 //
 // The OneSignal app and the relay belong to one build of the app (§6.5):
-// `SWARMEBOT_PUSH_APP_ID` and `SWARMEBOT_PUSH_RELAY` in iOS/Local.xcconfig.
-// Without them, pushes are off and nothing is registered anywhere.
+// `SWARMEBOT_PUSH_APP_ID` (iOS/Shared.xcconfig) and `SWARMEBOT_PUSH_RELAY`.
+// Without the app id, pushes are off; without the relay, OneSignal knows the
+// phone (a test push from its dashboard arrives) but no engine is told.
 import AgentCore
 import CompanionCore
 import Foundation
@@ -24,7 +25,8 @@ final class PushManager: NSObject {
 
     let appId = Bundle.main.object(forInfoDictionaryKey: "SwarmeBotPushAppId") as? String ?? ""
     let relayURL = (Bundle.main.object(forInfoDictionaryKey: "SwarmeBotPushRelay") as? String ?? "").trimmingSuffix("/")
-    var isConfigured: Bool { !appId.isEmpty && URL(string: relayURL)?.host != nil }
+    var isConfigured: Bool { !appId.isEmpty }
+    var hasRelay: Bool { URL(string: relayURL)?.host != nil }
 
     private static let tokenKey = "push.relayToken"
     private static let subscriptionKey = "push.subscriptionId"
@@ -33,6 +35,9 @@ final class PushManager: NSObject {
         self.model = model
         guard isConfigured, !started else { return }
         started = true
+        #if DEBUG
+        OneSignal.Debug.setLogLevel(.LL_WARN)
+        #endif
         OneSignal.initialize(appId, withLaunchOptions: nil)
         OneSignal.Notifications.addClickListener(self)
         OneSignal.User.pushSubscription.addObserver(self)
@@ -58,7 +63,9 @@ final class PushManager: NSObject {
 
     /// The relay's token for this phone's OneSignal subscription, cached.
     private func relayToken() async -> String? {
-        guard let subscription = OneSignal.User.pushSubscription.id, !subscription.isEmpty else { return nil }
+        // `local-…` ids are not registered with OneSignal yet
+        guard hasRelay, let subscription = OneSignal.User.pushSubscription.id, !subscription.isEmpty,
+              !subscription.hasPrefix("local-") else { return nil }
         if UserDefaults.standard.string(forKey: Self.subscriptionKey) == subscription, let token = Keychain.get(Self.tokenKey) { return token }
         guard let url = URL(string: relayURL + "/v1/register") else { return nil }
         var request = URLRequest(url: url)

@@ -10,3 +10,4 @@ Resources/linux-engines.json
 # iOS app: generated project, local signing
 iOS/Local.xcconfig
 iOS/SwarmeBot/Info.plist
+iOS/NotificationService/Info.plist
