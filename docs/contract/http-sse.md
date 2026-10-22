@@ -104,7 +104,7 @@ Shape ricorrenti: **WireBot** = `BotRecord` senza `resumeCursors`, con `tasks[]`
 
 | Metodo | Path | Request | Risposta | React | CC |
 |---|---|---|---|---|---|
-| POST | `/api/groups` | `{memberIds: string[] (≥1 bot esistente), name?}` | 201 `{group: WireGroup + messages:[]}` | ✅ | ✅ |
+| POST | `/api/groups` | `{memberIds: string[] (≥1 bot esistente), name?, cwd?}` (`cwd`: cartella assoluta esistente, altrimenti 400; diventa la cartella di lavoro di tutti i membri) | 201 `{group: WireGroup + messages:[]}` | ✅ | ✅ |
 | PATCH | `/api/groups/:gid` | `name` `bulletin` `unread` `memberIds[]` `defaultResponder{kind:"everyone"\|"mentions"\|"member", botId?}` (400 se invalido) `cwd` (400 se `dm`, 409 se `pinnedCwd` già fissato) `pinnedMessageId` | `{group: WireGroup}` | ✅ | ❌ |
 | DELETE | `/api/groups/:gid` | — | `{ok:true}` | ✅ | ❌ |
 | POST | `/api/groups/:gid/read` | — | `{group}` + frame `group` | ❌ (usa PATCH) | ✅ |
@@ -393,7 +393,7 @@ Paged/top-level `GET /api/bots`: mancano **`computerControl`** (mappa per bot).
 ### 4.3 Room (WireGroup da `GroupRecord`)
 
 Swift: `id, threadId, name, memberIds, defaultResponder{kind, botId?}, bulletin, unread, createdAt, dm?, busyBotId?, messages?, hasMore?`.
-Mancanti: **`cwd?`**, **`pinnedCwd?: string|null`**, **`pinnedMessageId?`**.
+Mancanti: **`pinnedMessageId?`**. `cwd?` e `pinnedCwd?: string|null` (fissata al primo turno) passano così come sono salvati.
 
 ### 4.4 Istanze e catalogo modelli (`registry.describe()` + `pickerVisible`)
 

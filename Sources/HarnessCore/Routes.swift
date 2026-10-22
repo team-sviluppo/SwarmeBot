@@ -344,7 +344,13 @@ public final class Routes {
             let members = (body["memberIds"]?.array ?? []).compactMap(\.string).filter { store.bot($0) != nil }
             guard !members.isEmpty else { return fail(400, "memberIds must name at least one bot") }
             let name = body["name"]?.string?.trimmingCharacters(in: .whitespaces) ?? ""
-            let group = store.createGroup(name: name.isEmpty ? (store.bot(members[0])?["name"]?.string ?? "Room") : name, memberIds: members)
+            var folder: String?
+            if let cwd = body["cwd"], !cwd.isNull, cwd.string != "" {
+                guard let path = Self.existingFolder(cwd) else { return fail(400, "cwd must be an existing absolute folder") }
+                folder = path
+            }
+            var group = store.createGroup(name: name.isEmpty ? (store.bot(members[0])?["name"]?.string ?? "Room") : name, memberIds: members)
+            if let folder { group = store.patchGroup(group["id"]!.string!, ["cwd": .string(folder)]) ?? group }
             var out = harness.wireGroup(group)
             out["messages"] = .array([])
             return ok(["group": .object(out)], 201)
@@ -369,6 +375,15 @@ public final class Routes {
                     case "member" where members.contains(responder["botId"]?.string ?? ""):
                         patch["defaultResponder"] = ["kind": "member", "botId": responder["botId"]!]
                     default: return fail(400, "invalid default responder")
+                    }
+                }
+                if let cwd = body["cwd"] {
+                    if existing["dm"]?.truthy == true { return fail(400, "a direct channel has no folder") }
+                    // pinned on the first turn: after that the folder never moves
+                    if existing["pinnedCwd"] != nil { return fail(409, "the room's folder is already fixed") }
+                    if cwd.isNull || cwd.string == "" { patch["cwd"] = .null } else {
+                        guard let path = Self.existingFolder(cwd) else { return fail(400, "cwd must be an existing absolute folder") }
+                        patch["cwd"] = .string(path)
                     }
                 }
                 guard let group = store.patchGroup(m[0], patch) else { return fail(404, "no such room") }
@@ -525,6 +540,14 @@ public final class Routes {
         guard let raw else { return nil }
         guard let size = Int(raw), size >= 0 else { throw HTTPError(400, "messages must be a non-negative whole number") }
         return min(size, 200)
+    }
+
+    /// An absolute path to a folder that exists, or nil.
+    static func existingFolder(_ value: JSON) -> String? {
+        guard let path = value.string, path.hasPrefix("/") else { return nil }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
+        return path
     }
 
     static func slim(_ message: JSONObject) -> JSONObject {

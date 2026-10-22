@@ -248,9 +248,9 @@ extension AppModel {
 
     // MARK: - Rooms
 
-    public func createRoom(name: String?, memberIds: [String]) async {
+    public func createRoom(name: String?, memberIds: [String], cwd: String? = nil) async {
         await perform { client in
-            let room = try await client.createRoom(name: name, memberIds: memberIds)
+            let room = try await client.createRoom(name: name, memberIds: memberIds, cwd: cwd)
             self.selection = .room(room.id)
         }
     }

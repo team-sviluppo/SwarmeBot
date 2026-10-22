@@ -100,8 +100,12 @@ public struct RoomPatch: Sendable {
     /// "everyone" · "mentions" · "member" (with `responderBotId`)
     public var responder: String?
     public var responderBotId: String?
+    /// The channel's working folder; an empty string clears it. Refused (409)
+    /// once the room has had its first turn.
+    public var cwd: String?
 
-    public init(name: String? = nil, bulletin: String? = nil, memberIds: [String]? = nil, responder: String? = nil, responderBotId: String? = nil) {
+    public init(name: String? = nil, bulletin: String? = nil, memberIds: [String]? = nil, responder: String? = nil, responderBotId: String? = nil, cwd: String? = nil) {
+        self.cwd = cwd
         self.name = name
         self.bulletin = bulletin
         self.memberIds = memberIds
@@ -114,6 +118,7 @@ public struct RoomPatch: Sendable {
         if let name { out["name"] = name }
         if let bulletin { out["bulletin"] = bulletin }
         if let memberIds { out["memberIds"] = memberIds }
+        if let cwd { out["cwd"] = cwd }
         if let responder {
             var value: [String: Any] = ["kind": responder]
             if let responderBotId { value["botId"] = responderBotId }
