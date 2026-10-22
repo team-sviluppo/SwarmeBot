@@ -32,7 +32,7 @@ struct BotSkillsCard: View {
     private func row(_ skill: Skill) -> some View {
         let entry = assigned.first { $0.id == skill.id }
         return SettingRow(icon: skill.hasScripts ? "terminal" : "wand.and.stars", tint: Theme.accentText,
-                          title: skill.name, subtitle: skill.description) {
+                          title: skill.name) {
             HStack(spacing: 10) {
                 if let entry {
                     Toggle(tr("Accesa nelle nuove chat"), isOn: Binding(get: { entry.defaultOn }, set: { on in
@@ -48,6 +48,8 @@ struct BotSkillsCard: View {
                 .toggleStyle(.switch).controlSize(.small).labelsHidden().tint(Theme.accent)
             }
         }
+        // the description can run to paragraphs: the row shows the title, hover shows the rest
+        .help(skill.description)
     }
 
     private func save(_ list: [BotSkill]) {
