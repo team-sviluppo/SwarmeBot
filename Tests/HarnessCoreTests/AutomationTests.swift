@@ -22,6 +22,25 @@ final class RoutineScheduleTests: XCTestCase {
         XCTAssertEqual(RoutineManager.nextOccurrence(schedule, after: atTime, calendar: calendar), millis(2026, 10, 19, 7, 30))
     }
 
+    func testIntervalCountsFromTheReferenceInstant() {
+        let schedule: JSON = ["type": "interval", "every": 90, "unit": "minutes"]
+        XCTAssertEqual(RoutineManager.nextOccurrence(schedule, after: 1_000), 1_000 + 90 * 60_000)
+        XCTAssertEqual(RoutineManager.nextOccurrence(["type": "interval", "every": 2, "unit": "hours"], after: 0), 2 * 3_600_000)
+    }
+
+    func testIntervalValidation() throws {
+        XCTAssertEqual(try RoutineManager.cleanSchedule(["type": "interval", "every": 15, "unit": "minutes"]),
+                       ["type": "interval", "every": 15, "unit": "minutes"])
+        XCTAssertEqual(try RoutineManager.cleanSchedule(["type": "interval", "every": 30])["unit"]?.string, "minutes", "unit defaults to minutes")
+        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 4, "unit": "minutes"]))
+        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 169, "unit": "hours"]))
+        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 1.5, "unit": "hours"]))
+        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 0, "unit": "hours"]))
+        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 10, "unit": "days"]))
+        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval"]))
+        XCTAssertNoThrow(try RoutineManager.cleanSchedule(["type": "interval", "every": 168, "unit": "hours"]))
+    }
+
     func testOnceAndDaysCleaning() {
         XCTAssertNil(RoutineManager.nextOccurrence(["type": "once", "at": 10], after: 10))
         XCTAssertEqual(RoutineManager.nextOccurrence(["type": "once", "at": 11], after: 10), 11)
@@ -86,5 +105,48 @@ final class RoutineRunChatTests: XCTestCase {
         manager.tick()
         XCTAssertEqual(created.map(\.title), ["[AUTOMAZIONE] Report", "[AUTOMAZIONE] Inbox"])
         XCTAssertEqual(created.map(\.activate), [true, true])
+    }
+}
+
+@MainActor
+final class IntervalRoutineTickTests: XCTestCase {
+    /// A manager over a routines.json whose only routine is due `lateMillis` ago.
+    private func manager(lateMillis: Double, every: Int, existingRun: String? = nil, in dir: URL) throws -> RoutineManager {
+        let due = nowMillis() - lateMillis
+        let runs = existingRun.map { """
+            {"id":"r0","routineId":"rt","routineName":"Poll","botId":"bot","runOn":"maus","scheduledFor":\(due - 1),"status":"\($0)","manual":false}
+            """ } ?? ""
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try """
+        {"version":1,"routines":[{"id":"rt","name":"Poll","prompt":"Check","botId":"bot","runOn":"maus","enabled":true,
+        "schedule":{"type":"interval","every":\(every),"unit":"minutes"},"durationMinutes":30,"nextRunAt":\(due),"createdAt":0,"updatedAt":0}],
+        "runs":[\(runs)]}
+        """.write(to: dir.appendingPathComponent("routines.json"), atomically: true, encoding: .utf8)
+        return RoutineManager(file: dir.appendingPathComponent("routines.json"), host: .init(
+            emit: { _ in }, botState: { _ in "ready" }, createTask: { _, _, _ in "t" }, startTurn: { _, _, _, _, _, _ in }, interruptTurn: { _, _, _ in }))
+    }
+
+    func testDueIntervalRunsOnceAndKeepsItsGrid() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        // 7 minutes late on a 5-minute grid: one run, and the next one on the grid after now
+        let manager = try manager(lateMillis: 7 * 60_000, every: 5, in: dir)
+        let routine = try XCTUnwrap(manager.routines.first)
+        XCTAssertTrue(manager.runs.isEmpty)
+        manager.tick()
+        XCTAssertEqual(manager.runs.count, 1)
+        let next = try XCTUnwrap(manager.routines.first?["nextRunAt"]?.double)
+        let due = try XCTUnwrap(routine["nextRunAt"]?.double)
+        XCTAssertEqual((next - due).truncatingRemainder(dividingBy: 300_000), 0, "stays on the 5-minute grid")
+        XCTAssertGreaterThan(next, nowMillis())
+    }
+
+    func testIntervalDoesNotPileUpBehindAnUnfinishedRun() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let manager = try manager(lateMillis: 1_000, every: 5, existingRun: "queued", in: dir)
+        manager.tick()
+        XCTAssertEqual(manager.runs.count, 1, "no second run while the first is still going")
+        XCTAssertGreaterThan(try XCTUnwrap(manager.routines.first?["nextRunAt"]?.double), nowMillis(), "but the clock still moves on")
     }
 }

@@ -168,7 +168,7 @@ La **selezione del modello per bot** non ha una route dedicata: si fa con `PATCH
 | Metodo | Path | Request | Risposta | React | CC |
 |---|---|---|---|---|---|
 | GET | `/api/routines` | `from?`, `to?` (epoch ms, filtro runs) | `{routines: Routine[], runs: RoutineRun[]}` | ✅ | ❌ |
-| POST | `/api/routines` | `RoutineInput {name, prompt, botId, runOn?:"maus"\|"cloud", enabled?, schedule:{type:"once",at}\|{type:"daily",time:"HH:MM",weekdays:number[]}, durationMinutes?}` | 201 `{routine}` + frame `routine` | ✅ | ❌ |
+| POST | `/api/routines` | `RoutineInput {name, prompt, botId, runOn?:"maus"\|"cloud", enabled?, schedule:{type:"once",at}\|{type:"daily",time:"HH:MM",weekdays:number[]}\|{type:"interval",every:number,unit:"minutes"\|"hours"}, durationMinutes?}` (`interval` is Swift-only, added after the Node engine: 5 min – 7 days, integer `every`, `unit` defaults to `minutes`) | 201 `{routine}` + frame `routine` | ✅ | ❌ |
 | PATCH | `/api/routines/:id` | `Partial<RoutineInput>` | `{routine}` / 404 | ✅ | ❌ |
 | DELETE | `/api/routines/:id` | — | `{ok:true}` + frame `routine.deleted` | ✅ | ❌ |
 | POST | `/api/routines/:id/run` | — | 201 `{run}` | ✅ | ❌ |

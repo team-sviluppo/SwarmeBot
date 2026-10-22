@@ -9,7 +9,7 @@ import Foundation
 // MARK: - Routines
 
 public struct RoutineSchedule: Codable, Hashable, Sendable {
-    /// "once" or "daily".
+    /// "once", "daily" or "interval".
     public var type: String
     /// once: epoch ms.
     public var at: Double?
@@ -17,12 +17,18 @@ public struct RoutineSchedule: Codable, Hashable, Sendable {
     public var time: String?
     /// daily: 0 = Sunday … 6 = Saturday, like JavaScript's getDay().
     public var weekdays: [Int]?
+    /// interval: how many `unit`s between runs.
+    public var every: Int?
+    /// interval: "minutes" or "hours".
+    public var unit: String?
 
-    public init(type: String, at: Double? = nil, time: String? = nil, weekdays: [Int]? = nil) {
+    public init(type: String, at: Double? = nil, time: String? = nil, weekdays: [Int]? = nil, every: Int? = nil, unit: String? = nil) {
         self.type = type
         self.at = at
         self.time = time
         self.weekdays = weekdays
+        self.every = every
+        self.unit = unit
     }
 
     public static func once(_ date: Date) -> RoutineSchedule {
@@ -33,11 +39,17 @@ public struct RoutineSchedule: Codable, Hashable, Sendable {
         RoutineSchedule(type: "daily", time: time, weekdays: weekdays)
     }
 
+    public static func interval(every: Int, unit: String) -> RoutineSchedule {
+        RoutineSchedule(type: "interval", every: every, unit: unit)
+    }
+
     var json: [String: Any] {
         var out: [String: Any] = ["type": type]
         if let at { out["at"] = at }
         if let time { out["time"] = time }
         if let weekdays { out["weekdays"] = weekdays }
+        if let every { out["every"] = every }
+        if let unit { out["unit"] = unit }
         return out
     }
 }
@@ -96,6 +108,10 @@ public struct RoutineInput: Sendable {
         self.enabled = enabled
         self.schedule = schedule
         self.durationMinutes = durationMinutes
+    }
+
+    public static func interval(every: Int, unit: String) -> RoutineSchedule {
+        RoutineSchedule(type: "interval", every: every, unit: unit)
     }
 
     var json: [String: Any] {
@@ -191,6 +207,10 @@ public struct WebhookInput: Sendable {
         self.botId = botId
         self.enabled = enabled
         self.eventTypes = eventTypes
+    }
+
+    public static func interval(every: Int, unit: String) -> RoutineSchedule {
+        RoutineSchedule(type: "interval", every: every, unit: unit)
     }
 
     var json: [String: Any] {
