@@ -1,7 +1,7 @@
 // Routines — `server/routines.ts`, ported.
 //
-// Persisted definitions (once, or daily at HH:MM on chosen weekdays) become
-// detached bot tasks. The manager owns timing and receipts; the harness stays
+// Persisted definitions (once, daily at HH:MM on chosen weekdays, or every N
+// minutes / hours) become detached bot tasks. The manager owns timing and receipts; the harness stays
 // the only owner of provider sessions, approvals and messages. Webhook
 // deliveries join the same queue (`enqueueWebhook`), so busy-bot ordering,
 // task creation and runner choice are identical for every unattended job.
@@ -15,6 +15,9 @@ public final class RoutineManager {
     static let catchUpMillis = 12.0 * 60 * 60_000
     static let maxRuns = 2_000
     static let allDays = [0, 1, 2, 3, 4, 5, 6]
+    /// An interval shorter than this would open a chat and spend a turn every few seconds.
+    static let minIntervalMinutes = 5
+    static let maxIntervalMinutes = 7 * 24 * 60
     /// Stored in the task title, like the untitled "Nuova chat": engine titles are not translated.
     public static let automationTitlePrefix = "[AUTOMAZIONE] "
 
@@ -84,9 +87,33 @@ public final class RoutineManager {
                 daily["timeZone"] = .string(zone)
             }
             return .object(daily)
+        case "interval":
+            let unit = schedule?["unit"]?.string ?? "minutes"
+            guard unit == "minutes" || unit == "hours" else { throw InputError(message: "Interval unit must be minutes or hours") }
+            guard let every = schedule?["every"]?.double, every.isFinite, every.rounded() == every, every >= 1,
+                  let minutes = intervalMinutes(every: Int(every), unit: unit),
+                  (minIntervalMinutes...maxIntervalMinutes).contains(minutes) else {
+                throw InputError(message: "The interval must be a whole number, from \(minIntervalMinutes) minutes to 7 days")
+            }
+            return ["type": "interval", "every": .number(every), "unit": .string(unit)]
         default:
             throw InputError(message: "Choose a supported schedule")
         }
+    }
+
+    /// The period of an interval schedule in minutes; nil when it is not a valid one.
+    static func intervalMinutes(every: Int, unit: String) -> Int? {
+        switch unit {
+        case "minutes": return every
+        case "hours": return every.multipliedReportingOverflow(by: 60).overflow ? nil : every * 60
+        default: return nil
+        }
+    }
+
+    static func intervalMillis(_ schedule: JSON) -> Double? {
+        guard let every = schedule["every"]?.double, every >= 1, every <= Double(Int.max / 120),
+              let minutes = intervalMinutes(every: Int(every), unit: schedule["unit"]?.string ?? "minutes") else { return nil }
+        return Double(minutes) * 60_000
     }
 
     /// Next wall-clock occurrence, strictly after `after`: in the schedule's
@@ -95,6 +122,9 @@ public final class RoutineManager {
         if schedule["type"]?.string == "once" {
             let at = schedule["at"]?.double ?? 0
             return at > after ? at : nil
+        }
+        if schedule["type"]?.string == "interval" {
+            return intervalMillis(schedule).map { after + $0 }
         }
         var calendar = base
         if let zone = schedule["timeZone"]?.string.flatMap(TimeZone.init(identifier:)) { calendar.timeZone = zone }
@@ -317,7 +347,9 @@ public final class RoutineManager {
         for index in routines.indices {
             let routine = routines[index]
             guard routine["enabled"]?.bool == true, let scheduledFor = routine["nextRunAt"]?.double, scheduledFor <= now else { continue }
-            if now - scheduledFor > Self.catchUpMillis {
+            if routine["schedule"]?["type"]?.string == "interval", hasUnfinishedRun(routine["id"]?.string) {
+                // the previous run is still going: do not pile runs up behind a slow one
+            } else if now - scheduledFor > Self.catchUpMillis {
                 var missed = newRun(routine, scheduledFor: scheduledFor, manual: false)
                 missed["status"] = "missed"
                 missed["finishedAt"] = .number(now)
@@ -328,7 +360,7 @@ public final class RoutineManager {
                 emitRun(newRun(routine, scheduledFor: scheduledFor, manual: false))
             }
             let once = routine["schedule"]?["type"]?.string == "once"
-            routines[index]["nextRunAt"] = once ? .null : .from(Self.nextOccurrence(routine["schedule"]!, after: max(now, scheduledFor)))
+            routines[index]["nextRunAt"] = once ? .null : .from(nextRun(after: routine["schedule"]!, scheduledFor: scheduledFor, now: now))
             if once { routines[index]["enabled"] = false }
             routines[index]["updatedAt"] = .number(now)
             emitRoutine(routines[index])
@@ -371,6 +403,18 @@ public final class RoutineManager {
                 failThread(threadId, (error as? Harness.TurnError)?.message ?? error.localizedDescription)
             }
         }
+    }
+
+    /// An interval keeps its grid (`scheduledFor` + k periods) so ticks do not drift, and
+    /// never lands in the past after downtime; the other schedules count from now.
+    private func nextRun(after schedule: JSON, scheduledFor: Double, now: Double) -> Double? {
+        guard schedule["type"]?.string == "interval" else { return Self.nextOccurrence(schedule, after: max(now, scheduledFor)) }
+        guard let period = Self.intervalMillis(schedule) else { return nil }
+        return scheduledFor + period * (((now - scheduledFor) / period).rounded(.down) + 1)
+    }
+
+    private func hasUnfinishedRun(_ routineId: String?) -> Bool {
+        runs.contains { $0["routineId"]?.string == routineId && Self.unfinished.contains($0["status"]?.string ?? "") }
     }
 
     private func fail(_ index: Int, _ message: String) {

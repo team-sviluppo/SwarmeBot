@@ -105,6 +105,9 @@ private struct RoutineRow: View {
         if schedule.type == "once", let at = schedule.at {
             return tr("Una volta, %@", Date(timeIntervalSince1970: at / 1000).appFormatted(date: .abbreviated, time: .shortened))
         }
+        if schedule.type == "interval", let every = schedule.every {
+            return schedule.unit == "hours" ? tr("ogni %@ h", String(every)) : tr("ogni %@ min", String(every))
+        }
         let days = schedule.weekdays ?? []
         let names = tr("dom lun mar mer gio ven sab").split(separator: " ").map(String.init)
         let label = days.count == 7 ? tr("ogni giorno") : days.sorted().map { names[$0 % 7] }.joined(separator: " ")
@@ -171,11 +174,20 @@ struct RoutineDraft: Identifiable {
     var prompt = ""
     var botId: String
     var enabled = true
-    var once = false
+    enum Kind: Hashable { case daily, interval, once }
+    var kind = Kind.daily
     var at = Date().addingTimeInterval(3600)
     var time = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
     var weekdays: Set<Int> = [1, 2, 3, 4, 5]
+    var every = 30
+    var hours = false
     var duration = 30
+
+    /// What the engine accepts for an interval: 5 minutes to 7 days.
+    var intervalIsValid: Bool {
+        let minutes = hours ? every * 60 : every
+        return every >= 1 && (5...7 * 24 * 60).contains(minutes)
+    }
 
     init(botId: String) {
         id = UUID().uuidString
@@ -189,7 +201,13 @@ struct RoutineDraft: Identifiable {
         prompt = routine.prompt
         botId = routine.botId
         enabled = routine.enabled
-        once = routine.schedule.type == "once"
+        switch routine.schedule.type {
+        case "once": kind = .once
+        case "interval": kind = .interval
+        default: kind = .daily
+        }
+        every = routine.schedule.every ?? every
+        hours = routine.schedule.unit == "hours"
         if let at = routine.schedule.at { self.at = Date(timeIntervalSince1970: at / 1000) }
         if let hm = routine.schedule.time?.split(separator: ":"), hm.count == 2, let h = Int(hm[0]), let m = Int(hm[1]) {
             time = Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) ?? time
@@ -198,11 +216,22 @@ struct RoutineDraft: Identifiable {
         duration = routine.durationMinutes ?? 30
     }
 
+    var scheduleIsComplete: Bool {
+        switch kind {
+        case .once: true
+        case .interval: intervalIsValid
+        case .daily: !weekdays.isEmpty
+        }
+    }
+
     var input: RoutineInput {
         let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
-        let schedule = once
-            ? RoutineSchedule.once(at)
-            : RoutineSchedule.daily(String(format: "%02d:%02d", parts.hour ?? 9, parts.minute ?? 0), weekdays: weekdays.sorted())
+        let schedule: RoutineSchedule
+        switch kind {
+        case .once: schedule = .once(at)
+        case .interval: schedule = .interval(every: every, unit: hours ? "hours" : "minutes")
+        case .daily: schedule = .daily(String(format: "%02d:%02d", parts.hour ?? 9, parts.minute ?? 0), weekdays: weekdays.sorted())
+        }
         return RoutineInput(name: name, prompt: prompt, botId: botId, enabled: enabled, schedule: schedule, durationMinutes: duration)
     }
 }
@@ -224,14 +253,30 @@ private struct RoutineEditor: View {
                 PromptEditor(text: $draft.prompt)
             }
             Section {
-            Picker(tr("Quando"), selection: $draft.once) {
-                Text(tr("Ripeti")).tag(false)
-                Text(tr("Una volta")).tag(true)
+            Picker(tr("Quando"), selection: $draft.kind) {
+                Text(tr("Ripeti")).tag(RoutineDraft.Kind.daily)
+                Text(tr("A intervalli")).tag(RoutineDraft.Kind.interval)
+                Text(tr("Una volta")).tag(RoutineDraft.Kind.once)
             }
             .pickerStyle(.segmented)
-            if draft.once {
+            switch draft.kind {
+            case .once:
                 DatePicker(tr("Data e ora"), selection: $draft.at)
-            } else {
+            case .interval:
+                HStack {
+                    Stepper(tr("Ogni %@", String(draft.every)), value: $draft.every, in: 1...999)
+                    Picker(tr("Unità"), selection: $draft.hours) {
+                        Text(tr("minuti")).tag(false)
+                        Text(tr("ore")).tag(true)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                if !draft.intervalIsValid {
+                    Text(tr("Da 5 minuti a 7 giorni."))
+                        .font(.system(size: 11)).foregroundStyle(Theme.danger)
+                }
+            case .daily:
                 DatePicker(tr("Ora"), selection: $draft.time, displayedComponents: .hourAndMinute)
                 HStack {
                     ForEach([1, 2, 3, 4, 5, 6, 0], id: \.self) { day in
@@ -258,7 +303,7 @@ private struct RoutineEditor: View {
                     Task { await model.save(routine: input, id: id) }
                     dismiss()
                 }
-                .disabled(draft.name.isEmpty || draft.prompt.isEmpty || draft.botId.isEmpty || (!draft.once && draft.weekdays.isEmpty))
+                .disabled(draft.name.isEmpty || draft.prompt.isEmpty || draft.botId.isEmpty || !draft.scheduleIsComplete)
             }
         }
     }
