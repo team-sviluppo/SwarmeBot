@@ -40,7 +40,7 @@ serve quindi solo con **una build propria dell'app iOS**.
 4. **Build dell'app.** In `iOS/Local.xcconfig`, che git ignora:
    ```
    DEVELOPMENT_TEAM = <team>
-   PRODUCT_BUNDLE_IDENTIFIER = <il tuo bundle>
+   SWARMEBOT_BUNDLE_ID = <il tuo bundle>
    SWARMEBOT_PUSH_APP_ID = <OneSignal App ID>
    SWARMEBOT_PUSH_RELAY = https:/$()/push.example.com
    ```

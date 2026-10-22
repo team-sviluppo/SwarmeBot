@@ -6,7 +6,7 @@
 # Signing for a device: put DEVELOPMENT_TEAM in iOS/Local.xcconfig (git-ignored).
 name: SwarmeBot-iOS
 options:
-  bundleIdPrefix: com.swarmebot
+  bundleIdPrefix: it.hextra
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
@@ -68,7 +68,7 @@ targets:
         aps-environment: development
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.swarmebot.ios
+        PRODUCT_BUNDLE_IDENTIFIER: $(SWARMEBOT_BUNDLE_ID)
         PRODUCT_NAME: SwarmeBot
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -96,15 +96,15 @@ targets:
         CFBundleDocumentTypes:
           - CFBundleTypeName: SwarmeBot configuration
             LSHandlerRank: Owner
-            LSItemContentTypes: [com.swarmebot.phone-config]
+            LSItemContentTypes: [it.hextra.swarmebot.phone-config]
         UTExportedTypeDeclarations:
-          - UTTypeIdentifier: com.swarmebot.phone-config
+          - UTTypeIdentifier: it.hextra.swarmebot.phone-config
             UTTypeDescription: SwarmeBot configuration
             UTTypeConformsTo: [public.data]
             UTTypeTagSpecification:
               public.filename-extension: [swarmeconfig]
         CFBundleURLTypes:
-          - CFBundleURLName: com.swarmebot.ios
+          - CFBundleURLName: $(SWARMEBOT_BUNDLE_ID)
             CFBundleURLSchemes: [swarmebot]
   SwarmeBot-iOSTests:
     type: bundle.unit-test

@@ -16,7 +16,7 @@ import Network
 import Observation
 import OSLog
 
-private let log = Logger(subsystem: "com.swarmebot.ios", category: "remote")
+private let log = Logger(subsystem: "it.hextra.swarmebot", category: "remote")
 
 @MainActor
 @Observable

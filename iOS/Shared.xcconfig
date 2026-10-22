@@ -1,10 +1,12 @@
 // Settings shared by Debug and Release. A developer's own values go in
 // Local.xcconfig, next to this file and git-ignored:
 //   DEVELOPMENT_TEAM = ABCDE12345
+//   SWARMEBOT_BUNDLE_ID = <own bundle id, only for a build with its own push relay>
 //   SWARMEBOT_PUSH_APP_ID = <OneSignal app id>
 //   SWARMEBOT_PUSH_RELAY = https:/$()/push.example.com
 // (`//` starts a comment in an xcconfig: `$()` keeps the URL whole.)
 // Without the last two the app sends no push registration anywhere.
+SWARMEBOT_BUNDLE_ID = it.hextra.swarmebot
 SWARMEBOT_PUSH_APP_ID =
 SWARMEBOT_PUSH_RELAY =
 #include? "Local.xcconfig"

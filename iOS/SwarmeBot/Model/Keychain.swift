@@ -6,7 +6,7 @@ import Foundation
 import Security
 
 enum Keychain {
-    static let service = "com.swarmebot.ios"
+    static let service = "it.hextra.swarmebot"
 
     struct Failure: LocalizedError {
         let status: OSStatus
