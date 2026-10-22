@@ -1,6 +1,7 @@
 // The phone's own bots (plan §4, D5): private to this phone, never synced.
 // A bot is an OpenAI-compatible endpoint, Gemma on the phone, or Apple's
 // on-device model; its chat and its connectors live here and in the Keychain.
+import CompanionCore
 import Foundation
 
 enum LocalBotKind: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -108,6 +109,43 @@ struct LocalMessage: Codable, Hashable, Identifiable, Sendable {
     var tool: LocalToolCall?
     /// A reply cut short by stop or by the app going away.
     var interrupted: Bool = false
+    /// In a channel, the member that wrote it: a phone bot's id, or a
+    /// guest's `RoomGuest.memberId`.
+    var from: String?
+    /// A guest's reply: its engine's id for it, so the next turn there does
+    /// not copy it twice (`ref`).
+    var guestRef: String?
+}
+
+/// A channel on the phone: its bots, and guests from the paired servers (a
+/// mixed channel). They answer one at a time, each with the channel's recent
+/// conversation, as the engine's rooms do (Rooms.swift, MixedRooms.swift).
+struct LocalRoom: Codable, Hashable, Identifiable, Sendable {
+    var id: String
+    var name: String
+    var memberIds: [String]
+    /// Bots of the paired servers; `peerId` is the server's id on this phone.
+    var guests: [RoomGuest]?
+    /// "everyone" · "mentions" · "member" (`responderBotId`, else the first
+    /// member); nil is "member", the engine's default.
+    var responder: String?
+    var responderBotId: String?
+    var createdAt: Date
+    /// A reply came while the channel was not on screen.
+    var unread: Bool?
+
+    /// Every member's id: the phone's bots, then the guests.
+    var allMemberIds: [String] { memberIds + (guests ?? []).map(\.memberId) }
+
+    /// Who answers a message without @mentions.
+    var defaultResponders: [String] {
+        let all = allMemberIds
+        switch responder {
+        case "everyone": return all
+        case "mentions": return []
+        default: return (responderBotId.flatMap { all.contains($0) ? $0 : nil } ?? all.first).map { [$0] } ?? []
+        }
+    }
 }
 
 /// An MCP server over HTTP (D3), with its secrets in the Keychain.

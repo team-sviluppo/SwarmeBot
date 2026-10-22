@@ -1,6 +1,21 @@
 // English for remote servers: Settings › Server remoti, setup, pairing, devices, remote admin.
 extension Translations {
     static let remote: [String: String] = [
+        "Relay delle notifiche push: %@": "Push notification relay: %@",
+        "Ospita il relay delle notifiche push…": "Host the Push Notification Relay…",
+        "Relay delle notifiche push su %@": "Push Notification Relay on %@",
+        "Il relay manda le push dell'app iOS tramite OneSignal. Gira con lo stesso programma del motore, che lo aggiorna insieme a sé, e risponde in HTTPS su %@/push. Va installato su un solo server: la chiave REST di OneSignal può mandare push a tutti i telefoni con l'app, quindi resta solo lì, in un file leggibile dal suo utente.": "The relay sends the iOS app's pushes through OneSignal. It runs as the same program as the engine, which updates it along with itself, and answers over HTTPS at %@/push. Install it on one server only: the OneSignal REST key can push to every phone with the app, so it stays there alone, in a file only its user can read.",
+        "Relay attivo": "Relay Running",
+        "Nella build dell'app iOS (iOS/Local.xcconfig o Shared.xcconfig) metti:": "In the iOS app's build (iOS/Local.xcconfig or Shared.xcconfig) set:",
+        "OneSignal App ID": "OneSignal App ID",
+        "OneSignal REST API key": "OneSignal REST API key",
+        "Password di sudo (se il server la chiede)": "sudo password (if the server asks for one)",
+        "Installo il relay sul server…": "Installing the relay on the server…",
+        "Aggiorna le chiavi": "Update Keys",
+        "Di %@ non conosco il sito Caddy: rifai la configurazione del server da questo Mac": "I don't know %@'s Caddy site: set the server up again from this Mac",
+        "L'URL del relay non è valido": "The relay URL is not valid",
+        "Il relay è installato, ma %@ non risponde da qui (%@)": "The relay is installed, but %@ does not answer from here (%@)",
+        "nessuna risposta": "no answer",
         // Settings › Server remoti
         "Nessun server. Un bot su un server continua a lavorare anche a Mac spento, e lo ritrovi qui o sul telefono.":
             "No servers. A bot on a server keeps working even with your Mac off, and you'll find it here or on your phone.",

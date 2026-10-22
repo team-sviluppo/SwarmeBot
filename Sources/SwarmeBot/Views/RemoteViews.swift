@@ -18,6 +18,7 @@ struct RemoteServersPane: View {
     @State private var forgetting: RemoteEngine?
     @State private var claudeLoginFor: RemoteEngine?
     @State private var piCopyFor: RemoteEngine?
+    @State private var pushRelayFor: RemoteEngine?
     @State private var configuring: String?
     @State private var notice: String?
 
@@ -36,6 +37,10 @@ struct RemoteServersPane: View {
                             Text(engine.chatURL).font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled)
                             if let identity = model.identity(for: engine) {
                                 Text(tr("Amministrato da questo Mac come %@", identity.label)).font(.system(size: 11)).foregroundStyle(.tertiary)
+                                if let relay = engine.pushRelayURL {
+                                    Text(tr("Relay delle notifiche push: %@", relay)).font(.system(size: 11)).foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                }
                                 EngineUpdateLine(engine: engine)
                                 if configuring == engine.id {
                                     HStack(spacing: 6) {
@@ -56,6 +61,7 @@ struct RemoteServersPane: View {
                                     .disabled(configuring != nil)
                                 Button(tr("Login di Claude sul server…")) { claudeLoginFor = engine }
                                 Button(tr("Copia la configurazione di pi…")) { piCopyFor = engine }
+                                Button(tr("Ospita il relay delle notifiche push…")) { pushRelayFor = engine }
                                 Button(tr("Apri un terminale sul server")) { try? model.openTerminal(identity) }
                             }
                             Divider()
@@ -80,6 +86,7 @@ struct RemoteServersPane: View {
         .sheet(item: $devicesFor) { DevicesSheet(engine: $0) }
         .sheet(item: $qrFor) { PairingQRSheet(engine: $0) }
         .sheet(item: $claudeLoginFor) { ClaudeTokenSheet(engine: $0) }
+        .sheet(item: $pushRelayFor) { PushRelaySheet(engine: $0) }
         .confirmationDialog(tr("Copiare la configurazione di pi su %@?", piCopyFor?.name ?? ""),
                             isPresented: Binding(get: { piCopyFor != nil }, set: { if !$0 { piCopyFor = nil } })) {
             Button(tr("Copia")) {
@@ -459,6 +466,70 @@ struct ClaudeTokenSheet: View {
         }
         .padding(20)
         .frame(width: 480)
+    }
+}
+
+/// The iOS app's push relay on this server (docs/push-relay.md): the same
+/// binary as the engine, its own service, `<prefix>/push` in Caddy. Meant for
+/// the one server that serves the app's build: the OneSignal key can push to
+/// every phone with the app, so it stays on that server only.
+struct PushRelaySheet: View {
+    let engine: RemoteEngine
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var appId = ""
+    @State private var apiKey = ""
+    @State private var sudoPassword = ""
+    @State private var error: String?
+    @State private var working = false
+    @State private var relay: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(tr("Relay delle notifiche push su %@", engine.name)).font(.title3.weight(.semibold))
+            Text(tr("Il relay manda le push dell'app iOS tramite OneSignal. Gira con lo stesso programma del motore, che lo aggiorna insieme a sé, e risponde in HTTPS su %@/push. Va installato su un solo server: la chiave REST di OneSignal può mandare push a tutti i telefoni con l'app, quindi resta solo lì, in un file leggibile dal suo utente.", engine.chatURL))
+                .font(.callout).foregroundStyle(.secondary)
+            if let relay {
+                Label(tr("Relay attivo"), systemImage: "checkmark.circle.fill").foregroundStyle(Theme.success)
+                Text(tr("Nella build dell'app iOS (iOS/Local.xcconfig o Shared.xcconfig) metti:")).font(.callout)
+                Text(verbatim: "SWARMEBOT_PUSH_RELAY = " + relay.replacingOccurrences(of: "://", with: ":/$()/"))
+                    .font(.system(.body, design: .monospaced)).textSelection(.enabled)
+            } else {
+                TextField(tr("OneSignal App ID"), text: $appId)
+                SecureField(tr("OneSignal REST API key"), text: $apiKey)
+                SecureField(tr("Password di sudo (se il server la chiede)"), text: $sudoPassword)
+            }
+            if let error { Text(error).foregroundStyle(Theme.danger) }
+            HStack {
+                if working {
+                    ProgressView().controlSize(.small)
+                    Text(tr("Installo il relay sul server…")).font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if relay != nil {
+                    Button(tr("Fine")) { dismiss() }.keyboardShortcut(.defaultAction)
+                } else {
+                    Button(tr("Annulla")) { dismiss() }.keyboardShortcut(.cancelAction)
+                    Button(engine.pushRelayURL == nil ? tr("Installa") : tr("Aggiorna le chiavi")) {
+                        working = true
+                        error = nil
+                        Task {
+                            do {
+                                relay = try await model.installPushRelay(on: engine, appId: appId, apiKey: apiKey,
+                                                                         sudoPassword: sudoPassword.isEmpty ? nil : sudoPassword)
+                            } catch {
+                                self.error = error.localizedDescription
+                            }
+                            working = false
+                        }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(working || appId.trimmingCharacters(in: .whitespaces).isEmpty || apiKey.isEmpty)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 520)
     }
 }
 

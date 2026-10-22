@@ -29,13 +29,25 @@ serve quindi solo con **una build propria dell'app iOS**.
 
 1. **App iOS.** Nell'account Apple Developer, un App ID con Push Notifications e una chiave APNs (.p8).
 2. **OneSignal.** Un'app OneSignal configurata con quella chiave APNs. Annota l'App ID e la REST API key.
-3. **Relay.** Su un server, dietro un proxy HTTPS (per esempio Caddy, come il motore remoto):
+3. **Relay.** Il modo più semplice è ospitarlo accanto a un motore remoto, dallo stesso Mac che lo amministra:
+   Impostazioni › Server remoti › Azioni › **Ospita il relay delle notifiche push…**, con App ID e REST API key.
+   - Il relay è lo stesso programma del motore (`swarme-harness push-relay serve`): non c'è un binario in più e
+     si aggiorna con il motore.
+   - Gira come servizio suo: `swarmebot-push.service` utente su Linux, LaunchDaemon `it.swarmebot.push.<utente>`
+     su Mac.
+   - Risponde su `<URL di chat>/push`, nello stesso Caddy.
+   - Le chiavi vanno in `~/.swarmebot/push-relay.json` (0600), mai nei segreti del motore, che arrivano agli
+     agenti. Il segreto del relay nasce sul server e resta lì; reinstallare con chiavi nuove lo conserva.
+   - Va su **un solo** server: la chiave REST manda push a tutti i telefoni con l'app.
+
+   Oppure, a mano, su un server qualsiasi dietro un proxy HTTPS (per esempio Caddy, come il motore remoto):
    ```sh
    swift build -c release --product swarme-push-relay
    ONESIGNAL_APP_ID=… ONESIGNAL_API_KEY=… RELAY_SECRET="$(openssl rand -hex 32)" \
      .build/release/swarme-push-relay --port 8920        # oppure --socket /run/swarme-push/relay.sock
    ```
-   Il relay ascolta solo su loopback o su un socket unix: l'HTTPS lo fa il proxy. Su Linux compila come il
+   Il relay ascolta solo su loopback o su un socket unix: l'HTTPS lo fa il proxy. Lo stesso relay gira anche come
+   `swarme-harness push-relay serve`; `swarme-harness push-relay configure` legge `{appId, apiKey}` da stdin. Su Linux compila come il
    motore (`scripts/build-linux-engine.sh` usa la stessa immagine `swift:6.4-noble`).
 4. **Build dell'app.** In `iOS/Local.xcconfig`, che git ignora:
    ```

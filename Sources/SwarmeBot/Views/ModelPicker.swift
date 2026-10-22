@@ -99,7 +99,7 @@ struct ModelPickerButton: View {
             open.toggle()
         } label: {
             HStack(spacing: 6) {
-                ProviderMark(driverKind: instance?.driverKind, name: instance?.displayName ?? instance?.driverKind ?? "?")
+                ProviderMark(driverKind: instance?.driverKind, name: instance?.shownName ?? "?")
                 Text(chipText(model.modelLabel(for: bot), 28))
                     .font(.system(size: Theme.uiSize, weight: .medium))
                     .foregroundStyle(Theme.ink)
@@ -154,7 +154,7 @@ struct ModelPickerPopover: View {
                         Button {
                             engine = instance.instanceId
                         } label: {
-                            ProviderMark(driverKind: instance.driverKind, name: instance.displayName ?? instance.driverKind, size: 18)
+                            ProviderMark(driverKind: instance.driverKind, name: instance.shownName, size: 18)
                                 .frame(width: 36, height: 36)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(instance.instanceId == current ? Theme.raised : .clear))
                                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(instance.instanceId == current ? Theme.hairline.opacity(0.5) : .clear))
@@ -168,7 +168,7 @@ struct ModelPickerPopover: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help(instance.displayName ?? instance.driverKind)
+                        .help(instance.shownName)
                     }
                 }
                 .padding(8)
@@ -181,7 +181,7 @@ struct ModelPickerPopover: View {
                 if let selected {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
-                            Text(selected.displayName ?? selected.driverKind)
+                            Text(selected.shownName)
                                 .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
                             Text(selected.snapshot.isAvailable ? tr("Connesso") : tr("Non disponibile"))
                                 .font(.system(size: 10.5, weight: .medium))

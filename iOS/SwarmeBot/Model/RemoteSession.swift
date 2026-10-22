@@ -257,6 +257,52 @@ final class RemoteSession: Identifiable {
         }
     }
 
+    // MARK: - Channels (the engine's rooms)
+
+    /// A channel of this server's bots; their working folder is the engine's
+    /// choice (the phone cannot browse the server's folders).
+    func createRoom(name: String, memberIds: [String]) async -> Room? {
+        var created: Room?
+        await perform { client in
+            let room = try await client.createRoom(name: name, memberIds: memberIds)
+            self.state.apply(.room(room))
+            created = room
+        }
+        return created
+    }
+
+    /// Who answers a message without @mentions: "everyone", "mentions" or "member" (with `botId`).
+    func setResponder(_ roomId: String, kind: String, botId: String? = nil) async {
+        await perform { client in
+            let room = try await client.patchRoom(roomId, RoomPatch(responder: kind, responderBotId: botId))
+            self.state.apply(.room(room))
+        }
+    }
+
+    /// A bot of this server speaks in a channel of the phone (a mixed channel).
+    func guestTurn(conversationId: String, name: String, botId: String, roster: [String], userName: String, hostName: String,
+                   messages: [GuestMessage]) async -> Result<GuestTurnResult, Error> {
+        guard let client else { return .failure(APIError.badURL) }
+        do {
+            return .success(try await client.guestTurn(conversationId: conversationId, name: name, botId: botId, roster: roster,
+                                                       userName: userName, hostName: hostName, messages: messages))
+        } catch {
+            if (error as? APIError)?.isUnauthorized == true { status = .unpaired }
+            return .failure(error)
+        }
+    }
+
+    func interruptGuestTurn(conversationId: String) async {
+        _ = try? await client?.interruptGuestTurn(conversationId: conversationId)
+    }
+
+    func deleteRoom(_ roomId: String) async {
+        await perform { client in
+            try await client.deleteRoom(roomId)
+            self.state.apply(.roomDeleted(groupId: roomId))
+        }
+    }
+
     // MARK: - Chats of a bot (the engine's tasks)
 
     /// A bot's chats, newest first; the shown one is `bot.threadId`.

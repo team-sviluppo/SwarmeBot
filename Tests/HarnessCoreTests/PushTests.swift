@@ -1,5 +1,4 @@
 @testable import HarnessCore
-@testable import swarme_push_relay
 import XCTest
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -68,6 +67,24 @@ final class PushTests: XCTestCase {
         other.oneSignalURL = URL(string: "https://onesignal.test")!
         XCTAssertNil(Relay(config: other).subscription(of: token), "another relay's secret does not accept it")
         XCTAssertFalse(Relay.validSubscription("../x"))
+    }
+
+    func testRelayKeysLiveInTheirOwnFileAndKeepTheSecret() throws {
+        let paths = DataPaths(root: FileManager.default.temporaryDirectory.appendingPathComponent("relay-\(UUID().uuidString)"))
+        XCTAssertThrowsError(try RelayConfig.configure(["appId": "app-1"], paths: paths))
+        try RelayConfig.configure(["appId": "app-1", "apiKey": "rest-1"], paths: paths)
+        let first = try RelayConfig.load([:], paths: paths)
+        XCTAssertEqual(first.appId, "app-1")
+        XCTAssertEqual(first.secret.utf8.count, 64)
+        let mode = try FileManager.default.attributesOfItem(atPath: RelayConfig.file(paths).path)[.posixPermissions] as? Int
+        XCTAssertEqual(mode, 0o600)
+        // a new key keeps the secret: the phones' tokens stay valid
+        try RelayConfig.configure(["appId": "app-1", "apiKey": "rest-2"], paths: paths)
+        let second = try RelayConfig.load([:], paths: paths)
+        XCTAssertEqual(second.apiKey, "rest-2")
+        XCTAssertEqual(second.secret, first.secret)
+        // the environment wins over the file
+        XCTAssertEqual(try RelayConfig.load(["ONESIGNAL_API_KEY": "from-env"], paths: paths).apiKey, "from-env")
     }
 
     func testNotifySendsOneSignalTheSubscriptionAndNoChatText() async throws {

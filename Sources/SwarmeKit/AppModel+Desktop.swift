@@ -248,9 +248,9 @@ extension AppModel {
 
     // MARK: - Rooms
 
-    public func createRoom(name: String?, memberIds: [String], cwd: String? = nil) async {
+    public func createRoom(name: String?, memberIds: [String], cwd: String? = nil, guests: [RoomGuest] = []) async {
         await perform { client in
-            let room = try await client.createRoom(name: name, memberIds: memberIds, cwd: cwd)
+            let room = try await client.createRoom(name: name, memberIds: memberIds, cwd: cwd, guests: guests)
             self.selection = .room(room.id)
         }
     }
@@ -496,7 +496,7 @@ extension AppModel {
     public func connectorBlock(_ bot: Bot) -> String? {
         guard let instance = instances.first(where: { $0.instanceId == bot.modelSelection.instanceId }) else { return nil }
         guard (instance.capabilities?.connectors ?? "none") != "none" else {
-            return tr("Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex, gli agenti ACP e il Local Endpoint.")
+            return tr("Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex, gli agenti ACP e il server compatibile OpenAI.")
         }
         if instance.models.options.first(where: { $0.id == bot.modelSelection.model })?.clientTools == false {
             return tr("Questo modello è un profilo Hermes: usa i suoi strumenti e ignora i connettori di SwarmeBot.")

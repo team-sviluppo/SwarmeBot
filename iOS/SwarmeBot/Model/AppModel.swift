@@ -15,6 +15,7 @@ final class AppModel {
     var open: Route?
     /// The same for one of the phone's bots.
     var openPhoneBot: String?
+    var openPhoneRoom: String?
     /// Settings from the Mac waiting to be looked at (a QR or a file).
     var pendingImport: ImportSource?
 
@@ -24,6 +25,8 @@ final class AppModel {
     init() {
         sessions = ServerStore.load().map { RemoteSession(server: $0) }
         for session in sessions { listen(session) }
+        // guests of mixed channels speak through their server's session
+        local.remoteSession = { [weak self] id in self?.session(id) }
     }
 
     func session(_ id: String) -> RemoteSession? { sessions.first { $0.id == id } }
@@ -40,10 +43,18 @@ final class AppModel {
         }
     }
 
+    /// The guests a selection of `RoomGuest.memberId`s names, from the paired servers' bots.
+    func roomGuests(_ ids: [String]) -> [RoomGuest] {
+        let all = sessions.flatMap { session in
+            session.visibleBots.map { RoomGuest(peerId: session.id, botId: $0.id, name: $0.name, color: $0.color,
+                                                title: $0.title.isEmpty ? nil : $0.title) }
+        }
+        return ids.compactMap { id in all.first { $0.memberId == id } }
+    }
+
     // MARK: - Lifecycle
 
     func becameActive() {
-        Notifier.shared.active = true
         endGrace()
         for session in sessions { session.resume() }
     }
@@ -52,7 +63,6 @@ final class AppModel {
     /// minute), so a turn ending soon after still tells; a turn on the phone
     /// carries on as long as that. Then the background refreshes take over.
     func wentToBackground() {
-        Notifier.shared.active = false
         guard grace == nil else { return }
         let id = UIApplication.shared.beginBackgroundTask(withName: "finish turns") { [weak self] in
             // iOS calls it on the main thread, just before suspending the app

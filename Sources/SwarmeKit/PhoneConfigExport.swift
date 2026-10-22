@@ -1,5 +1,5 @@
 // "Invia al telefono" (docs/plans/2026-10-22-app-ios.md §7, D11): this Mac's
-// Local Endpoint and HTTP connectors, with their secrets, for the iOS app's
+// OpenAI-compatible server and HTTP connectors, with their secrets, for the iOS app's
 // own bots. Secrets come from where "Copia su server" reads them (the engine
 // never hands them out over its API); OAuth connectors go without tokens.
 //
@@ -24,12 +24,12 @@ public enum PhoneConfigExport {
         public var note: String?
     }
 
-    /// What can be sent: the Local Endpoint when it has an address, and every HTTP connector.
+    /// What can be sent: the OpenAI-compatible server when it has an address, and every HTTP connector.
     @MainActor
     public static func items(_ model: AppModel) -> [Item] {
         var out: [Item] = []
         if let base = model.config?.localEndpoint?.baseUrl, !base.isEmpty {
-            out.append(Item(id: "endpoint", kind: .endpoint, name: "Local Endpoint", detail: base,
+            out.append(Item(id: "endpoint", kind: .endpoint, name: tr("Server compatibile OpenAI"), detail: base,
                             note: CredentialStore.load()[WorkspaceCredential.localEndpointApiKey.environmentName] == nil
                                 ? tr("senza chiave: non è salvata su questo Mac") : nil))
         }
@@ -49,7 +49,7 @@ public enum PhoneConfigExport {
             switch item.kind {
             case .endpoint:
                 let key = CredentialStore.load()[WorkspaceCredential.localEndpointApiKey.environmentName]
-                config.endpoints.append(PhoneConfig.Endpoint(name: "Local Endpoint", baseUrl: item.detail, apiKey: key))
+                config.endpoints.append(PhoneConfig.Endpoint(name: tr("Server compatibile OpenAI"), baseUrl: item.detail, apiKey: key))
             case let .connector(id):
                 guard let connector = model.mcpConnectors.first(where: { $0.id == id }), let url = connector.url else { continue }
                 if connector.usesOAuth {

@@ -73,6 +73,13 @@ public final class Harness {
     /// One chain per room: members speak one at a time.
     var groupQueues: [String: Task<Void, Never>] = [:]
     var roomStallHandlers: [String: () -> Void] = [:]
+    /// Engines whose bots may be guests in this engine's rooms (MixedRooms.swift),
+    /// in memory only: the Mac app hands them over at every start.
+    var peerEngines: [String: PeerEngine] = [:]
+    /// The guest turn a room is waiting on, to stop it.
+    var peerTurns: [String: (peer: PeerEngine, conversationId: String, task: Task<GuestOutcome, Never>)] = [:]
+    /// How guest engines show where a mixed channel lives.
+    var hostName = "SwarmeBot"
     var unattendedBots: [String: Date] = [:]
     var delegationWatch: [String: (channelId: String?, toBotId: String)] = [:]
     /// Last session window per instance (UsageLimits.swift).
@@ -204,7 +211,8 @@ public final class Harness {
             if let group = self.store.groupByThread(turn.threadId), group["busyBotId"]?.string == turn.botId,
                self.groupSpeakers[turn.threadId]?["botId"]?.string == turn.botId {
                 self.groupSpeakers[turn.threadId] = nil
-                self.store.patchGroup(group["id"]?.string ?? "", ["busyBotId": .null, "unread": true])
+                // a mirror room is read on its host (MixedRooms.swift)
+                self.store.patchGroup(group["id"]?.string ?? "", group["guest"] == nil ? ["busyBotId": .null, "unread": true] : ["busyBotId": .null])
             }
             if Store.isBusy(self.store.bot(turn.botId)) { self.store.setActivity(turn.botId, "idle") }
         }
@@ -478,7 +486,8 @@ public final class Harness {
             if let member = groupSpeakers[threadId], let room = store.groupByThread(threadId),
                room["busyBotId"]?.string == member["botId"]?.string, let memberId = member["botId"]?.string {
                 groupSpeakers[threadId] = nil
-                store.patchGroup(room["id"]?.string ?? "", ["busyBotId": .null, "unread": true])
+                // a mirror room is read on its host (MixedRooms.swift)
+                store.patchGroup(room["id"]?.string ?? "", room["guest"] == nil ? ["busyBotId": .null, "unread": true] : ["busyBotId": .null])
                 if Store.isBusy(store.bot(memberId)) {
                     store.setActivity(memberId, "idle")
                     store.patchBot(memberId, ["unread": true])

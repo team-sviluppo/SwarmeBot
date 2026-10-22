@@ -21,6 +21,8 @@ public struct RemoteEngine: Codable, Hashable, Identifiable, Sendable {
     public var prefix: String?
     public var tls: String?
     public var createdAt: Date
+    /// The iOS app's push relay hosted next to this engine, once installed from this Mac.
+    public var pushRelayURL: String?
 
     public var connection: Connection? { Connection.remote(chatURL: chatURL, name: name) }
 }

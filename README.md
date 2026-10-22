@@ -138,7 +138,7 @@ laptop closed, and every paired device sees the same chats.
 - macOS **notifications**, Dock badge and menu.
 - **Settings**: profile and channel timeouts; **Engines** (executable, test, visibility, install
   and log in through Terminal); **Remote servers**; **Connectors**; **Mac control**; **Keys and
-  services** (API keys in the macOS Keychain, Local Endpoint, VPS); **DeepSeek** (direct or paired
+  services** (API keys in the macOS Keychain, OpenAI-compatible server, VPS); **DeepSeek** (direct or paired
   connection); **Updates**.
 - Automatic updates with **Sparkle** (signed appcast, EdDSA-verified archives).
 
@@ -162,11 +162,11 @@ to log in.
 | **Antigravity** (`agy`) | print mode with conversation resume |
 | **ACP agents** | Agent Client Protocol: Gemini CLI, Grok CLI, Kimi CLI, Factory Droid, Cursor Agent, OpenCode Go, Qwen Code, Hermes |
 | **Grok API** (xAI) | direct API |
-| **Local Endpoint** | any OpenAI-compatible server: LiteLLM, vLLM, Ollama, LM Studio… (with session continuity for Hermes behind LiteLLM) |
+| **OpenAI-compatible server** | any server speaking the OpenAI API: LiteLLM, vLLM, Ollama, LM Studio… (with session continuity for Hermes behind LiteLLM) |
 | **DeepSeek Harness** | Host API over HTTP + WebSocket, direct or paired |
 | **Box agent** | an agent that works on a cloud computer |
 
-Local models served by your Local Endpoint can also be **injected** into Claude Code, Codex and the
+Local models served by your OpenAI-compatible server can also be **injected** into Claude Code, Codex and the
 ACP agents that support custom providers: SwarmeBot writes the agent's config for you.
 
 You bring your own subscriptions and API keys: SwarmeBot never proxies your traffic through a

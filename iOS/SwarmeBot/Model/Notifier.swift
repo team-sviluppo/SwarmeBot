@@ -16,8 +16,8 @@ final class Notifier: NSObject {
     static let refreshTask = "it.hextra.swarmebot.refresh"
 
     private weak var model: AppModel?
-    /// The app is in front.
-    var active = false
+    /// The app is on screen: in front, or under a system alert (not in the background).
+    var active: Bool { UIApplication.shared.applicationState != .background }
     /// The chat on screen (`key(…)`), told by the chat views.
     var onScreen: String?
 
@@ -29,6 +29,8 @@ final class Notifier: NSObject {
     }
 
     static func key(phoneBot id: String) -> String { "phone/\(id)" }
+
+    static func key(phoneRoom id: String) -> String { "phone/room/\(id)" }
 
     func start(_ model: AppModel) {
         guard self.model == nil else { return }
@@ -89,6 +91,12 @@ final class Notifier: NSObject {
                 userInfo: ["phoneBotId": bot.id])
     }
 
+    /// A channel of the phone's bots answered; the last reply says who.
+    func deliver(phoneRoom room: LocalRoom, speaker: String, reply: String) {
+        deliver(title: room.name, body: "\(speaker): \(Self.summarize(reply))", chat: Self.key(phoneRoom: room.id), blocking: false,
+                userInfo: ["phoneRoomId": room.id])
+    }
+
     static func summarize(_ text: String, max: Int = 140) -> String {
         let line = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return line.count > max ? String(line.prefix(max - 1)) + "…" : line
@@ -137,6 +145,8 @@ final class Notifier: NSObject {
         guard let model else { return }
         if let botId = userInfo["phoneBotId"] as? String {
             model.openPhoneBot = botId
+        } else if let roomId = userInfo["phoneRoomId"] as? String {
+            model.openPhoneRoom = roomId
         } else if let serverId = userInfo["serverId"] as? String, let botId = userInfo["botId"] as? String {
             model.open = Route(serverId: serverId, chat: .bot(botId))
         }

@@ -93,9 +93,9 @@ private struct EnginesPane: View {
                     Circle()
                         .fill(instance.snapshot.isAvailable ? Theme.success : Theme.danger)
                         .frame(width: 8, height: 8)
-                    ProviderMark(driverKind: instance.driverKind, name: instance.displayName ?? instance.driverKind, size: 16)
+                    ProviderMark(driverKind: instance.driverKind, name: instance.shownName, size: 16)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(instance.displayName ?? instance.driverKind).font(.system(size: 13, weight: .medium))
+                        Text(instance.shownName).font(.system(size: 13, weight: .medium))
                         Text(instance.driverKind).font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 }
@@ -257,7 +257,7 @@ private struct KeysPane: View {
                     }
                 }
             }
-            Section(tr("Local Endpoint (LiteLLM, vLLM, OpenAI-compatibile)")) {
+            Section(tr("Server compatibile OpenAI (LiteLLM, vLLM, Ollama…)")) {
                 HStack {
                     TextField(tr("URL base, es. http://127.0.0.1:4000/v1"), text: $endpointURL)
                     Button(tr("Salva")) { Task { await model.saveConfig(["localEndpoint": ["baseUrl": endpointURL]]) } }

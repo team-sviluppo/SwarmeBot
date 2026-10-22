@@ -16,6 +16,8 @@ struct ChatView: View {
     @State private var attachError: String?
     @State private var sending = false
     @State private var showChats = false
+    @State private var deletingRoom = false
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
     private var bot: Bot? {
@@ -60,6 +62,16 @@ struct ChatView: View {
                     if busy {
                         Button(tr("Ferma"), systemImage: "stop.circle") { Task { await session.interrupt(chat) } }
                     }
+                    if let room {
+                        if room.guest == nil {
+                            ResponderMenu(kind: room.defaultResponder.kind, botId: room.defaultResponder.botId,
+                                          members: members.map { ($0.id, $0.name) } + (room.guests ?? []).map { ($0.memberId, $0.name) }) { kind, botId in
+                                Task { await session.setResponder(room.id, kind: kind, botId: botId) }
+                            }
+                        }
+                        Divider()
+                        Button(tr("Elimina il canale"), systemImage: "trash", role: .destructive) { deletingRoom = true }
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                 }
@@ -90,6 +102,15 @@ struct ChatView: View {
         }
         .onAppear { Notifier.shared.onScreen = screenKey }
         .onDisappear { if Notifier.shared.onScreen == screenKey { Notifier.shared.onScreen = nil } }
+        .confirmationDialog(tr("Eliminare %@?", room?.name ?? ""), isPresented: $deletingRoom, titleVisibility: .visible) {
+            Button(tr("Elimina"), role: .destructive) {
+                if case let .room(id) = chat { Task { await session.deleteRoom(id) } }
+            }
+        } message: {
+            Text(tr("Il canale e la sua conversazione spariscono dal server, anche sul Mac. I bot restano."))
+        }
+        // a channel deleted here or elsewhere: back to the list
+        .onChange(of: room == nil) { _, gone in if gone, case .room = chat { dismiss() } }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             Task { await attach(item) }
@@ -134,7 +155,19 @@ struct ChatView: View {
 
     // MARK: Composer
 
+    @ViewBuilder
     private var composer: some View {
+        if let host = room?.guest {
+            // a mirror of a mixed channel: written where it lives
+            Text(tr("Canale misto di %@: si scrive da lì.", host.hostName ?? tr("un altro dispositivo")))
+                .font(.footnote).foregroundStyle(Theme.secondary)
+                .padding(.horizontal, 20).padding(.bottom, 12)
+        } else {
+            editableComposer
+        }
+    }
+
+    private var editableComposer: some View {
         VStack(spacing: 4) {
             if !session.isLive {
                 Text(tr("Senza connessione al server: l'invio torna quando la connessione riprende."))

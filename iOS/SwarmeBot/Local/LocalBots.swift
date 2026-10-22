@@ -13,11 +13,16 @@ final class LocalBots {
     private(set) var bots: [LocalBot] = []
     private(set) var connectors: [LocalConnector] = []
     private(set) var servers: [LocalServer] = []
+    /// The channels of the phone's bots (LocalRooms.swift).
+    var rooms: [LocalRoom] = []
     var lastError: String?
 
     @ObservationIgnored let store: LocalStore?
     @ObservationIgnored let pool = ConnectorPool()
     @ObservationIgnored private var chats: [String: LocalChat] = [:]
+    @ObservationIgnored var roomChats: [String: LocalRoomChat] = [:]
+    /// A paired server by id, for the guests of mixed channels (set by AppModel).
+    @ObservationIgnored var remoteSession: ((String) -> RemoteSession?)?
     @ObservationIgnored private lazy var endpointDriver = EndpointDriver()
     @ObservationIgnored private lazy var appleDriver = AppleDriver()
     @ObservationIgnored lazy var gemma = GemmaModel()
@@ -27,6 +32,7 @@ final class LocalBots {
         bots = store?.bots() ?? []
         connectors = store?.connectors() ?? []
         servers = store?.servers() ?? []
+        rooms = store?.rooms() ?? []
         // bots from before several chats: their one chat becomes the first of the list
         for var bot in bots where bot.chats == nil {
             let first = store?.messages(bot: bot.id).first { $0.role == .user }
@@ -67,10 +73,10 @@ final class LocalBots {
 
     func bot(_ id: String) -> LocalBot? { bots.first { $0.id == id } }
 
-    var unreadCount: Int { bots.filter { $0.unread == true }.count }
+    var unreadCount: Int { bots.filter { $0.unread == true }.count + rooms.filter { $0.unread == true }.count }
 
-    /// A turn runs in one of the chats.
-    var isBusy: Bool { chats.values.contains(where: \.busy) }
+    /// A turn runs in one of the chats or channels.
+    var isBusy: Bool { chats.values.contains(where: \.busy) || roomChats.values.contains(where: \.busy) }
 
     /// The bot's chat is on screen: its replies are read.
     func markRead(_ botId: String) {
@@ -169,6 +175,11 @@ final class LocalBots {
         chats.removeValue(forKey: bot.id)?.stop()
         store?.delete(bot: bot.id)
         bots.removeAll { $0.id == bot.id }
+        // out of its channels too; a channel left with nobody goes
+        for var room in rooms where room.memberIds.contains(bot.id) {
+            room.memberIds.removeAll { $0 == bot.id }
+            if room.allMemberIds.isEmpty { delete(room) } else { save(room) }
+        }
     }
 
 

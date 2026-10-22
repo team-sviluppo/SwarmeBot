@@ -24,10 +24,11 @@ struct LocalBotAvatar: View {
     let bot: LocalBot
     var size: CGFloat = 52
     var busy = false
+    var animated = true
 
     var body: some View {
         SwarmeAvatar(color: bot.paletteColor, size: size, state: busy ? .working : SwarmeState.restingFace(for: bot.id),
-                     silhouette: bot.shape, animated: true, trackPointer: false)
+                     silhouette: bot.shape, animated: animated, trackPointer: false)
     }
 }
 

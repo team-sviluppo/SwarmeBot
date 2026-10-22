@@ -1,6 +1,14 @@
 // English for the chat window: sidebar, header, transcript, composer, inspector, palette, menus, notifications.
 extension Translations {
     static let chat: [String: String] = [
+        "server": "server",
+        "Canale misto di %@: si scrive da lì. Qui ci sono le risposte e le richieste di permesso dei bot di questo server.": "Mixed channel of %@: written from there. Here are the replies and permission requests of this server's bots.",
+        "un altro dispositivo": "another device",
+        "Specchio di %@": "Mirror of %@",
+        "Ospiti da %@": "Guests from %@",
+        "Rispondono dal loro server e lavorano nelle loro cartelle: la cartella del canale vale solo per i bot di questo Mac.": "They answer from their server and work in their own folders: the channel's folder is only for this Mac's bots.",
+        "Ospiti non raggiungibili": "Unreachable Guests",
+        "Canale misto di %@: si scrive da lì.": "Mixed channel of %@: written from there.",
         "Copia percorso": "Copy Path",
         "Cartella del canale": "Channel folder",
         "Una per ogni bot": "One per bot",
@@ -32,7 +40,8 @@ extension Translations {
         "Automazioni (⇧⌘R)": "Automations (⇧⌘R)",
         "Avvia": "Start",
         "Avvio di SwarmeBot": "Starting SwarmeBot",
-        "Bacheca (visibile a tutti i membri)": "Bulletin (visible to all members)",
+        "Istruzioni del canale": "Channel Instructions",
+        "Le leggono tutti i membri a ogni turno, insieme alle loro istruzioni.": "Every member reads them on each turn, along with its own instructions.",
         "Box: %@": "Box: %@",
         "Canale": "Channel",
         "Canali": "Channels",
@@ -89,7 +98,7 @@ extension Translations {
         "Ignora richiesta": "Dismiss request",
         "Ignorata": "Dismissed",
         "Il bot chiede aiuto: %@": "The bot asks for help: %@",
-        "Il Local Endpoint riceve i file come testo: %@ non si può leggere. Allega testo, codice, CSV, JSON, Markdown, PDF o immagini.": "The Local Endpoint receives files as text: %@ can't be read. Attach text, code, CSV, JSON, Markdown, PDF or images.",
+        "Il server compatibile OpenAI riceve i file come testo: %@ non si può leggere. Allega testo, codice, CSV, JSON, Markdown, PDF o immagini.": "The OpenAI-compatible server receives files as text: %@ can't be read. Attach text, code, CSV, JSON, Markdown, PDF or images.",
         "Il motore di questa chat non legge immagini: rimuovile o cambia modello.": "This chat's engine can't read images: remove them or change model.",
         "Il motore non è partito": "The engine didn't start",
         "Immagine": "Image",

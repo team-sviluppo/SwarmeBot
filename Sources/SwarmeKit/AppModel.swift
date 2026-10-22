@@ -125,6 +125,7 @@ public final class AppModel {
             status = .failed(message)
         case let .running(port, _):
             localPort = port
+            handOverPeerEngines()
             if engineChoice == .local { connectToChoice() }
         }
     }
@@ -419,5 +420,13 @@ public final class AppModel {
 
     public func export(threadId: String) async -> TranscriptExport? {
         try? await client?.export(threadId: threadId, format: "markdown")
+    }
+}
+
+extension Instance {
+    /// The name the app shows: the engine's, except for the OpenAI-compatible
+    /// server, named as on the phone (the engine keeps "Local Endpoint" on the wire).
+    public var shownName: String {
+        driverKind == "localEndpoint" ? tr("Server compatibile OpenAI") : displayName ?? driverKind
     }
 }

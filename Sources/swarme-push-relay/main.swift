@@ -3,6 +3,7 @@
 // Environment: ONESIGNAL_APP_ID, ONESIGNAL_API_KEY, RELAY_SECRET (≥ 32 bytes),
 // optional ONESIGNAL_API, RELAY_HOURLY_LIMIT. Listens on loopback or a unix
 // socket only: put an HTTPS proxy (Caddy) in front, like the remote engine.
+// The same relay runs as `swarme-harness push-relay` (HarnessCore/PushRelay.swift).
 import Foundation
 import HarnessCore
 

@@ -36,10 +36,9 @@ final class LocalTests: XCTestCase {
         let local = LocalBots(store: store)
         local.save(LocalBot(id: "b1", name: "Prova", kind: .apple, createdAt: Date()))
         let notifier = Notifier.shared
-        defer { notifier.onScreen = nil; notifier.active = false }
+        defer { notifier.onScreen = nil }
 
-        // on screen, in front: read as it arrives
-        notifier.active = true
+        // on screen (the test host is not in the background): read as it arrives
         notifier.onScreen = Notifier.key(phoneBot: "b1")
         local.replied("b1", text: "fatto")
         XCTAssertEqual(local.unreadCount, 0)
@@ -53,6 +52,57 @@ final class LocalTests: XCTestCase {
         local.markRead("b1")
         XCTAssertEqual(local.unreadCount, 0)
         XCTAssertNil(local.bot("b1")?.unread)
+    }
+
+    func testAChannelAnswersAsTheEngineRoomsDo() throws {
+        let ada = LocalBot(id: "a", name: "Ada", kind: .apple, createdAt: Date())
+        let ada2 = LocalBot(id: "a2", name: "Ada Due", kind: .apple, createdAt: Date())
+        let bob = LocalBot(id: "b", name: "Bob", kind: .apple, createdAt: Date())
+        // a guest from a paired server: a mixed channel
+        let cleo = RoomGuest(peerId: "srv", botId: "c", name: "Cleo", color: "green")
+        let members: [RoomMember] = [.phone(ada), .phone(ada2), .phone(bob), .guest(cleo)]
+        var room = LocalRoom(id: "r", name: "Team", memberIds: ["a", "a2", "b"], guests: [cleo], createdAt: Date())
+        let ids = { (text: String) in LocalRoomChat.responders(text, members: members, room: room).map(\.id) }
+
+        // untagged: the first member, the engine's default
+        XCTAssertEqual(ids("ciao"), ["a"])
+        // tags win, longest name first; an address is no tag
+        XCTAssertEqual(ids("@Ada Due e @bob, guardate"), ["a2", "b"])
+        XCTAssertEqual(ids("scrivi a me@Bob.it"), ["a"])
+        XCTAssertEqual(ids("@Cleo tocca a te"), ["peer:srv:c"])
+        XCTAssertEqual(ids("@everyone"), ["a", "a2", "b", "peer:srv:c"])
+        room.responder = "member"
+        room.responderBotId = "peer:srv:c"
+        XCTAssertEqual(ids("ciao"), ["peer:srv:c"])
+        room.responder = "everyone"
+        XCTAssertEqual(ids("ciao"), ["a", "a2", "b", "peer:srv:c"])
+        room.responder = "mentions"
+        XCTAssertEqual(ids("ciao"), [])
+        let system = LocalRoomChat.system(for: bob, in: room, roster: members.map { "@\($0.name)" })
+        XCTAssertTrue(system.contains("Room members: @Ada, @Ada Due, @Bob, @Cleo"))
+    }
+
+    func testChannelsAreKeptAndLoseDeletedBots() throws {
+        let store = try temporaryStore()
+        let local = LocalBots(store: store)
+        local.save(LocalBot(id: "a", name: "Ada", kind: .apple, createdAt: Date()))
+        local.save(LocalBot(id: "b", name: "Bob", kind: .apple, createdAt: Date()))
+        let room = local.addRoom(name: " ", memberIds: ["a", "b"])
+        XCTAssertEqual(room.name, "Ada, Bob")
+        XCTAssertEqual(LocalBots(store: try LocalStore(folder: store.folder)).rooms.map { [$0.id, $0.name] + $0.memberIds }, [[room.id, "Ada, Bob", "a", "b"]])
+
+        local.delete(try XCTUnwrap(local.bot("a")))
+        XCTAssertEqual(local.room(room.id)?.memberIds, ["b"])
+        local.delete(try XCTUnwrap(local.bot("b")))
+        XCTAssertNil(local.room(room.id))
+        XCTAssertTrue(LocalBots(store: try LocalStore(folder: store.folder)).rooms.isEmpty)
+
+        // a channel with a guest outlives its last phone bot
+        local.save(LocalBot(id: "c", name: "Cleo", kind: .apple, createdAt: Date()))
+        let mixed = local.addRoom(name: "", memberIds: ["c"], guests: [RoomGuest(peerId: "srv", botId: "x", name: "Xeno", color: "red")])
+        XCTAssertEqual(mixed.name, "Cleo, Xeno")
+        local.delete(try XCTUnwrap(local.bot("c")))
+        XCTAssertEqual(local.room(mixed.id)?.allMemberIds, ["peer:srv:x"])
     }
 
     func testImportFromTheMacMakesBotsAndConnectors() async throws {

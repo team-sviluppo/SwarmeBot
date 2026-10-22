@@ -111,6 +111,31 @@ Shape ricorrenti: **WireBot** = `BotRecord` senza `resumeCursors`, con `tasks[]`
 | POST | `/api/groups/:gid/messages` | `{text}` | 202 `{ok:true}` (turno di room asincrono, sequenziale per membro) | ✅ | ✅ |
 | POST | `/api/groups/:gid/interrupt` | — | `{ok:true}` (chiude le approval aperte) | ✅ | ❌ |
 
+#### Canali misti (solo Swift, `HarnessCore/MixedRooms.swift`)
+
+Un canale vive su un host (un motore, o il telefono); i membri di altri motori sono **ospiti**. Per il turno di un
+ospite l'host chiama il motore dell'ospite, che tiene una **stanza specchio** del canale.
+
+| Metodo | Path | Request | Risposta |
+|---|---|---|---|
+| PUT | `/api/peer-engines` | `{name?, engines: [{id, name, url, token}]}`: sostituisce l'elenco (`url` = chat URL del motore). Solo in memoria. **Solo locale** (501 da remoto) | `{engines: [{id, name}]}`; 400 se manca id/url/token |
+| GET | `/api/peer-engines` | — | `{engines: [{id, name}]}` (mai i token) |
+| POST | `/api/guest-turns` | `{conversationId (1..128, [\w:.-]), name, botId, roster: string[], userName?, hostName?, messages: [{id, role:"user"\|"bot", name, color?, text, ref?}] (ultimi 60)}` | sincrono, a turno finito: 200 `{text, messageId}`; 409 `{busy:true, error}` se il bot o lo specchio sono occupati; 404 bot assente; 502 con il chip d'errore se il bot non ha risposto |
+| POST | `/api/guest-turns/interrupt` | `{conversationId}` | `{ok:true}`; 404 se lo specchio non c'è |
+
+- `POST /api/groups` accetta `guests: [{peerId, botId, name, color?, title?}]`: sono tenuti solo i `peerId` presenti in
+  `/api/peer-engines`. `memberIds` può essere vuoto se ci sono ospiti. `PATCH` accetta `guests` (lista intera; `[]` li
+  toglie; 400 su uno specchio).
+- Un ospite è il membro `peer:<peerId>:<botId>`: vale in `defaultResponder.botId`, `busyBotId` e `from.botId` dei
+  suoi messaggi (`from: {botId, name, color}`, più `guestRef` = `messageId` dell'ospite).
+- **Specchio** (sul motore dell'ospite): una room con `guest: {conversationId, deviceId, hostName?, userName?,
+  roster}`, una per dispositivo chiamante e `conversationId`.
+  - Copia i messaggi dell'host una volta sola (`hostId` sui messaggi copiati; `ref` evita di ricopiare le risposte
+    dell'ospite).
+  - Non diventa mai `unread` e non fa catene di menzioni (le fa l'host).
+  - `POST /api/groups/:gid/messages` risponde 409 ("this channel is written from where it lives").
+- Ogni membro lavora nelle cartelle del proprio motore: `cwd` della room vale solo per i bot dell'host.
+
 ### 2.3 Thread e messaggi
 
 | Metodo | Path | Request | Risposta | React | CC |

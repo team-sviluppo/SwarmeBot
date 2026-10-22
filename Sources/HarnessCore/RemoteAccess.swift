@@ -204,7 +204,7 @@ public final class RemoteAccess {
     public var onRevoke: ((String) -> Void)?
 
     static let unavailable = "non disponibile su un motore remoto"
-    static let localOnly = [#"^/api/local-computer(/|$)"#, #"^/api/bots/[^/]+/computer(/|$)"#]
+    static let localOnly = [#"^/api/local-computer(/|$)"#, #"^/api/bots/[^/]+/computer(/|$)"#, #"^/api/peer-engines$"#]
 
     public init(paths: DataPaths, publicURL: String?) {
         devices = DeviceRegistry(paths: paths)

@@ -23,6 +23,7 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var pendingLink: RemotePairingLink?
     @State private var newBot = false
+    @State private var newChannel = false
     @State private var search = ""
 
     var body: some View {
@@ -58,6 +59,9 @@ struct RootView: View {
             .navigationDestination(for: LocalRoute.self) { route in
                 LocalChatView(botId: route.botId)
             }
+            .navigationDestination(for: LocalRoomRoute.self) { route in
+                LocalRoomView(roomId: route.roomId)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(tr("Impostazioni"), systemImage: "gearshape") { showSettings = true }
@@ -76,6 +80,12 @@ struct RootView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $newBot) { LocalBotEditor(existing: nil) }
+        .sheet(isPresented: $newChannel) {
+            NewChannelSheet { route in
+                if let route = route as? Route { path.append(route) }
+                if let route = route as? LocalRoomRoute { path.append(route) }
+            }
+        }
         .onChange(of: model.open) { _, route in
             // a tapped notification: its chat on top
             guard let route else { return }
@@ -86,6 +96,11 @@ struct RootView: View {
             guard let botId else { return }
             if model.local.bot(botId) != nil { path.append(LocalRoute(botId: botId)) }
             model.openPhoneBot = nil
+        }
+        .onChange(of: model.openPhoneRoom) { _, roomId in
+            guard let roomId else { return }
+            if model.local.room(roomId) != nil { path.append(LocalRoomRoute(roomId: roomId)) }
+            model.openPhoneRoom = nil
         }
         .onChange(of: model.unreadCount, initial: true) { _, count in Notifier.shared.setBadge(count) }
         #if DEBUG
@@ -126,6 +141,12 @@ struct RootView: View {
             }
         }
         .task {
+            // `-openFirstRoom YES [-roomText <text>]`: the first phone channel, a message sent
+            guard UserDefaults.standard.bool(forKey: "openFirstRoom"), let room = model.local.rooms.first else { return }
+            path.append(LocalRoomRoute(roomId: room.id))
+            if let text = UserDefaults.standard.string(forKey: "roomText") { model.local.roomChat(room.id).send(text) }
+        }
+        .task {
             // `-openFirstChat YES`: land in the first bot's chat
             guard UserDefaults.standard.bool(forKey: "openFirstChat") else { return }
             for _ in 0..<40 {
@@ -162,6 +183,7 @@ struct RootView: View {
     private var addMenu: some View {
         Menu {
             Button(tr("Nuovo bot sul telefono"), systemImage: "iphone") { newBot = true }
+            Button(tr("Nuovo canale"), systemImage: "person.3") { newChannel = true }
             Button(tr("Abbina un server"), systemImage: "qrcode.viewfinder") { showPairing = true }
         } label: {
             Image(systemName: "plus")
@@ -172,6 +194,7 @@ struct RootView: View {
         HStack(spacing: 10) {
             Menu {
                 Button(tr("Nuovo bot sul telefono"), systemImage: "iphone") { newBot = true }
+                Button(tr("Nuovo canale"), systemImage: "person.3") { newChannel = true }
                 Button(tr("Abbina un server"), systemImage: "qrcode.viewfinder") { showPairing = true }
             } label: {
                 Image(systemName: "square.grid.2x2")
@@ -295,11 +318,13 @@ private struct PhoneSection: View {
     @Environment(AppModel.self) private var model
     let search: String
     @State private var collapsed = false
+    @State private var roomsCollapsed = false
     @State private var editing: LocalBot?
     @State private var deleting: LocalBot?
 
     var body: some View {
         let bots = model.local.bots.filter { matches(search, $0.name, last($0)?.text ?? "") }
+        let rooms = model.local.rooms.filter { matches(search, $0.name, last(room: $0)?.text ?? "") }
         Group {
             if !bots.isEmpty {
                 SectionHeader(title: tr("Sul telefono"), collapsed: $collapsed)
@@ -319,6 +344,21 @@ private struct PhoneSection: View {
                     }
                 }
             }
+            if !rooms.isEmpty {
+                SectionHeader(title: tr("Canali sul telefono"), collapsed: $roomsCollapsed)
+                if !roomsCollapsed {
+                    ForEach(rooms) { room in
+                        let chat = model.local.roomChat(room.id)
+                        NavigationLink(value: LocalRoomRoute(roomId: room.id)) {
+                            ChatRow(name: room.name, preview: preview(room), date: last(room: room)?.at, unread: room.unread == true,
+                                    busy: chat.busy) {
+                                LocalRoomAvatar(members: model.local.members(of: room), size: 56)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
         .sheet(item: $editing) { LocalBotEditor(existing: $0) }
         .deleteBotDialog($deleting)
@@ -326,6 +366,18 @@ private struct PhoneSection: View {
 
     private func last(_ bot: LocalBot) -> LocalMessage? {
         model.local.chat(bot.id).messages.last { $0.role == .bot || $0.role == .user }
+    }
+
+    private func last(room: LocalRoom) -> LocalMessage? {
+        model.local.roomChat(room.id).messages.last { $0.role == .bot || $0.role == .user }
+    }
+
+    /// "Name: text" for a member's reply, the text alone for the user's.
+    private func preview(_ room: LocalRoom) -> String {
+        guard let message = last(room: room) else { return "" }
+        let text = message.text.replacingOccurrences(of: "\n", with: " ")
+        guard let name = message.from.flatMap(model.local.roomChat(room.id).member)?.name else { return text }
+        return "\(name): \(text)"
     }
 
     private func badge(_ kind: LocalBotKind) -> String? {
@@ -365,14 +417,17 @@ private struct ServerSections: View {
             Text(tr("Questo telefono non è più abbinato: abbinalo di nuovo dal Mac."))
                 .font(.footnote).foregroundStyle(Theme.danger).padding(.horizontal, 20)
         }
-        let rooms = session.state.rooms.filter { matches(search, $0.name, preview($0.threadId)) }
+        // not the mirrors of this phone's own mixed channels: they are in "Canali sul telefono"
+        let rooms = session.state.rooms.filter { $0.guest?.deviceId != session.id && matches(search, $0.name, preview($0.threadId)) }
         if !rooms.isEmpty {
             let key = "rooms"
             SectionHeader(title: tr("Canali"), collapsed: Binding(get: { collapsed.contains(key) }, set: { if $0 { collapsed.insert(key) } else { collapsed.remove(key) } }))
             if !collapsed.contains(key) {
                 ForEach(rooms) { room in
                     NavigationLink(value: Route(serverId: session.id, chat: .room(room.id))) {
-                        ChatRow(name: room.name, preview: preview(room.threadId), date: last(room.threadId)?.date, unread: room.unread,
+                        // a mirror of a mixed channel hosted elsewhere
+                        ChatRow(name: room.name, badge: room.guest != nil ? tr("misto") : nil, preview: preview(room.threadId),
+                                date: last(room.threadId)?.date, unread: room.unread,
                                 busy: room.busyBotId != nil) {
                             RoomAvatar(members: room.memberIds.compactMap { session.state.bot($0) }, size: 56)
                         }

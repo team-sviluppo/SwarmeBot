@@ -11,6 +11,12 @@
 // Open source on purpose: anyone may run their own relay with their own
 // OneSignal app — which then also needs their own build of the iOS app,
 // because Apple's pushes are bound to the app that receives them.
+//
+// It runs as `swarme-push-relay`, or as `swarme-harness push-relay` next to a
+// remote engine (the same binary, so it is installed and updated with it).
+// Its keys come from the environment or from `push-relay.json` (0600) in the
+// engine's data folder, never from the engine's secrets: those reach the
+// coding agents' processes.
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -20,18 +26,52 @@ import CryptoKit
 #else
 import Crypto
 #endif
-import HarnessCore
 
-struct RelayConfig {
-    var appId: String
-    var apiKey: String
-    var secret: String
+public struct RelayConfig: Sendable {
+    public var appId: String
+    public var apiKey: String
+    public var secret: String
     /// OneSignal's API; a test points it at a fake.
-    var oneSignalURL = URL(string: "https://api.onesignal.com/notifications?c=push")!
+    public var oneSignalURL = URL(string: "https://api.onesignal.com/notifications?c=push")!
     /// Pushes one token may send per hour.
-    var hourlyLimit = 120
+    public var hourlyLimit = 120
 
-    static func fromEnvironment(_ env: [String: String]) throws -> RelayConfig {
+    public init(appId: String, apiKey: String, secret: String) {
+        self.appId = appId
+        self.apiKey = apiKey
+        self.secret = secret
+    }
+
+    /// Where `swarme-harness push-relay` keeps its keys: `<data>/push-relay.json`, 0600.
+    public static func file(_ paths: DataPaths) -> URL { paths.root.appendingPathComponent("push-relay.json") }
+
+    /// The environment, else the file's values (`appId`, `apiKey`, `secret`) under the same names.
+    public static func load(_ env: [String: String], paths: DataPaths) throws -> RelayConfig {
+        var merged = env
+        if let saved = FileIO.readJSON(file(paths)) {
+            for (name, key) in [("ONESIGNAL_APP_ID", "appId"), ("ONESIGNAL_API_KEY", "apiKey"), ("RELAY_SECRET", "secret")]
+            where (merged[name] ?? "").isEmpty {
+                if let value = saved[key]?.string { merged[name] = value }
+            }
+        }
+        return try fromEnvironment(merged)
+    }
+
+    /// `push-relay configure`: the OneSignal app and key, with the relay's
+    /// secret kept when there is one (a new secret would void every phone's token).
+    public static func configure(_ body: JSONObject, paths: DataPaths) throws {
+        guard let appId = body["appId"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !appId.isEmpty,
+              let apiKey = body["apiKey"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !apiKey.isEmpty else {
+            throw RelayError(message: "appId and apiKey are required")
+        }
+        let existing = FileIO.readJSON(file(paths))?["secret"]?.string ?? ""
+        let secret = existing.utf8.count >= 32 ? existing : (0..<32).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
+        paths.ensure()
+        try FileIO.writeAtomic(JSON.object(["appId": .string(appId), "apiKey": .string(apiKey), "secret": .string(secret)]).data,
+                               to: file(paths), mode: 0o600)
+    }
+
+    public static func fromEnvironment(_ env: [String: String]) throws -> RelayConfig {
         func required(_ name: String) throws -> String {
             guard let value = env[name], !value.isEmpty else { throw RelayError(message: "\(name) is required") }
             return value
@@ -45,18 +85,18 @@ struct RelayConfig {
     }
 }
 
-struct RelayError: LocalizedError {
+public struct RelayError: LocalizedError {
     let message: String
-    var errorDescription: String? { message }
+    public var errorDescription: String? { message }
 }
 
 @MainActor
-final class Relay {
+public final class Relay {
     let config: RelayConfig
     private let session: URLSession
     private var sent: [String: [Date]] = [:]
 
-    init(config: RelayConfig, session: URLSession = .shared) {
+    public init(config: RelayConfig, session: URLSession = .shared) {
         self.config = config
         self.session = session
     }
@@ -98,7 +138,7 @@ final class Relay {
 
     // MARK: Routes
 
-    func handle(_ request: HTTPRequest) async -> RouteResult {
+    public func handle(_ request: HTTPRequest) async -> RouteResult {
         do {
             switch (request.method, request.path) {
             case ("GET", "/health"):

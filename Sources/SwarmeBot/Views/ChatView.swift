@@ -13,11 +13,18 @@ struct ChatView: View {
                 ChatHeader()
                 TranscriptView(threadId: threadId)
                     .id(threadId)
-                ComposerView(threadId: threadId)
-                    .frame(maxWidth: Theme.transcriptMaxWidth)
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 24)
-                    .padding(.top, 8)
+                if let host = model.selectedRoom?.guest {
+                    // a mirror of a mixed channel: written where it lives
+                    Text(tr("Canale misto di %@: si scrive da lì.", host.hostName ?? tr("un altro dispositivo")))
+                        .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                        .padding(.bottom, 24).padding(.top, 8)
+                } else {
+                    ComposerView(threadId: threadId)
+                        .frame(maxWidth: Theme.transcriptMaxWidth)
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 24)
+                        .padding(.top, 8)
+                }
             }
             .frame(maxWidth: .infinity)
         }

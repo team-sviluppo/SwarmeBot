@@ -1,4 +1,4 @@
-// Impostazioni › Telefono: send this Mac's Local Endpoint and HTTP connectors
+// Impostazioni › Telefono: send this Mac's OpenAI-compatible server and HTTP connectors
 // to the iOS app's own bots (docs/plans/2026-10-22-app-ios.md §7), with a QR
 // on the local network or a file sealed with a passphrase. Never chats.
 import AppKit
@@ -19,7 +19,7 @@ struct PhonePane: View {
         Form {
             Section {
                 if items.isEmpty {
-                    Text(tr("Niente da inviare: configura il Local Endpoint o un connettore HTTP.")).foregroundStyle(.secondary)
+                    Text(tr("Niente da inviare: configura il server compatibile OpenAI o un connettore HTTP.")).foregroundStyle(.secondary)
                 }
                 ForEach(items) { item in
                     Toggle(isOn: Binding(get: { chosen.contains(item.id) }, set: { on in

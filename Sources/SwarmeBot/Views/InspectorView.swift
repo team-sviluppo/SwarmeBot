@@ -127,6 +127,23 @@ private struct RoomDetails: View {
                     }
                 }
             }
+            // guests: from a server, they answer from there
+            ForEach(room.guests ?? [], id: \.memberId) { guest in
+                HStack(spacing: 8) {
+                    SwarmeAvatar(color: guest.color, size: 24, state: .idle, animated: false)
+                    Text(guest.name).font(.system(size: 13)).foregroundStyle(Theme.ink)
+                    Text(model.remoteEngines.first { $0.id == guest.peerId }?.name ?? tr("server")).font(.system(size: 11))
+                        .foregroundStyle(Theme.tertiary)
+                    if room.busyBotId == guest.memberId {
+                        Text(tr("sta scrivendo…")).font(.system(size: 11)).foregroundStyle(Theme.accent)
+                    }
+                }
+            }
+            if let host = room.guest {
+                Text(tr("Canale misto di %@: si scrive da lì. Qui ci sono le risposte e le richieste di permesso dei bot di questo server.",
+                        host.hostName ?? tr("un altro dispositivo")))
+                    .font(.system(size: 11)).foregroundStyle(Theme.secondary)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

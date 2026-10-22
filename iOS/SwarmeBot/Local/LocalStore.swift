@@ -1,4 +1,4 @@
-// The phone's private chats, in SQLite (plan §4.1): bots, servers, messages and
+// The phone's private chats, in SQLite (plan §4.1): bots, servers, channels, messages and
 // connectors as JSON rows, in Application Support, so they are part of the
 // device backup — for D5 the only copy there is. Images attached to a chat
 // are files next to the database.
@@ -28,6 +28,7 @@ final class LocalStore {
             CREATE TABLE IF NOT EXISTS bots (id TEXT PRIMARY KEY, json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS connectors (id TEXT PRIMARY KEY, json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS servers (id TEXT PRIMARY KEY, json TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, bot TEXT NOT NULL, at REAL NOT NULL, json TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS messages_bot ON messages (bot, at);
             """)
@@ -43,6 +44,13 @@ final class LocalStore {
     func save(_ connector: LocalConnector) { upsert("connectors", connector.id, connector) }
     func servers() -> [LocalServer] { rows("SELECT json FROM servers").sorted { $0.createdAt < $1.createdAt } }
     func save(_ server: LocalServer) { upsert("servers", server.id, server) }
+    func rooms() -> [LocalRoom] { rows("SELECT json FROM rooms").sorted { $0.createdAt < $1.createdAt } }
+    func save(_ room: LocalRoom) { upsert("rooms", room.id, room) }
+
+    func delete(room id: String) {
+        run("DELETE FROM messages WHERE bot = ?", [id])
+        run("DELETE FROM rooms WHERE id = ?", [id])
+    }
 
     func messages(bot: String) -> [LocalMessage] {
         rows("SELECT json FROM messages WHERE bot = ? ORDER BY at, rowid", [bot])

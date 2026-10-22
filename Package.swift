@@ -101,7 +101,7 @@ let package = Package(
         ),
         .testTarget(
             name: "HarnessCoreTests",
-            dependencies: ["HarnessCore", "HarnessDrivers", "swarme-push-relay"],
+            dependencies: ["HarnessCore", "HarnessDrivers"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

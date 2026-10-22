@@ -47,6 +47,10 @@ if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "device" {
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "secret" {
     MainActor.assumeIsolated { runSecretCommand(Array(CommandLine.arguments.dropFirst(2)), paths: paths) }
 }
+// the push relay for the iOS app, next to a remote engine (PushRelay.swift, PushRelayCommand.swift)
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "push-relay" {
+    runPushRelayCommand(Array(CommandLine.arguments.dropFirst(2)), paths: paths, environment: env)
+}
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "serve" {
     let rest = Array(CommandLine.arguments.dropFirst(2))
     guard rest.contains("--remote") else { fail("serve needs --remote (the local engine starts without arguments)") }
