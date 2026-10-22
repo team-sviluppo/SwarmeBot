@@ -16,7 +16,9 @@ struct SwarmeBotApp: App {
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
-            case .active: model.becameActive()
+            case .active:
+                PushManager.shared.start(model)
+                model.becameActive()
             case .background: model.wentToBackground()
             default: break
             }

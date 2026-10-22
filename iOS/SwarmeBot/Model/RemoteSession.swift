@@ -220,6 +220,17 @@ final class RemoteSession: Identifiable {
         }
     }
 
+    /// An approval answered from a notification: no card at hand, only its ids.
+    func respond(threadId: String, requestId: String, allow: Bool) async {
+        await perform { try await $0.respond(threadId: threadId, requestId: requestId, behavior: allow ? "allow" : "deny") }
+    }
+
+    /// This phone's relay token, so the engine can push to it (plan §6.1).
+    func subscribePush(token: String, relayUrl: String) async {
+        guard let client else { return }
+        _ = try? await client.subscribePush(token: token, relayUrl: relayUrl)
+    }
+
     func interrupt(_ chat: ChatRef) async {
         await perform { client in
             switch chat {

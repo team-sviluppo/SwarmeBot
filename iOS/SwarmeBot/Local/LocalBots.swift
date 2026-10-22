@@ -3,6 +3,7 @@
 // kind. Nothing here leaves the phone except the requests to the bot's own
 // endpoint and connectors (D5).
 import AgentCore
+import CompanionCore
 import Foundation
 import Observation
 
@@ -92,6 +93,37 @@ final class LocalBots {
             bot.connectorIds.removeAll { $0 == connector.id }
             save(bot)
         }
+    }
+
+    // MARK: From the Mac
+
+    /// What the Mac sent (plan §7): an endpoint becomes a bot, with its key in
+    /// the Keychain and the endpoint's first model when none came along; a
+    /// connector arrives as it is, an OAuth one without tokens.
+    func importConfig(_ config: PhoneConfig) async {
+        for endpoint in config.endpoints {
+            var bot = LocalBot(id: newId(), name: endpoint.name, kind: .endpoint, createdAt: Date())
+            var model = endpoint.model ?? ""
+            if model.isEmpty { model = await Self.firstModel(endpoint) ?? "" }
+            bot.endpoint = EndpointConfig(baseUrl: endpoint.baseUrl, model: model, headers: endpoint.headers ?? [:])
+            save(bot, apiKey: endpoint.apiKey ?? "")
+        }
+        for incoming in config.connectors {
+            let auth = LocalConnector.Auth(rawValue: incoming.auth) ?? .none
+            let connector = LocalConnector(id: newId(), name: incoming.name, url: incoming.url, auth: auth,
+                                           headerNames: (incoming.headers ?? [:]).keys.sorted(), oauthClientId: incoming.oauthClientId,
+                                           createdAt: Date())
+            save(connector, headers: incoming.headers ?? [:])
+        }
+    }
+
+    private static func firstModel(_ endpoint: PhoneConfig.Endpoint) async -> String? {
+        guard let url = URL(string: endpoint.baseUrl.trimmingSuffix("/") + "/models") else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        if let key = endpoint.apiKey { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
+        return (try? JSON.parse(data))?["data"]?.array?.first?["id"]?.string
     }
 
     func toolBox(for bot: LocalBot) -> ToolBox? {

@@ -68,6 +68,12 @@ struct RootView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $newBot) { LocalBotEditor(existing: nil) }
+        .onChange(of: model.open) { _, route in
+            // a tapped notification: its chat on top
+            guard let route else { return }
+            path.append(route)
+            model.open = nil
+        }
         #if DEBUG
         .task {
             // UI checks on the simulator: `-pairLink swarmebot://pair?…` pairs without the camera
@@ -98,6 +104,12 @@ struct RootView: View {
             if let text = UserDefaults.standard.string(forKey: "sendText") { model.local.chat(bot.id).send(text) }
         }
         .task {
+            // `-importLink swarmebot://import?…`: the Mac's settings QR, without the system's "Open in" prompt
+            if let raw = UserDefaults.standard.string(forKey: "importLink"), let url = URL(string: raw), let link = PhoneConfigLink(url: url) {
+                model.pendingImport = .link(link)
+            }
+        }
+        .task {
             // `-openFirstChat YES`: land in the first bot's chat
             guard UserDefaults.standard.bool(forKey: "openFirstChat") else { return }
             for _ in 0..<40 {
@@ -110,11 +122,17 @@ struct RootView: View {
         }
         #endif
         .onOpenURL { url in
-            // the Camera app read the Mac's QR and opened us
-            guard let link = RemotePairingLink(url: url) else { return }
-            pendingLink = link
-            showPairing = true
+            // the Camera app read one of the Mac's QRs, or a `.swarmeconfig` was opened
+            if let link = RemotePairingLink(url: url) {
+                pendingLink = link
+                showPairing = true
+            } else if let link = PhoneConfigLink(url: url) {
+                model.pendingImport = .link(link)
+            } else if url.isFileURL, url.pathExtension == "swarmeconfig" {
+                model.pendingImport = .file(url)
+            }
         }
+        .sheet(item: Binding(get: { model.pendingImport }, set: { model.pendingImport = $0 })) { ImportView(source: $0) }
     }
 }
 

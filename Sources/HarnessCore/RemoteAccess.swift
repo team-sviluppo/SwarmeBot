@@ -194,6 +194,8 @@ public struct FailureLimiter {
 @MainActor
 public final class RemoteAccess {
     public let devices: DeviceRegistry
+    /// The phones' push subscriptions (Push.swift).
+    public let push: PushRegistry
     /// The chat URL clients use (`--public-url`), handed out with pairing codes.
     public let publicURL: String?
     private var pairing = PairingCodes()
@@ -206,6 +208,7 @@ public final class RemoteAccess {
 
     public init(paths: DataPaths, publicURL: String?) {
         devices = DeviceRegistry(paths: paths)
+        push = PushRegistry(paths: paths)
         self.publicURL = publicURL
     }
 
@@ -243,9 +246,10 @@ public final class RemoteAccess {
         return nil
     }
 
-    /// `/api/health` and `/api/devices*`; nil for everything else.
+    /// `/api/health`, `/api/devices*` and `/api/push/*`; nil for everything else.
     public func route(_ request: HTTPRequest) -> RouteResult? {
         let path = request.path, method = request.method
+        if let answer = push.route(request) { return answer }
         if method == "GET", path == "/api/health" {
             return .response(.json(200, ["app": "swarmebot", "engine": "swift", "remote": true, "contract": .number(Double(RemoteContract.version))]))
         }
@@ -272,6 +276,7 @@ public final class RemoteAccess {
             if method == "DELETE", path.hasPrefix("/api/devices/") {
                 let id = String(path.dropFirst("/api/devices/".count))
                 guard try devices.revoke(id) else { return .response(.error(404, "no such device")) }
+                push.remove(deviceId: id)
                 onRevoke?(id)
                 return .response(.json(200, ["ok": true]))
             }

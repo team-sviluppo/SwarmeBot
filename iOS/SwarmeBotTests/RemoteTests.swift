@@ -25,3 +25,14 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(connection.basePath, "/srv1/deploy")
     }
 }
+
+final class PushDataTests: XCTestCase {
+    func testOneSignalDataIsReadFromCustomA() {
+        let userInfo: [AnyHashable: Any] = ["aps": ["category": "approval"],
+                                            "custom": ["i": "n1", "a": ["threadId": "t1", "requestId": "r1", "server": "https://x/"]]]
+        let data = PushManager.data(userInfo)
+        XCTAssertEqual(data["threadId"] as? String, "t1")
+        XCTAssertEqual(data["requestId"] as? String, "r1")
+        XCTAssertTrue(PushManager.data([:]).isEmpty)
+    }
+}

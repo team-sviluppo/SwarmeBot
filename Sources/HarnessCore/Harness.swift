@@ -316,7 +316,12 @@ public final class Harness {
         return String(line.prefix(max - 1)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
-    func notify(_ kind: String, bot: JSONObject, threadId: String, detail: String) {
+    /// Every notification, with the request it is about when there is one:
+    /// the remote engine hands it to the phones' push relay (Push.swift).
+    /// Not on the wire: the `notify` frame stays as it is.
+    public var onNotify: ((_ notification: JSONObject, _ requestId: String?) -> Void)?
+
+    func notify(_ kind: String, bot: JSONObject, threadId: String, detail: String, requestId: String? = nil) {
         guard bot["notifications"]?.bool != false else { return }
         let name = bot["name"]?.string ?? "Bot"
         let body = Self.summarize(detail)
@@ -328,10 +333,12 @@ public final class Harness {
         case "takeover": title = "\(name) needs your hands"
         default: title = "\(name) finished"
         }
-        hub.broadcast(["kind": "notify", "notification": [
+        let notification: JSONObject = [
             "kind": .string(kind), "botId": bot["id"] ?? "", "botName": .string(name),
             "threadId": .string(threadId), "title": .string(title), "body": .string(body),
-        ]])
+        ]
+        hub.broadcast(["kind": "notify", "notification": .object(notification)])
+        onNotify?(notification, requestId)
     }
 
     // MARK: - The fold
@@ -561,7 +568,7 @@ public final class Harness {
         DecisionLog.append(paths, shown)
         if let asker, let askerId {
             if Store.isBusy(asker) { store.setActivity(askerId, "waiting-on-you") }
-            notify(permission ? "approval" : "question", bot: asker, threadId: threadId, detail: summary)
+            notify(permission ? "approval" : "question", bot: asker, threadId: threadId, detail: summary, requestId: event.requestId)
         }
     }
 

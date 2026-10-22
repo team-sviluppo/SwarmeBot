@@ -29,6 +29,7 @@ let package = Package(
         .library(name: "AgentCore", targets: ["AgentCore"]),
         .library(name: "HarnessCore", targets: ["HarnessCore"]),
         .executable(name: "swarme-harness", targets: ["swarme-harness"]),
+        .executable(name: "swarme-push-relay", targets: ["swarme-push-relay"]),
     ],
     dependencies: [
         // Updates: signed appcast, EdDSA-verified archives.
@@ -89,9 +90,18 @@ let package = Package(
             dependencies: ["HarnessCore", "HarnessDrivers"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // The push relay for the iOS app (docs/plans/2026-10-22-app-ios.md §6.5): Linux and macOS.
+        .executableTarget(
+            name: "swarme-push-relay",
+            dependencies: [
+                "HarnessCore",
+                .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
+            ],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .testTarget(
             name: "HarnessCoreTests",
-            dependencies: ["HarnessCore", "HarnessDrivers"],
+            dependencies: ["HarnessCore", "HarnessDrivers", "swarme-push-relay"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

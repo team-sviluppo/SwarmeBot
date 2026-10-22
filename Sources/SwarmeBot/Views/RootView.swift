@@ -20,6 +20,7 @@ final class UIState {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @State private var ui = UIState.shared
     /// Set once the engine first goes live; a later reconnect keeps the layout.
     @State private var loaded = false
@@ -102,7 +103,9 @@ struct RootView: View {
         }
         .animation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.2), value: model.showPalette)
         .sheet(isPresented: $model.showNewRoom) { NewRoomSheet() }
-        .onAppear { OpenWindowBridge.open = { openWindow(id: $0) } }
+        .onAppear {
+            OpenWindowBridge.open = { id in id == "settings" ? openSettings() : openWindow(id: id) }
+        }
         .onChange(of: model.selection) { _, chat in
             guard let chat else { return }
             Task { await model.markRead(chat) }

@@ -30,8 +30,14 @@ struct PairingView: View {
                 } else if scannerAvailable {
                     Section {
                         QRScanner { text in
-                            guard !working, let url = URL(string: text), let link = RemotePairingLink(url: url) else { return }
-                            Task { await pair(link) }
+                            guard !working, let url = URL(string: text) else { return }
+                            if let link = RemotePairingLink(url: url) {
+                                Task { await pair(link) }
+                            } else if let link = PhoneConfigLink(url: url) {
+                                // the Mac's other QR: settings for the phone's own bots
+                                model.pendingImport = .link(link)
+                                dismiss()
+                            }
                         }
                         .frame(height: 280)
                         .listRowInsets(EdgeInsets())

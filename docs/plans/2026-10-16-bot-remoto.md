@@ -328,6 +328,8 @@ Cosa cambia:
 ## 9. App iOS (futura)
 
 Piano dedicato: `docs/plans/2026-10-22-app-ios.md` (decisioni D1–D16; push con relay, fine di R5).
+Nota (2026-10-22): R5 non è imposto dal codice. Il broker gira anche sul motore remoto, e le approvazioni da un
+client remoto funzionano già (provato con `fake_claude.py`, §13 fase 5 del piano iOS).
 
 Non è parte di questo lavoro, ma il piano la rende possibile senza modifiche al motore:
 - client `CompanionCore` su HTTPS con bearer, lo stesso dell'app Mac;

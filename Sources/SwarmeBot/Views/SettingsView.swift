@@ -2,19 +2,23 @@ import CompanionCore
 import SwarmeKit
 import SwiftUI
 
-/// ⌘, — profile, engines, connectors, control of this Mac, keys and services, DeepSeek Harness, updates.
+/// ⌘, — profile, engines, connectors, the phone, control of this Mac, keys and services, DeepSeek Harness, updates.
 struct SettingsView: View {
+    /// Debug aid for screenshots: `SWARMEBOT_SETTINGS_TAB=phone` opens on that pane.
+    @State private var tab = ProcessInfo.processInfo.environment["SWARMEBOT_SETTINGS_TAB"] ?? "general"
+
     var body: some View {
-        TabView {
-            GeneralPane().tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }
-            EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }
-            RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }
-            ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }
-            SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }
-            MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }
-            KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }
-            DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }
-            UpdatesPane().tabItem { Label(tr("Aggiornamenti"), systemImage: "arrow.down.circle") }
+        TabView(selection: $tab) {
+            GeneralPane().tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }.tag("general")
+            EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
+            RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }.tag("remote")
+            ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
+            SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
+            PhonePane().tabItem { Label(tr("Telefono"), systemImage: "iphone") }.tag("phone")
+            MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }.tag("mac")
+            KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
+            DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
+            UpdatesPane().tabItem { Label(tr("Aggiornamenti"), systemImage: "arrow.down.circle") }.tag("updates")
         }
         .frame(width: 920, height: 560)
     }

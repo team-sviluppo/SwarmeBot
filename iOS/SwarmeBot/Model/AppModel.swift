@@ -11,6 +11,10 @@ final class AppModel {
     private(set) var sessions: [RemoteSession] = []
     let local = LocalBots()
     var lastError: String?
+    /// A chat to show, asked by a tapped notification.
+    var open: Route?
+    /// Settings from the Mac waiting to be looked at (a QR or a file).
+    var pendingImport: ImportSource?
 
     init() {
         sessions = ServerStore.load().map { RemoteSession(server: $0) }
@@ -57,6 +61,8 @@ final class AppModel {
         sessions.append(session)
         ServerStore.save(sessions.map(\.server))
         session.resume()
+        PushManager.shared.requestPermission()
+        Task { await PushManager.shared.register(session) }
         return session
     }
 

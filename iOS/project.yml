@@ -27,6 +27,10 @@ packages:
   swift-transformers:
     url: https://github.com/huggingface/swift-transformers
     exactVersion: 1.3.5
+  # pushes (plan §6): the SDK only, the key stays on the relay
+  OneSignal:
+    url: https://github.com/OneSignal/OneSignal-XCFramework
+    exactVersion: 5.7.0
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -54,11 +58,14 @@ targets:
         product: MLXHuggingFace
       - package: swift-transformers
         product: Tokenizers
+      - package: OneSignal
+        product: OneSignalFramework
     entitlements:
       path: SwarmeBot/SwarmeBot.entitlements
       properties:
         # Gemma's peak is about 5 GiB (plan §13, phase 0)
         com.apple.developer.kernel.increased-memory-limit: true
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.swarmebot.ios
@@ -73,12 +80,29 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         INFOPLIST_KEY_NSCameraUsageDescription: "SwarmeBot usa la fotocamera per leggere il QR di abbinamento e per le foto da allegare."
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "SwarmeBot riceve dal Mac, sulla rete locale, la configurazione dei bot del telefono."
+        INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: NO
     info:
       path: SwarmeBot/Info.plist
       properties:
         # endpoints and test engines on the local network may be plain HTTP (plan §8)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # pushes are off unless the build names its OneSignal app and relay (iOS/Local.xcconfig)
+        SwarmeBotPushAppId: $(SWARMEBOT_PUSH_APP_ID)
+        SwarmeBotPushRelay: $(SWARMEBOT_PUSH_RELAY)
+        UIBackgroundModes: [remote-notification]
+        # settings exported from the Mac (plan §7)
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: SwarmeBot configuration
+            LSHandlerRank: Owner
+            LSItemContentTypes: [com.swarmebot.phone-config]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.swarmebot.phone-config
+            UTTypeDescription: SwarmeBot configuration
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [swarmeconfig]
         CFBundleURLTypes:
           - CFBundleURLName: com.swarmebot.ios
             CFBundleURLSchemes: [swarmebot]

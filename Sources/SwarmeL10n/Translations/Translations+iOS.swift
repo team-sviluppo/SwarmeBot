@@ -105,5 +105,15 @@ extension Translations {
         "Togli": "Remove",
         "Un server che parla l'API di OpenAI: LiteLLM, vLLM, Hermes Agent, un proxy.": "A server that speaks OpenAI's API: LiteLLM, vLLM, Hermes Agent, a proxy.",
         "Verifica del file…": "Verifying the file…",
+        "Bot sul telefono": "Bots on the Phone",
+        "Con chiave": "With a key",
+        "Configurazione non ricevuta: %@. Il telefono deve essere sulla stessa rete del Mac, entro due minuti dal QR.": "Settings not received: %@. The phone must be on the same network as the Mac, within two minutes of the QR.",
+        "Dal Mac": "From the Mac",
+        "Frase sbagliata o file danneggiato.": "Wrong passphrase or damaged file.",
+        "Frase scelta sul Mac": "Passphrase chosen on the Mac",
+        "Il file è cifrato: serve la frase scelta quando è stato esportato.": "The file is encrypted: it needs the passphrase chosen when it was exported.",
+        "OAuth: dopo, premi «Accedi» nel connettore.": "OAuth: afterwards, tap “Sign In” in the connector.",
+        "Ricezione dal Mac…": "Receiving from the Mac…",
+        "Senza chiave": "Without a key",
     ]
 }

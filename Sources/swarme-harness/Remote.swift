@@ -87,6 +87,7 @@ func runDeviceCommand(_ args: [String], paths: DataPaths) -> Never {
         case "revoke":
             guard args.count >= 2 else { fail("device revoke <id>") }
             guard try registry.revoke(args[1]) else { fail("no such device \(args[1])") }
+            PushRegistry(paths: paths).remove(deviceId: args[1])
             print(JSON.object(["ok": true]).serialized())
         default:
             fail("device add --name <name> [--kind mac|ios|other] | device list | device revoke <id>")
@@ -149,6 +150,9 @@ func bootRemote(_ options: RemoteOptions, paths: DataPaths, environment: [String
         harness.hub.proxyFriendly = true
         harness.routines.missedReason = "The engine was offline for more than 12 hours after the scheduled time"
         remote.onRevoke = { [weak harness] device in harness?.hub.close(deviceId: device) }
+        harness.onNotify = { notification, requestId in
+            remote.push.send(notification, requestId: requestId, server: options.publicURL)
+        }
 
         // the proxies' door: loopback, boot token, nothing but /api/internal
         let proxies = HTTPServer { request in

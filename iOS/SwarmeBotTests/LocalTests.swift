@@ -1,5 +1,6 @@
 @testable import SwarmeBot
 import AgentCore
+import CompanionCore
 import XCTest
 
 @MainActor
@@ -25,6 +26,22 @@ final class LocalTests: XCTestCase {
         reopened.delete(bot: "b1")
         XCTAssertTrue(reopened.bots().isEmpty)
         XCTAssertTrue(reopened.messages(bot: "b1").isEmpty)
+    }
+
+    func testImportFromTheMacMakesBotsAndConnectors() async throws {
+        let local = LocalBots(store: try temporaryStore())
+        let config = PhoneConfig(endpoints: [.init(name: "Endpoint dal Mac", baseUrl: "http://10.0.0.2:4000/v1", model: "m1", apiKey: "sk-1")],
+                                 connectors: [.init(name: "MCP", url: "https://x/mcp", auth: "headers", headers: ["X-Key": "v"]),
+                                              .init(name: "Notion", url: "https://n/mcp", auth: "oauth", oauthClientId: "c1")])
+        await local.importConfig(config)
+        let bot = try XCTUnwrap(local.bots.first)
+        XCTAssertEqual(bot.endpoint?.model, "m1")
+        XCTAssertEqual(Keychain.get(bot.apiKeyAccount), "sk-1")
+        XCTAssertEqual(local.connectors.map(\.auth), [.headers, .oauth])
+        XCTAssertEqual(ConnectorSecrets.headers(local.connectors[0]), ["X-Key": "v"])
+        XCTAssertEqual(local.connectors[1].oauthClientId, "c1")
+        for connector in local.connectors { local.delete(connector) }
+        local.delete(bot)
     }
 
     func testAppleInstructionsKeepTheNewestHistory() {
