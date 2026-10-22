@@ -17,6 +17,10 @@ struct SettingsView: View {
                         }
                     }
                 }
+                Section(tr("Sul telefono")) {
+                    NavigationLink(tr("Connettori")) { ConnectorsView() }
+                    NavigationLink(tr("Modelli sul telefono")) { ModelsView() }
+                }
                 Section {
                     ForEach(model.sessions) { session in
                         VStack(alignment: .leading, spacing: 2) {

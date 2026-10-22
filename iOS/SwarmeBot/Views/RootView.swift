@@ -1,5 +1,6 @@
 // The list of chats: one section per paired server with its bots and rooms
 // (plan §1). The phone's own bots get their section in phase 3.
+import AgentCore
 import CompanionCore
 import SwiftUI
 
@@ -8,23 +9,30 @@ struct Route: Hashable {
     let chat: ChatRef
 }
 
+/// A chat with one of the phone's own bots.
+struct LocalRoute: Hashable {
+    let botId: String
+}
+
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    @State private var path: [Route] = []
+    @State private var path = NavigationPath()
     @State private var showPairing = false
     @State private var showSettings = false
     @State private var pendingLink: RemotePairingLink?
+    @State private var newBot = false
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                PhoneSection(newBot: $newBot)
                 if model.sessions.isEmpty {
-                    ContentUnavailableView {
+                    Section {
+                        Button(tr("Abbina un server"), systemImage: "qrcode.viewfinder") { showPairing = true }
+                    } header: {
                         Label(tr("Nessun server"), systemImage: "server.rack")
-                    } description: {
+                    } footer: {
                         Text(tr("Abbina un server dal Mac: Impostazioni › server › Abbina telefono, poi inquadra il QR."))
-                    } actions: {
-                        Button(tr("Abbina un server")) { showPairing = true }.buttonStyle(.borderedProminent)
                     }
                 }
                 ForEach(model.sessions) { session in
@@ -36,6 +44,9 @@ struct RootView: View {
                 if let session = model.session(route.serverId) {
                     ChatView(session: session, chat: route.chat)
                 }
+            }
+            .navigationDestination(for: LocalRoute.self) { route in
+                LocalChatView(botId: route.botId)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -56,6 +67,7 @@ struct RootView: View {
             PairingView(initialLink: pendingLink).onDisappear { pendingLink = nil }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $newBot) { LocalBotEditor(existing: nil) }
         #if DEBUG
         .task {
             // UI checks on the simulator: `-pairLink swarmebot://pair?…` pairs without the camera
@@ -64,11 +76,33 @@ struct RootView: View {
             try? await model.pair(link)
         }
         .task {
+            // `-seedEndpoint <url> [-seedConnector <url>] [-sendText <text>]`: a phone bot on a test
+            // endpoint, its chat open, a message sent; `-seedKind apple|gemma` for the on-device ones
+            let defaults = UserDefaults.standard
+            let kind = defaults.string(forKey: "seedKind").flatMap(LocalBotKind.init(rawValue:)) ?? .endpoint
+            guard kind != .endpoint || defaults.string(forKey: "seedEndpoint") != nil else { return }
+            if !model.local.bots.contains(where: { $0.kind == kind }) {
+                var bot = LocalBot(id: newId(), name: "Bot di prova (\(kind.rawValue))", kind: kind, createdAt: Date())
+                if let base = defaults.string(forKey: "seedEndpoint"), kind == .endpoint {
+                    bot.endpoint = EndpointConfig(baseUrl: base, model: "fake/echo-1")
+                }
+                if let url = UserDefaults.standard.string(forKey: "seedConnector") {
+                    let connector = LocalConnector(id: newId(), name: "Fake MCP", url: url, auth: .none, createdAt: Date())
+                    model.local.save(connector, headers: [:])
+                    bot.connectorIds = [connector.id]
+                }
+                model.local.save(bot, apiKey: "test-key")
+            }
+            guard let bot = model.local.bots.last(where: { $0.kind == kind }) else { return }
+            path.append(LocalRoute(botId: bot.id))
+            if let text = UserDefaults.standard.string(forKey: "sendText") { model.local.chat(bot.id).send(text) }
+        }
+        .task {
             // `-openFirstChat YES`: land in the first bot's chat
             guard UserDefaults.standard.bool(forKey: "openFirstChat") else { return }
             for _ in 0..<40 {
                 if let session = model.sessions.first, let bot = session.visibleBots.first {
-                    path = [Route(serverId: session.id, chat: .bot(bot.id))]
+                    path.append(Route(serverId: session.id, chat: .bot(bot.id)))
                     return
                 }
                 try? await Task.sleep(nanoseconds: 250_000_000)
@@ -80,6 +114,42 @@ struct RootView: View {
             guard let link = RemotePairingLink(url: url) else { return }
             pendingLink = link
             showPairing = true
+        }
+    }
+}
+
+/// The phone's own bots: private, never synced (D5).
+private struct PhoneSection: View {
+    @Environment(AppModel.self) private var model
+    @Binding var newBot: Bool
+
+    var body: some View {
+        Section {
+            ForEach(model.local.bots) { bot in
+                NavigationLink(value: LocalRoute(botId: bot.id)) {
+                    ChatRow(name: bot.name, color: bot.color, preview: preview(bot), unread: false,
+                            busy: model.local.chat(bot.id).busy, symbol: symbol(bot.kind))
+                }
+            }
+            Button(tr("Nuovo bot sul telefono"), systemImage: "plus") { newBot = true }
+        } header: {
+            HStack(spacing: 6) {
+                Image(systemName: "iphone")
+                Text(tr("Sul telefono"))
+            }
+        }
+    }
+
+    private func preview(_ bot: LocalBot) -> String {
+        model.local.chat(bot.id).messages.last(where: { $0.role == .bot || $0.role == .user })?.text
+            .replacingOccurrences(of: "\n", with: " ") ?? ""
+    }
+
+    private func symbol(_ kind: LocalBotKind) -> String {
+        switch kind {
+        case .endpoint: return "network"
+        case .gemma: return "cpu"
+        case .apple: return "apple.intelligence"
         }
     }
 }

@@ -1,5 +1,5 @@
 // The iOS app's state: the paired remote engines, each a `RemoteSession`,
-// and pairing a new one. The phone's own bots (plan §4) join here later.
+// and pairing a new one; the phone's own bots are `local` (plan §4).
 import CompanionCore
 import Foundation
 import Observation
@@ -9,6 +9,7 @@ import UIKit
 @Observable
 final class AppModel {
     private(set) var sessions: [RemoteSession] = []
+    let local = LocalBots()
     var lastError: String?
 
     init() {

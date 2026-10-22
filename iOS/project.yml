@@ -17,6 +17,16 @@ configFiles:
 packages:
   SwarmeBot:
     path: ..
+  # Gemma on the phone (plan §4.4): the versions phase 0 measured, iOS app only
+  mlx-swift-lm:
+    url: https://github.com/ml-explore/mlx-swift-lm
+    exactVersion: 3.32.3
+  swift-huggingface:
+    url: https://github.com/huggingface/swift-huggingface
+    exactVersion: 0.13.0
+  swift-transformers:
+    url: https://github.com/huggingface/swift-transformers
+    exactVersion: 1.3.5
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -36,6 +46,19 @@ targets:
         product: CompanionCore
       - package: SwarmeBot
         product: SwarmeL10n
+      - package: mlx-swift-lm
+        product: MLXVLM
+      - package: mlx-swift-lm
+        product: MLXLMCommon
+      - package: mlx-swift-lm
+        product: MLXHuggingFace
+      - package: swift-transformers
+        product: Tokenizers
+    entitlements:
+      path: SwarmeBot/SwarmeBot.entitlements
+      properties:
+        # Gemma's peak is about 5 GiB (plan §13, phase 0)
+        com.apple.developer.kernel.increased-memory-limit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.swarmebot.ios

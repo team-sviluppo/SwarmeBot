@@ -359,3 +359,26 @@ public final class MCPClient {
         for continuation in waiting.values { continuation.resume(throwing: error) }
     }
 }
+
+extension MCPClient {
+    /// A `tools/call` result as the text a chat model reads: the text parts,
+    /// else the structured content; pictures and binaries become a note.
+    nonisolated public static func resultText(_ result: JSON, limit: Int) -> String {
+        var parts: [String] = []
+        for item in result["content"]?.array ?? [] {
+            switch item["type"]?.string {
+            case "text": if let text = item["text"]?.string { parts.append(text) }
+            case "image": parts.append("[immagine dal connettore omessa]")
+            case "audio": parts.append("[audio dal connettore omesso]")
+            case "resource":
+                if let text = item["resource"]?["text"]?.string { parts.append(text) } else { parts.append("[risorsa \(item["resource"]?["uri"]?.string ?? "") omessa]") }
+            case "resource_link": parts.append("[link: \(item["uri"]?.string ?? "")]")
+            default: break
+            }
+        }
+        if parts.isEmpty, let structured = result["structuredContent"], !structured.isNull { parts.append(structured.serialized()) }
+        let text = parts.joined(separator: "\n")
+        guard text.count > limit else { return text.isEmpty ? "(nessun risultato)" : text }
+        return String(text.prefix(limit)) + "\n…troncato (\(text.count) caratteri in tutto)"
+    }
+}
