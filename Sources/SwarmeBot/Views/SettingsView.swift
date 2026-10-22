@@ -25,6 +25,7 @@ struct SettingsView: View {
 private struct GeneralPane: View {
     @Environment(AppModel.self) private var model
     @State private var localizer = Localizer.shared
+    @State private var appearance = AppearanceSettings.shared
     @State private var name = ""
     @State private var email = ""
     @State private var timeout = 30
@@ -38,6 +39,14 @@ private struct GeneralPane: View {
                         Text(verbatim: language.nativeName).tag(language)
                     }
                 }
+            }
+            Section(tr("Aspetto")) {
+                Picker(tr("Tema"), selection: $appearance.appearance) {
+                    Text(tr("Scuro")).tag(AppAppearance.dark)
+                    Text(tr("Chiaro")).tag(AppAppearance.light)
+                    Text(tr("Sistema")).tag(AppAppearance.system)
+                }
+                .pickerStyle(.segmented)
             }
             Section(tr("Profilo")) {
                 TextField(tr("Nome"), text: $name)

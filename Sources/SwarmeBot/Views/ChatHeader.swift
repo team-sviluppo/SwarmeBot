@@ -446,8 +446,8 @@ struct NewRoomSheet: View {
 /// green under 50%, yellow up to 80%, red past it.
 private struct SessionLimitChip: View {
     let limit: UsageLimit
-    /// Theme.warning is orange; this reads as yellow on the dark header.
-    private static let yellow = Color(hex: "#F5C842")
+    /// Theme.warning is orange; this reads as yellow.
+    private static let yellow = Theme.caution
 
     var body: some View {
         let percent = Int((limit.utilization * 100).rounded())
