@@ -121,21 +121,7 @@ extension Harness {
 /// tool loop (docs/plans/2026-10-15-connettori-mcp.md §5).
 @MainActor
 public final class ConnectorGateway {
-    public struct Tool: Sendable {
-        public var connectorId: String
-        public var connectorName: String
-        public var name: String
-        public var description: String
-        public var inputSchema: JSON
-
-        public init(connectorId: String, connectorName: String, name: String, description: String, inputSchema: JSON) {
-            self.connectorId = connectorId
-            self.connectorName = connectorName
-            self.name = name
-            self.description = description
-            self.inputSchema = inputSchema
-        }
-    }
+    public typealias Tool = ChatTool
 
     public struct Result: Sendable {
         public var text: String

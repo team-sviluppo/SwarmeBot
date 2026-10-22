@@ -368,7 +368,7 @@ final class MCPConnectorsTests: XCTestCase {
             ConnectorGateway.Tool(connectorId: connector, connectorName: connector.uppercased(), name: name, description: "d", inputSchema: .null)
         }
         let long = String(repeating: "x", count: 80)
-        let (tools, routes) = LocalEndpointInstance.openAITools([tool("git", "create.issue"), tool("git", "create_issue"), tool("git", long)])
+        let (tools, routes) = OpenAIChatEndpoint.openAITools([tool("git", "create.issue"), tool("git", "create_issue"), tool("git", long)])
         let names = tools.compactMap { $0["function"]?["name"]?.string }
         XCTAssertEqual(names.count, 3)
         XCTAssertEqual(names[0], "git__create_issue")
@@ -392,9 +392,9 @@ final class MCPConnectorsTests: XCTestCase {
     }
 
     func testStreamedToolCallsAreReassembledByIndex() {
-        XCTAssertEqual(LocalEndpointInstance.toolCalls([["id": "a", "function": ["name": "x", "arguments": "{}"]], ["function": ["name": "y"]]]).map(\.name), ["x", "y"])
-        XCTAssertEqual(LocalEndpointInstance.toolCalls(nil).count, 0)
-        XCTAssertTrue(LocalEndpointInstance.toolCalls([["function": ["name": "y"]]])[0].id.hasPrefix("call_0_"), "a missing id is made up")
+        XCTAssertEqual(OpenAIChatEndpoint.toolCalls([["id": "a", "function": ["name": "x", "arguments": "{}"]], ["function": ["name": "y"]]]).map(\.name), ["x", "y"])
+        XCTAssertEqual(OpenAIChatEndpoint.toolCalls(nil).count, 0)
+        XCTAssertTrue(OpenAIChatEndpoint.toolCalls([["function": ["name": "y"]]])[0].id.hasPrefix("call_0_"), "a missing id is made up")
     }
 
     func testHermesModelsAreReadFromOwnedBy() throws {
@@ -405,14 +405,14 @@ final class MCPConnectorsTests: XCTestCase {
 
     func testPKCEAndHeaderParsing() {
         // S256 = base64url(sha256(verifier)), checked against Python's hashlib
-        XCTAssertEqual(MCPOAuth.challenge("dBjftJeZ4CVP-mJ92K9b6hlA25qBXFROkPbcCfwx4Mo"), "yCB6KWWMNT9T1MW4F3j_wL6jjA0BMP7ozcLtkaOqb9U")
-        XCTAssertEqual(MCPOAuth.randomToken(32).count, 43)
+        XCTAssertEqual(OAuthFlow.challenge("dBjftJeZ4CVP-mJ92K9b6hlA25qBXFROkPbcCfwx4Mo"), "yCB6KWWMNT9T1MW4F3j_wL6jjA0BMP7ozcLtkaOqb9U")
+        XCTAssertEqual(OAuthFlow.randomToken(32).count, 43)
         let header = #"Bearer error="invalid_token", resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource", scope="read write""#
-        XCTAssertEqual(MCPOAuth.parameter("resource_metadata", in: header), "https://mcp.example.com/.well-known/oauth-protected-resource")
-        XCTAssertEqual(MCPOAuth.parameter("scope", in: header), "read write")
-        XCTAssertNil(MCPOAuth.parameter("realm", in: header))
-        XCTAssertEqual(MCPOAuth.canonical(URL(string: "HTTPS://MCP.Example.com/mcp/#x")!), "https://mcp.example.com/mcp")
-        XCTAssertEqual(MCPOAuth.formEncode(["b": "a b&c", "a": "x/y"]), "a=x%2Fy&b=a%20b%26c")
+        XCTAssertEqual(OAuthFlow.parameter("resource_metadata", in: header), "https://mcp.example.com/.well-known/oauth-protected-resource")
+        XCTAssertEqual(OAuthFlow.parameter("scope", in: header), "read write")
+        XCTAssertNil(OAuthFlow.parameter("realm", in: header))
+        XCTAssertEqual(OAuthFlow.canonical(URL(string: "HTTPS://MCP.Example.com/mcp/#x")!), "https://mcp.example.com/mcp")
+        XCTAssertEqual(OAuthFlow.formEncode(["b": "a b&c", "a": "x/y"]), "a=x%2Fy&b=a%20b%26c")
     }
 
     func testOAuthDefinitionsAndTheirTokens() throws {

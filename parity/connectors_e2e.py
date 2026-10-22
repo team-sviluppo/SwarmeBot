@@ -305,7 +305,7 @@ def run_oauth():
         # the login: what the browser does, followed by hand
         status, body = request(port, "POST", "/api/mcp-connectors/web/oauth/start")
         assert status == 200, (status, body)
-        assert body["redirectUri"] == f"http://127.0.0.1:{port}/oauth/mcp/callback", body
+        assert body["redirectUri"] == f"http://localhost:{port}/oauth/mcp/callback", body
         try:
             with urllib.request.urlopen(body["authorizationUrl"]) as res:
                 page = res.read().decode()

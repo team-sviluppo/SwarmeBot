@@ -125,14 +125,7 @@ public struct RuntimeEvent: Sendable {
         case usageLimit(window: String, utilization: Double, resetsAt: Double?)
     }
 
-    public struct TokenUsage: Sendable, Equatable {
-        public var input: Double
-        public var output: Double
-        public init(input: Double, output: Double) {
-            self.input = input
-            self.output = output
-        }
-    }
+    public typealias TokenUsage = AgentCore.TokenUsage
 
     public var eventId: String
     public var provider: String
@@ -586,8 +579,6 @@ public func newEventId() -> String {
     let millis = Int(Date().timeIntervalSince1970 * 1000)
     return "ev-\(String(millis, radix: 36))-\(String(eventCounter, radix: 36))"
 }
-
-public func newId() -> String { UUID().uuidString.lowercased() }
 
 public func nowMillis() -> Double { (Date().timeIntervalSince1970 * 1000).rounded() }
 

@@ -346,7 +346,7 @@ extension JSON {
 
     /// JavaScript's number printing for the values that occur in practice:
     /// integers without a fraction, non-finite as null.
-    static func format(_ value: Double) -> String {
+    public static func format(_ value: Double) -> String {
         guard value.isFinite else { return "null" }
         if value == value.rounded(), abs(value) < 9_007_199_254_740_992 {
             return String(Int64(value))
@@ -354,7 +354,7 @@ extension JSON {
         return "\(value)"
     }
 
-    static func quote(_ string: String, into out: inout String) {
+    public static func quote(_ string: String, into out: inout String) {
         out += "\""
         for scalar in string.unicodeScalars {
             switch scalar {

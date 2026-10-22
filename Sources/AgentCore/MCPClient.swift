@@ -3,8 +3,9 @@
 //
 // JSON-RPC 2.0 over one of two transports:
 //
-// - stdio: the server is a child process (CLIProcess, so it gets its own
-//   process group and killTree reaps whatever it spawned), one message per line;
+// - stdio: the server is a child process, one message per line. That
+//   transport lives in HarnessCore (MCPStdioTransport.swift), because it
+//   spawns processes and this module also builds for iOS;
 // - Streamable HTTP: every message is a POST; the answer is either one JSON
 //   body or an SSE stream carrying it, and `Mcp-Session-Id` from the
 //   initialize answer goes on every later request.
@@ -28,11 +29,11 @@ public struct MCPError: LocalizedError, Sendable {
     }
 
     /// The HTTP session the server handed out is gone: initialize again.
-    var sessionExpired: Bool { status == 404 }
+    public var sessionExpired: Bool { status == 404 }
 }
 
 @MainActor
-protocol MCPTransport: AnyObject {
+public protocol MCPTransport: AnyObject {
     /// Every message from the server, in order.
     var onMessage: ((JSON) -> Void)? { get set }
     /// The transport is gone for good; the text says why when it is known.
@@ -40,73 +41,6 @@ protocol MCPTransport: AnyObject {
     func start() async throws
     func send(_ message: JSON) async throws
     func close()
-}
-
-// MARK: - stdio
-
-@MainActor
-final class MCPStdioTransport: MCPTransport {
-    var onMessage: ((JSON) -> Void)?
-    var onClose: ((String?) -> Void)?
-    private let command: String
-    private let args: [String]
-    private let cwd: String?
-    private let environment: [String: String]
-    private let log: (String) -> Void
-    private var process: CLIProcess?
-    private var stderrTail = ""
-
-    init(command: String, args: [String], cwd: String?, environment: [String: String], log: @escaping (String) -> Void) {
-        self.command = command
-        self.args = args
-        self.cwd = cwd
-        self.environment = environment
-        self.log = log
-    }
-
-    func start() async throws {
-        let process: CLIProcess
-        do {
-            process = try CLIProcess(cli: command, args: args, cwd: cwd, environment: environment)
-        } catch let failure as SpawnFailure {
-            throw MCPError(failure.message)
-        }
-        process.onLine = { [weak self] line in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // a server that prints a banner on stdout breaks the protocol, but
-            // dropping the line is kinder than dropping the connector
-            guard trimmed.hasPrefix("{") || trimmed.hasPrefix("["), let message = try? JSON.parse(trimmed) else {
-                if !trimmed.isEmpty { self?.log("stdout (not JSON-RPC): \(trimmed.prefix(300))") }
-                return
-            }
-            if case let .array(batch) = message { batch.forEach { self?.onMessage?($0) } } else { self?.onMessage?(message) }
-        }
-        process.onStderr = { [weak self] text in
-            guard let self else { return }
-            self.log(text)
-            self.stderrTail = String((self.stderrTail + text).suffix(400))
-        }
-        process.onClose = { [weak self] code in
-            guard let self else { return }
-            let tail = self.stderrTail.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.process = nil
-            self.onClose?("il processo è terminato (\(code.map { "codice \($0)" } ?? "segnale"))" + (tail.isEmpty ? "" : ": \(tail.suffix(300))"))
-        }
-        self.process = process
-        process.start()
-    }
-
-    func send(_ message: JSON) async throws {
-        guard let process, !process.hasExited else { throw MCPError("il server del connettore non è in esecuzione") }
-        process.write(message.serialized() + "\n")
-    }
-
-    func close() {
-        guard let process else { return }
-        self.process = nil
-        process.closeStdin()
-        process.killTree()
-    }
 }
 
 // MARK: - Streamable HTTP
@@ -244,7 +178,7 @@ public final class MCPClient {
         public var instructions: String?
     }
 
-    static let protocolVersion = "2025-06-18"
+    nonisolated public static let protocolVersion = "2025-06-18"
     static let supportedVersions: Set<String> = ["2025-06-18", "2025-03-26", "2024-11-05"]
 
     private let transport: MCPTransport
@@ -258,15 +192,10 @@ public final class MCPClient {
     public var onToolsChanged: (() -> Void)?
     public var onClose: ((String?) -> Void)?
 
-    init(transport: MCPTransport) {
+    public init(transport: MCPTransport) {
         self.transport = transport
         transport.onMessage = { [weak self] message in self?.receive(message) }
         transport.onClose = { [weak self] reason in self?.transportClosed(reason) }
-    }
-
-    public static func stdio(command: String, args: [String], cwd: String?, environment: [String: String],
-                             log: @escaping (String) -> Void = { _ in }) -> MCPClient {
-        MCPClient(transport: MCPStdioTransport(command: command, args: args, cwd: cwd, environment: environment, log: log))
     }
 
     public static func http(url: URL, headers: [String: String], session: URLSession = .shared) -> MCPClient {
