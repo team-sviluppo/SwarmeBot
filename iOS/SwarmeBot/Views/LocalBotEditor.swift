@@ -1,5 +1,5 @@
 // A phone bot's settings: its kind (endpoint, Gemma, Apple), the server and
-// model it uses, instructions, and the connectors it may use.
+// model it uses, instructions, the phone tools and the connectors it may use.
 import AgentCore
 import SwiftUI
 
@@ -18,6 +18,7 @@ struct LocalBotEditor: View {
     @State private var images = false
     @State private var instructions = ""
     @State private var connectorIds: Set<String> = []
+    @State private var phoneTools: Set<PhoneToolGroup> = []
     @State private var models: [String] = []
     @State private var loadingModels = false
     @State private var error: String?
@@ -75,6 +76,21 @@ struct LocalBotEditor: View {
                 Section(tr("Istruzioni")) {
                     TextField(tr("Istruzioni di sistema (facoltative)"), text: $instructions, axis: .vertical).lineLimit(3...10)
                 }
+                Section {
+                    ForEach(PhoneToolGroup.allCases) { group in
+                        Toggle(isOn: Binding(get: { phoneTools.contains(group) }, set: { on in
+                            if on { phoneTools.insert(group) } else { phoneTools.remove(group) }
+                        })) {
+                            Label(group.title, systemImage: group.symbol)
+                        }
+                    }
+                } header: {
+                    Text(tr("Telefono"))
+                } footer: {
+                    Text(kind == .apple
+                        ? tr("Il bot legge e scrive sul telefono; prima di creare qualcosa chiede conferma. Il modello di Apple ha poco contesto: accendi solo quello che serve.")
+                        : tr("Il bot legge e scrive sul telefono; prima di creare qualcosa chiede conferma."))
+                }
                 if kind.takesTools {
                     Section {
                         if model.local.connectors.isEmpty {
@@ -126,7 +142,7 @@ struct LocalBotEditor: View {
             }
         case .apple:
             switch AppleDriver.availability {
-            case .available: Text(tr("Il modello di Apple sul telefono: solo chat, niente connettori né immagini."))
+            case .available: Text(tr("Il modello di Apple sul telefono: niente connettori né immagini, ma può usare il telefono."))
             case let .unavailable(reason): Text(verbatim: reason).foregroundStyle(.orange)
             }
         }
@@ -195,6 +211,7 @@ struct LocalBotEditor: View {
         images = existing.endpoint?.images ?? false
         instructions = existing.instructions
         connectorIds = Set(existing.connectorIds)
+        phoneTools = Set(existing.phoneTools ?? [])
     }
 
     private func save() {
@@ -206,6 +223,7 @@ struct LocalBotEditor: View {
         bot.kind = kind
         bot.instructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
         bot.connectorIds = model.local.connectors.map(\.id).filter(connectorIds.contains)
+        bot.phoneTools = phoneTools.isEmpty ? nil : PhoneToolGroup.allCases.filter(phoneTools.contains)
         if kind == .endpoint {
             let config = EndpointConfig(serverId: serverId, model: modelId, images: images)
             if config.serverId != bot.endpoint?.serverId { bot.sessionId = nil }

@@ -88,7 +88,10 @@ final class EndpointDriver: LocalDriver {
         // `/v1/capabilities` once per endpoint while the app runs, as the engine does on a catalog read
         if probed.insert(ObjectIdentifier(endpoint).debugDescription).inserted { endpoint.applyProbe(await endpoint.probeHermes()) }
         let session = endpoint.session(cursor: input.bot.sessionId)
-        let system: [JSON] = input.bot.instructions.isEmpty ? [] : [["role": "system", "content": .string(input.bot.instructions)]]
+        // the phone's tools take local times: the model has to know when now is
+        let now = input.tools?.phoneTools.isEmpty == false ? PhoneTools.now() : ""
+        let prompt = [input.bot.instructions, now].filter { !$0.isEmpty }.joined(separator: "\n\n")
+        let system: [JSON] = prompt.isEmpty ? [] : [["role": "system", "content": .string(prompt)]]
         let replay: [JSON] = input.history.compactMap { message in
             switch message.role {
             case .user: return ["role": "user", "content": .string(transcriptText(message))]

@@ -200,7 +200,7 @@ struct ModelsView: View {
             } header: {
                 Text(verbatim: "Apple Intelligence")
             } footer: {
-                Text(tr("Il modello di Apple sul telefono: solo chat, contesto breve, niente connettori."))
+                Text(tr("Il modello di Apple sul telefono: contesto breve, niente connettori; può usare calendario, promemoria, rubrica e sveglie."))
             }
         }
         .navigationTitle(tr("Modelli sul telefono"))
