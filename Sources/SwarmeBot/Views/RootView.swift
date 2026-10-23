@@ -104,7 +104,12 @@ struct RootView: View {
         .animation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.2), value: model.showPalette)
         .sheet(isPresented: $model.showNewRoom) { NewRoomSheet() }
         .onAppear {
-            OpenWindowBridge.open = { id in id == "settings" ? openSettings() : openWindow(id: id) }
+            OpenWindowBridge.open = { id in
+                if id == "settings" { return openSettings() }
+                // `remote-settings:<engine id>`: a server's settings window
+                if id.hasPrefix("remote-settings:") { return openWindow(id: "remote-settings", value: String(id.dropFirst(16))) }
+                openWindow(id: id)
+            }
         }
         .onChange(of: model.selection) { _, chat in
             guard let chat else { return }

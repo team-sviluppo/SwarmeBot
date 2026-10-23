@@ -1,9 +1,7 @@
 // Workspace secrets, in the Keychain.
 //
 // The harness reads credentials from its environment in preference to
-// `config.json` (server/config.ts `loadConfig`). Electron kept them in
-// `credentials.bin`, encrypted with safeStorage, and passed them as env vars
-// at fork; this is the same contract with the Keychain as the store:
+// `config.json` (server/config.ts `loadConfig`), with the Keychain as the store:
 //
 // - at boot, `environment` becomes part of the harness's env;
 // - on save, the Keychain is written first and then the harness is told
@@ -12,7 +10,6 @@
 //
 // One Keychain item holding a small JSON object, rather than one item per
 // secret: one read at launch, one access prompt if ever there is one.
-import CommonCrypto
 import Foundation
 import Security
 
@@ -51,20 +48,11 @@ public enum WorkspaceCredential: String, CaseIterable, Sendable {
 
 public enum CredentialStoreError: LocalizedError {
     case keychain(OSStatus)
-    case electronStoreMissing
-    case electronKeyUnavailable(OSStatus)
-    case electronFormat(String)
 
     public var errorDescription: String? {
         switch self {
         case let .keychain(status):
             return tr("Portachiavi: %@", SecCopyErrorMessageString(status, nil) as String? ?? tr("errore %@", String(status)))
-        case .electronStoreMissing:
-            return tr("Nessun archivio credenziali dell'app Electron trovato.")
-        case let .electronKeyUnavailable(status):
-            return tr("Chiave 'SwarmeBot Safe Storage' non leggibile dal Portachiavi (%@).", String(status))
-        case let .electronFormat(detail):
-            return tr("Archivio Electron in un formato non riconosciuto: %@", detail)
         }
     }
 }
@@ -151,109 +139,4 @@ public enum CredentialStore {
         return env.filter { !$0.value.isEmpty }
     }
 
-    // MARK: Importing from the Electron app
-
-    /// Read the Electron app's `credentials.bin` and merge it into ours.
-    ///
-    /// Electron's safeStorage on macOS is Chromium's OSCrypt: a random
-    /// password in the Keychain under "<App> Safe Storage", stretched with
-    /// PBKDF2-SHA1 (salt "saltysalt", 1003 rounds) into an AES-128-CBC key,
-    /// IV of 16 spaces, ciphertext prefixed "v10". Reading that Keychain item
-    /// belongs to another app, so macOS asks the user — which is why this
-    /// runs only from an explicit button, never at launch.
-    @discardableResult
-    public static func importFromElectron() throws -> [String] {
-        let file = HarnessLocator.userData.appendingPathComponent("credentials.bin")
-        guard let blob = try? Data(contentsOf: file), !blob.isEmpty else { throw CredentialStoreError.electronStoreMissing }
-        let password = try electronPassword()
-        let plaintext = try decryptOSCrypt(blob, password: password)
-        guard let object = try JSONSerialization.jsonObject(with: plaintext) as? [String: Any] else {
-            throw CredentialStoreError.electronFormat(tr("JSON non valido"))
-        }
-        var values = load()
-        var imported: [String] = []
-        for credential in WorkspaceCredential.allCases {
-            if let value = object[credential.rawValue] as? String, !value.isEmpty {
-                values[credential.rawValue] = value
-                imported.append(credential.label)
-            }
-        }
-        try save(values)
-        return imported
-    }
-
-    static func electronPassword() throws -> Data {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "SwarmeBot Safe Storage",
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data else {
-            throw CredentialStoreError.electronKeyUnavailable(status)
-        }
-        return data
-    }
-
-    /// Chromium OSCrypt "v10" on macOS. Pure, so it is testable with a
-    /// known password and a blob encrypted the same way.
-    public static func decryptOSCrypt(_ blob: Data, password: Data) throws -> Data {
-        let prefix = Data("v10".utf8)
-        guard blob.starts(with: prefix) else { throw CredentialStoreError.electronFormat(tr("prefisso mancante")) }
-        let ciphertext = blob.dropFirst(prefix.count)
-        let key = try deriveKey(password)
-        let iv = Data(repeating: 0x20, count: kCCBlockSizeAES128)
-        return try crypt(CCOperation(kCCDecrypt), Data(ciphertext), key: key, iv: iv)
-    }
-
-    /// The inverse, for tests.
-    public static func encryptOSCrypt(_ plaintext: Data, password: Data) throws -> Data {
-        let key = try deriveKey(password)
-        let iv = Data(repeating: 0x20, count: kCCBlockSizeAES128)
-        return Data("v10".utf8) + (try crypt(CCOperation(kCCEncrypt), plaintext, key: key, iv: iv))
-    }
-
-    private static func deriveKey(_ password: Data) throws -> Data {
-        let salt = Data("saltysalt".utf8)
-        var key = Data(repeating: 0, count: kCCKeySizeAES128)
-        let status = key.withUnsafeMutableBytes { keyBytes in
-            password.withUnsafeBytes { passwordBytes in
-                salt.withUnsafeBytes { saltBytes in
-                    CCKeyDerivationPBKDF(
-                        CCPBKDFAlgorithm(kCCPBKDF2),
-                        passwordBytes.baseAddress?.assumingMemoryBound(to: CChar.self), password.count,
-                        saltBytes.baseAddress?.assumingMemoryBound(to: UInt8.self), salt.count,
-                        CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA1), 1003,
-                        keyBytes.baseAddress?.assumingMemoryBound(to: UInt8.self), kCCKeySizeAES128
-                    )
-                }
-            }
-        }
-        guard status == kCCSuccess else { throw CredentialStoreError.electronFormat("PBKDF2 \(status)") }
-        return key
-    }
-
-    private static func crypt(_ operation: CCOperation, _ input: Data, key: Data, iv: Data) throws -> Data {
-        var output = Data(repeating: 0, count: input.count + kCCBlockSizeAES128)
-        var written = 0
-        let outputCount = output.count
-        let status = output.withUnsafeMutableBytes { out in
-            input.withUnsafeBytes { inBytes in
-                key.withUnsafeBytes { keyBytes in
-                    iv.withUnsafeBytes { ivBytes in
-                        CCCrypt(
-                            operation, CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding),
-                            keyBytes.baseAddress, key.count, ivBytes.baseAddress,
-                            inBytes.baseAddress, input.count,
-                            out.baseAddress, outputCount, &written
-                        )
-                    }
-                }
-            }
-        }
-        guard status == kCCSuccess else { throw CredentialStoreError.electronFormat("AES \(status)") }
-        return output.prefix(written)
-    }
 }

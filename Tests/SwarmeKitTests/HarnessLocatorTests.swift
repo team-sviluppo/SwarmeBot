@@ -35,36 +35,6 @@ final class HarnessLocatorTests: XCTestCase {
     }
 }
 
-final class CredentialStoreTests: XCTestCase {
-    func testOSCryptRoundTrip() throws {
-        let password = Data("pa55w0rd".utf8)
-        let secret = Data(#"{"xaiApiKey":"xai-123"}"#.utf8)
-        let blob = try CredentialStore.encryptOSCrypt(secret, password: password)
-        XCTAssertTrue(blob.starts(with: Data("v10".utf8)))
-        XCTAssertEqual(try CredentialStore.decryptOSCrypt(blob, password: password), secret)
-    }
-
-    /// A vector computed independently with Python `cryptography` using
-    /// Chromium's parameters (PBKDF2-SHA1, "saltysalt", 1003, AES-128-CBC,
-    /// IV of spaces), so the round trip above is not testing itself.
-    func testOSCryptKnownVector() throws {
-        let blob = Data(base64Encoded: OSCryptVector.blob)!
-        let plain = try CredentialStore.decryptOSCrypt(blob, password: Data("peanuts".utf8))
-        XCTAssertEqual(String(decoding: plain, as: UTF8.self), "hello swarmebot")
-    }
-
-    func testWrongPrefixIsRejected() {
-        XCTAssertThrowsError(try CredentialStore.decryptOSCrypt(Data("v11xxxx".utf8), password: Data()))
-    }
-}
-
-/// Generated with: hashlib.pbkdf2_hmac('sha1', b'peanuts', b'saltysalt',
-/// 1003, 16) → `openssl enc -aes-128-cbc -K <key> -iv 20…20` over
-/// "hello swarmebot" with PKCS#7 padding, prefixed "v10".
-enum OSCryptVector {
-    static let blob = "djEwS8P3sKza2bmFMKPheJ7kOQ=="
-}
-
 @MainActor
 final class LiveTextTests: XCTestCase {
     private func event(_ json: String) throws -> RuntimeEvent {

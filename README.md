@@ -11,9 +11,11 @@ for help, schedule them, trigger them from webhooks and give them tools through 
 
 Everything runs in **`swarme-harness`**, a Swift engine with an HTTP + SSE API. The app is a client of
 that engine. The same engine can run on a Linux or macOS **server**: your bots keep working with your
-laptop closed, and every paired device sees the same chats.
+laptop closed, and every paired device sees the same chats. An **iPhone app** is a client of those
+servers and also has private bots of its own.
 
-> **Status:** active development, macOS 14+. The interface is currently in Italian.
+> **Status:** active development, macOS 14+ and iOS 26+. The interface is in English and Italian
+> (Settings › General).
 
 ---
 
@@ -26,6 +28,7 @@ laptop closed, and every paired device sees the same chats.
 - [Build and run](#build-and-run)
 - [Testing](#testing)
 - [Remote bots (SwarmeBot on a server)](#remote-bots-swarmebot-on-a-server)
+- [iOS app](#ios-app)
 - [Packaging and releases](#packaging-and-releases)
 - [Project layout](#project-layout)
 - [Data, privacy and security](#data-privacy-and-security)
@@ -136,15 +139,20 @@ laptop closed, and every paired device sees the same chats.
 - **⌘K** command palette: jump to chats, run commands, search messages and jump to the hit.
 - **Inspector**: Details (persona, auto-approve, notifications, working folder), Library, Computer.
 - macOS **notifications**, Dock badge and menu.
-- **Settings**: profile and channel timeouts; **Engines** (executable, test, visibility, install
-  and log in through Terminal); **Remote servers**; **Connectors**; **Mac control**; **Keys and
-  services** (API keys in the macOS Keychain, OpenAI-compatible server, VPS); **DeepSeek** (direct or paired
-  connection); **Updates**.
+- **Settings** (⌘,, always this Mac's engine): language and theme, profile and channel timeouts;
+  **Engines** (executable, test, visibility, install and log in through Terminal); **Remote servers**;
+  **Connectors**; **Skills**; **Phone**; **Mac control**; **Keys and services** (API keys in the macOS
+  Keychain, OpenAI-compatible server, VPS); **DeepSeek** (direct or paired connection); **Updates**.
+  Each server has its own settings window (see [Server settings](#server-settings)).
 - Automatic updates with **Sparkle** (signed appcast, EdDSA-verified archives).
 
 ### Remote bots
 Run the engine on an Ubuntu or macOS server, set it up from the app over ssh, and chat with it over
 HTTPS from any paired device. See [Remote bots](#remote-bots-swarmebot-on-a-server).
+
+### iPhone
+A client of your servers (same bots, same chats, push notifications) with private bots of its own:
+an OpenAI-compatible endpoint, Gemma on the phone, Apple Foundation Models. See [iOS app](#ios-app).
 
 ---
 
@@ -270,13 +278,15 @@ transcript (see `docs/benchmarks/r1-transcript.md`).
 ### What it is
 
 A **remote engine** is the whole `swarme-harness` — store, turns, agents, connectors, automations —
-running as a service on a server you control. The Mac app (and, later, an iOS app) is just a client.
+running as a service on a server you control. The Mac app and the iOS app are just clients.
 
 - Start a conversation on your Mac, close the lid, keep going from another device: the turn runs on
   the server and every client sees the same chats.
 - Routines and webhooks of a remote bot run on the server, even with every client disconnected.
 - Supported servers: **Ubuntu 24.04 / 26.04** (x86_64, aarch64) and **macOS 14+**.
-- Supported agents on the server: **Claude Code** and **pi**.
+- Agents on the server: the setup installs **Claude Code** and **pi** and can log them in from the
+  Mac; other CLIs can be installed from a terminal on the server. The **OpenAI-compatible server**
+  (LiteLLM, vLLM, Hermes…) needs only a URL and a key, set in the [server's settings](#server-settings).
 - One engine per unix user: several people can share a server, each with their own engine, data
   and agent logins.
 
@@ -302,9 +312,10 @@ running as a service on a server you control. The Mac app (and, later, an iOS ap
   to approve and kept in SwarmeBot's own `known_hosts`. A changed host key blocks the connection.
 - **Always on**: a `systemd --user` service with linger on Linux, a LaunchDaemon running as your
   user on macOS. Both start at boot without anyone logging in, and restart the engine if it dies.
-- **v1 limits**: remote bots run with permissions bypassed (no approval cards), so use a dedicated
-  unix user without sudo for the engine. The computer-use features are not available remotely. A
-  remote bot works with bots of the same engine; channels mixing engines are not supported.
+- **Limits**: remote bots are meant to run with permissions bypassed, so use a dedicated unix user
+  without sudo for the engine. The computer-use features are not available remotely. A channel of
+  this Mac (or of the phone) can invite bots of a server as guests; their replies arrive whole at the
+  end of the turn.
 
 ### Before you start
 
@@ -341,9 +352,9 @@ On the **Mac**: SwarmeBot, and for the Claude login, Claude Code installed and l
    | Service and HTTPS routes | the service is installed and started; Caddy routes for `<prefix>/*` and `<prefix>/hooks/*` are written, validated with `caddy validate` and rolled back if invalid |
    | Token for this Mac | `swarme-harness device add` creates this Mac's device token; it goes to the Keychain |
 
-4. **Show the server's bots**. The **engine switcher** at the top of the sidebar now lets you move
-   between *This Mac* and each server. Chats, bots, automations and connectors of the selected engine
-   use the usual views.
+4. **Show the server's bots**. The sidebar lists this Mac's sections and, below them, one section per
+   server with all its bots. Opening a chat of a server switches the window to that engine: chat,
+   inspector and automations are the server's.
 
 The setup is idempotent: run it again to repair a server.
 
@@ -360,9 +371,31 @@ login the usual way. From the server's card in **Settings › Remote servers**:
 - **Open a terminal on the server** — a Terminal window already connected with the dedicated key,
   e.g. to install `pi` (`npm i -g …`) or Claude Code.
 
+### Server settings
+
+⌘, always edits **this Mac's** engine. A server's settings are in a window of their own:
+**Settings › Remote servers › Remote server settings** (*Impostazioni › Server remoti ›
+Impostazioni server remoto*) opens **[REMOTE SERVER] - <name>**, one window per server, with:
+
+| Tab | What it changes on the server |
+|---|---|
+| General | profile (how bots address you) and channel timeouts |
+| Engines | which agents the server sees, their executable, visibility in the model picker. Install and sign-in commands are shown, to be run in *Open a terminal on the server* |
+| Connectors, Skills | the server's own MCP connectors and skills |
+| Keys and services | API keys and the **OpenAI-compatible server** URL. Keys go to the server's `secrets.json` (0600), never to this Mac's Keychain or to `config.json` |
+| DeepSeek | the server's DeepSeek Harness connection |
+
+Language, theme, phone, Mac control, VPS and updates belong to this Mac and are not there.
+
+An engine shows up in a bot's model picker only once it is available. For example, to give the bots
+of a server an OpenAI-compatible endpoint (such as Hermes Agent behind LiteLLM), set its base URL and
+key in the server's *Keys and services*: **OpenAI-compatible server** then appears in the picker of
+that server's bots. The server calls the endpoint itself, so it must be able to reach it. Those bots'
+chats live on the server, so the Mac and the iPhone see the same ones.
+
 ### Connectors on a server
 
-With the server selected, Settings › Connectors manages the server's own connectors. From a
+The server's settings window manages the server's own connectors. From a
 connector of *This Mac*, **Copy to server ▸ <server>** creates it on the server with its secrets and
 runs *Test connection* there (a stdio command available on your Mac may be missing on the server).
 OAuth connectors cannot be copied yet.
@@ -472,6 +505,111 @@ forwards; authentication is done by the engine. Requirements for any proxy in fr
 
 ---
 
+## iOS app
+
+### What it does
+
+The iPhone app (iOS 26+) lives in `iOS/` and has two kinds of bots, in separate sections of its list:
+
+- **Server bots.** It is a client of your remote engines, like the Mac app: same bots, same chats, over
+  HTTPS with its own device token. Pair it from the Mac (**Settings › Remote servers › Actions › Pair a
+  phone or another Mac…**) by scanning the QR code. It shows streaming replies, permission and question
+  cards (answerable from the notification too), attachments, older messages, and resumes the stream
+  after the app was in the background or the network changed.
+- **Private bots, on the phone only.** An **OpenAI-compatible endpoint** (with the same Hermes session
+  rules as the engine), **Gemma 4 E4B** running on the phone with MLX (downloaded on request, about
+  5 GB, iPhones with at least 8 GB of memory), and **Apple Foundation Models** (chat only). MCP
+  connectors over HTTP, with OAuth. Their chats are stored on the phone only.
+- **Settings from the Mac.** Endpoints and HTTP connectors can be sent from the Mac (**Settings ›
+  Phone**) with a QR code on the same network or an encrypted `.swarmeconfig` file. Chats are never
+  copied; OAuth connectors need a new login on the phone.
+- **Push notifications** ("a bot finished", "a bot asks for approval") for server bots, through a
+  relay that holds the OneSignal key (see [`docs/push-relay.md`](docs/push-relay.md)).
+
+Private bots of the Mac and of the phone are never synced. To see the same chats on both, put the bot
+on a server.
+
+### Build
+
+Needs **Xcode 26** (iOS 26 SDK), [**XcodeGen**](https://github.com/yonaskolb/XcodeGen)
+(`brew install xcodegen`) and the Metal Toolchain component for MLX
+(`xcodebuild -downloadComponent MetalToolchain`). The Xcode project is generated from
+`iOS/project.yml` and is git-ignored.
+
+```sh
+(cd iOS && xcodegen)
+open iOS/SwarmeBot-iOS.xcodeproj                       # or, from the command line:
+xcodebuild -project iOS/SwarmeBot-iOS.xcodeproj -scheme SwarmeBot-iOS \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+```
+
+- The project uses the package's `AgentCore`, `CompanionCore` and `SwarmeL10n`. MLX, the Hugging Face
+  libraries and the OneSignal SDK are added to the Xcode project only, never to `Package.swift`.
+  Building it makes Xcode write their pins into the root `Package.resolved`: don't commit those.
+- The **SwarmeBot-iOS Release** scheme runs an optimized build without the debugger, much faster on a
+  device (MLX above all).
+- Gemma does not run in the simulator. To try the app in the simulator against a throwaway engine
+  (`swarme-harness serve --remote` behind Caddy), the debug launch arguments
+  `-pairLink swarmebot://pair?…` and `-openFirstChat YES` skip the camera and the taps.
+- To run on your own iPhone, create `iOS/Local.xcconfig` (git-ignored) with your team:
+
+  ```
+  DEVELOPMENT_TEAM = ABCDE12345
+  ```
+
+### Your own build (bundle ID, signing, pushes)
+
+Apple ties push notifications to the app's bundle ID and APNs key, and the OneSignal REST key must stay
+on the relay. So a build under another bundle ID needs its own Apple setup, its own OneSignal app
+and its own relay. Values come from `iOS/Shared.xcconfig` (the official build) and are overridden in
+`iOS/Local.xcconfig`:
+
+```
+DEVELOPMENT_TEAM = <your Apple team ID>
+SWARMEBOT_BUNDLE_ID = com.example.swarmebot
+SWARMEBOT_PUSH_APP_ID = <your OneSignal App ID>
+SWARMEBOT_PUSH_RELAY = https:/$()/bot.example.com/srv1/deploy/push
+```
+
+In an xcconfig file `//` starts a comment: `$()` keeps the URL whole. Then run `xcodegen` again.
+
+1. **Apple Developer account.** Register two App IDs: `<bundle>` for the app and
+   `<bundle>.OneSignalNotificationServiceExtension` for the notification extension, with these
+   capabilities:
+   - app: **Push Notifications**, **App Groups** (`group.<bundle>.onesignal`), **Increased Memory
+     Limit** (Gemma);
+   - extension: **App Groups** (the same group).
+
+   With *Automatically manage signing* and your team in `DEVELOPMENT_TEAM`, Xcode creates the
+   provisioning profiles; otherwise create a development or App Store profile for each App ID.
+2. **APNs key.** In Certificates, Identifiers & Profiles › Keys, create a key with Apple Push
+   Notifications service and download the `.p8` (keep its Key ID and your Team ID).
+3. **OneSignal.** Create an app, Apple iOS platform, upload the `.p8` with Key ID, Team ID and your
+   bundle ID. Note the **App ID** (goes in `SWARMEBOT_PUSH_APP_ID`, not a secret) and the **REST API
+   key** (goes on the relay only).
+4. **Relay.** The easiest way is next to one of your remote engines, from the Mac that administers
+   it: **Settings › Remote servers › Actions › Host the Push Notification Relay…** with the OneSignal App ID and
+   REST API key. It answers on `<chat URL>/push`: that is `SWARMEBOT_PUSH_RELAY`. Install it on one
+   server only. A manual install is described in [`docs/push-relay.md`](docs/push-relay.md).
+5. **Build** with the values above. Without `SWARMEBOT_PUSH_APP_ID` and `SWARMEBOT_PUSH_RELAY` the
+   app registers nowhere and pushes stay off; everything else works.
+
+Other identifiers, which may stay as they are or be renamed together:
+
+| Identifier | Where |
+|---|---|
+| Version and build number | `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION` in `iOS/project.yml` |
+| Background refresh task `it.hextra.swarmebot.refresh` | `BGTaskSchedulerPermittedIdentifiers` in `iOS/project.yml` and `iOS/SwarmeBot/Model/Notifier.swift` |
+| Exported file type `it.hextra.swarmebot.phone-config` (`.swarmeconfig`) | `iOS/project.yml`; the Mac app writes these files |
+| URL scheme `swarmebot://` (pairing, OAuth callback) | `CFBundleURLTypes` in `iOS/project.yml` |
+| Keychain service and log subsystem `it.hextra.swarmebot` | `iOS/SwarmeBot/Model/Keychain.swift`, `RemoteSession.swift` |
+| App icon, display name | `iOS/SwarmeBot/Resources`, `INFOPLIST_KEY_CFBundleDisplayName` |
+
+For TestFlight or the App Store, archive with the Release configuration (Product › Archive) and upload
+from the Organizer.
+
+---
+
 ## Packaging and releases
 
 ```sh
@@ -521,17 +659,21 @@ x86_64 on Apple silicon runs under emulation: enable Rosetta in Docker Desktop, 
 |---|---|
 | `Sources/SwarmeBot` | the SwiftUI app: views, mascot, notifications, Sparkle updater |
 | `Sources/SwarmeKit` | app logic that is not UI: engine launcher and supervision, observable app model, Keychain, paths; `Remote/` for ssh identities, host keys, server setup, engine updates, Linux engine download |
-| `Sources/CompanionCore` | wire types, SSE parser with resume, HTTP client, pure fold of events into state |
+| `Sources/CompanionCore` | wire types, SSE parser with resume, HTTP client, pure fold of events into state (Mac and iOS) |
+| `Sources/AgentCore` | shared by the engine and the iOS app: ordered JSON, streaming, MCP client over HTTP, OAuth, OpenAI-compatible chat with Hermes continuity |
+| `Sources/SwarmeL10n` | UI languages and the Italian → English tables, for the Mac and iOS apps |
 | `Sources/HarnessCore` | the engine: JSON with stable key order, store and SQLite, turns, routes, HTTP server and SSE hub, channels, bot-to-bot comms, routines, webhooks, library, team packages, computers, MCP connectors and OAuth, permission broker, remote access |
 | `Sources/HarnessDrivers` | one driver per agent; `ACP/` (protocol runtime + agents), `DeepSeek/` |
 | `Sources/swarme-harness` | the engine executable and its subcommands |
+| `Sources/swarme-push-relay` | the push notification relay (OneSignal) for the iOS app |
+| `iOS/` | the iOS app: `project.yml` (XcodeGen), `SwarmeBot/`, the notification extension, tests |
 | `Tests/` | `HarnessCoreTests`, `CompanionCoreTests`, `SwarmeKitTests` |
 | `parity/` | fake agents and services, scenario runner, trace comparison |
 | `scripts/` | bundling, release, Linux engine build, integration tests |
 | `docs/` | HTTP/SSE contract, architecture and plans, benchmarks, design notes |
 
-`HarnessCore`, `HarnessDrivers` and `swarme-harness` build on macOS and Linux; the app, `SwarmeKit` and
-`CompanionCore` are macOS only.
+`HarnessCore`, `HarnessDrivers`, `AgentCore` and `swarme-harness` build on macOS and Linux; `AgentCore`,
+`CompanionCore` and `SwarmeL10n` also on iOS; the Mac app and `SwarmeKit` are macOS only.
 
 ---
 
@@ -540,7 +682,10 @@ x86_64 on Apple silicon runs under emulation: enable Rosetta in Docker Desktop, 
 - Everything stays on your machine (or your server): `~/.swarmebot` holds `bots.json`,
   `groups.json`, `config.json`, `messages.db` (SQLite, WAL) and event logs.
 - API keys you enter in Settings are stored in the **macOS Keychain** and handed to the engine at
-  start; they are not written to `config.json`. Logs are redacted.
+  start; they are not written to `config.json`. Keys entered in a server's settings go only to that
+  server's `secrets.json` (0600). Logs are redacted.
+- The iOS app keeps device tokens, endpoint keys and OAuth tokens in its Keychain (available after
+  first unlock, never synced to iCloud); private chats stay on the phone.
 - The local engine listens only on `127.0.0.1` and refuses requests whose `Host` or `Origin` is not
   loopback.
 - Agents run with your user's rights. Permission cards and auto-approve rules decide what they may do
@@ -579,6 +724,8 @@ x86_64 on Apple silicon runs under emulation: enable Rosetta in Docker Desktop, 
 - [`docs/plans/fase-2-architettura.md`](docs/plans/fase-2-architettura.md) — engine architecture, decisions and lessons learned.
 - [`docs/plans/2026-10-16-bot-remoto.md`](docs/plans/2026-10-16-bot-remoto.md) — remote engine design and status.
 - [`docs/plans/2026-10-15-connettori-mcp.md`](docs/plans/2026-10-15-connettori-mcp.md) — MCP connectors.
+- [`docs/plans/2026-10-22-app-ios.md`](docs/plans/2026-10-22-app-ios.md) — the iOS app: decisions and status.
+- [`docs/push-relay.md`](docs/push-relay.md) — the push relay and how to host your own.
 - [`docs/benchmarks/r1-transcript.md`](docs/benchmarks/r1-transcript.md) — long-transcript performance.
 - [`CLAUDE.md`](CLAUDE.md) — conventions for AI coding agents working on this repo.
 

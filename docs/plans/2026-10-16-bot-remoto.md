@@ -708,6 +708,28 @@ Non verificato:
   screenshot con il Mac attivo (sezioni del Mac + sezione del server) e con il server attivo (bot del Mac
   sopra, letti dal peer). Il clic vero su una riga non è stato provato (niente Accessibilità in questa sessione).
 
+### Impostazioni del server in una finestra a parte (2026-10-23)
+
+- ⌘, mostra sempre le impostazioni di questo Mac, qualunque motore abbia la finestra principale (prima
+  seguivano il motore della chat aperta, e non era intuitivo). Un server ha la sua finestra, "[SERVER REMOTO] -
+  <nome>", dal pulsante "Impostazioni server remoto" in Impostazioni › Server remoti: Generale (profilo e
+  canali), Motori, Connettori, Skill, Chiavi e servizi, DeepSeek. Niente lingua, aspetto, telefono, controllo
+  del Mac, VPS e aggiornamenti, che sono di questo Mac.
+- Una finestra di impostazioni su un motore che la finestra principale non mostra ha un `AppModel` suo, solo
+  impostazioni (`SwarmeKit/AppModel+Settings.swift`): client, config, motori, connettori e skill, aggiornati
+  dallo stream, senza flotta, trascrizioni e peer. Se la finestra principale passa a quel motore, la finestra
+  di impostazioni usa il modello principale.
+- Su un server le chiavi vanno al suo `secrets.json` (`PUT /api/config?secretStorage=external`) e non passano
+  dal Portachiavi del Mac; i comandi di installazione dei motori si mostrano ma non si lanciano nel Terminale del
+  Mac.
+- Tolta l'importazione delle chiavi dall'app Electron (sezione, `importFromElectron`, OSCrypt e i suoi test).
+- Verificato: con un'app su `SWARMEBOT_HOME` di prova, un motore locale su 38899 e un `serve --remote` dietro
+  Caddy, la finestra si apre col titolo giusto (schermate di Generale, Motori e Chiavi). Con un test
+  temporaneo sul modello della finestra remota, URL e chiave del server compatibile OpenAI arrivano al server
+  (`localEndpoint` passa a disponibile, chiave nel suo `secrets.json`, non in `config.json`). Il motore
+  locale e il Portachiavi restano intatti. Non provati: i clic veri nella finestra e il ⌘, con la finestra
+  principale su un server.
+
 ### Prova dell'interfaccia (2026-10-18)
 
 Con il permesso di Accessibilità, l'app di sviluppo è stata guidata a clic su `SWARMEBOT_HOME=/tmp/sbui`,

@@ -3,11 +3,19 @@ import SwarmeKit
 import SwiftUI
 
 /// ⌘, — profile, engines, connectors, the phone, control of this Mac, keys and services, DeepSeek Harness, updates.
+/// Always this Mac's engine, whichever engine the main window shows; a server has RemoteSettingsView.
 struct SettingsView: View {
+    @Environment(AppModel.self) private var app
     /// Debug aid for screenshots: `SWARMEBOT_SETTINGS_TAB=phone` opens on that pane.
     @State private var tab = ProcessInfo.processInfo.environment["SWARMEBOT_SETTINGS_TAB"] ?? "general"
 
     var body: some View {
+        tabs
+            .environment(app.settingsModel(for: .local))
+            .onDisappear { app.closeSettings(for: .local) }
+    }
+
+    private var tabs: some View {
         TabView(selection: $tab) {
             GeneralPane().tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }.tag("general")
             EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
@@ -24,9 +32,40 @@ struct SettingsView: View {
     }
 }
 
+/// A server's settings, in a window of their own: what its engine lets this
+/// Mac change from afar. Profile, engines, connectors, skills, keys, DeepSeek.
+struct RemoteSettingsView: View {
+    let engineId: String
+    @Environment(AppModel.self) private var app
+    @State private var tab = ProcessInfo.processInfo.environment["SWARMEBOT_SETTINGS_TAB"] ?? "general"
+
+    var body: some View {
+        if let engine = app.remoteEngines.first(where: { $0.id == engineId }) {
+            TabView(selection: $tab) {
+                GeneralPane(remote: true).tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }.tag("general")
+                EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
+                ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
+                SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
+                KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
+                DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
+            }
+            .frame(width: 920, height: 560)
+            .navigationTitle(tr("[SERVER REMOTO] - %@", engine.name))
+            .environment(app.settingsModel(for: .remote(engineId)))
+            .onDisappear { app.closeSettings(for: .remote(engineId)) }
+        } else {
+            Text(tr("Questo server non è più tra i server remoti di questo Mac."))
+                .foregroundStyle(.secondary)
+                .frame(width: 420, height: 160)
+        }
+    }
+}
+
 // MARK: - General
 
 private struct GeneralPane: View {
+    /// A server's: only what its engine keeps, not this app's language, look and folders.
+    var remote = false
     @Environment(AppModel.self) private var model
     @State private var localizer = Localizer.shared
     @State private var appearance = AppearanceSettings.shared
@@ -36,22 +75,7 @@ private struct GeneralPane: View {
 
     var body: some View {
         Form {
-            Section(tr("Lingua")) {
-                // each language named in itself, so it can be found whichever is shown
-                Picker(tr("Lingua dell'app"), selection: $localizer.language) {
-                    ForEach(AppLanguage.allCases) { language in
-                        Text(verbatim: language.nativeName).tag(language)
-                    }
-                }
-            }
-            Section(tr("Aspetto")) {
-                Picker(tr("Tema"), selection: $appearance.appearance) {
-                    Text(tr("Scuro")).tag(AppAppearance.dark)
-                    Text(tr("Chiaro")).tag(AppAppearance.light)
-                    Text(tr("Sistema")).tag(AppAppearance.system)
-                }
-                .pickerStyle(.segmented)
-            }
+            if !remote { appSections }
             Section(tr("Profilo")) {
                 TextField(tr("Nome"), text: $name)
                 TextField(tr("Email"), text: $email)
@@ -63,19 +87,44 @@ private struct GeneralPane: View {
                 Stepper(tr("Tempo massimo per turno di un membro: %@ min", String(timeout)), value: $timeout, in: 1...1440)
                 Button(tr("Salva")) { Task { await model.saveConfig(["rooms": ["turnTimeoutMinutes": timeout]]) } }
             }
-            Section(tr("Dati")) {
-                LabeledContent(tr("Dati del motore"), value: "~/.swarmebot")
-                LabeledContent(tr("Log"), value: "~/Library/Logs/SwarmeBot/server.log")
-                Button(tr("Mostra i log nel Finder")) {
-                    NSWorkspace.shared.activateFileViewerSelecting([HarnessLocator.logDirectory.appendingPathComponent("server.log")])
+            if !remote {
+                Section(tr("Dati")) {
+                    LabeledContent(tr("Dati del motore"), value: "~/.swarmebot")
+                    LabeledContent(tr("Log"), value: "~/Library/Logs/SwarmeBot/server.log")
+                    Button(tr("Mostra i log nel Finder")) {
+                        NSWorkspace.shared.activateFileViewerSelecting([HarnessLocator.logDirectory.appendingPathComponent("server.log")])
+                    }
                 }
             }
         }
         .formStyle(.grouped)
-        .onAppear {
-            name = model.config?.profile?.name ?? ""
-            email = model.config?.profile?.email ?? ""
-            timeout = model.config?.rooms?.turnTimeoutMinutes ?? 30
+        // a settings window's own model gets the config after it appears
+        .onAppear(perform: load)
+        .onChange(of: model.config == nil) { _, _ in load() }
+    }
+
+    private func load() {
+        name = model.config?.profile?.name ?? ""
+        email = model.config?.profile?.email ?? ""
+        timeout = model.config?.rooms?.turnTimeoutMinutes ?? 30
+    }
+
+    @ViewBuilder private var appSections: some View {
+        Section(tr("Lingua")) {
+            // each language named in itself, so it can be found whichever is shown
+            Picker(tr("Lingua dell'app"), selection: $localizer.language) {
+                ForEach(AppLanguage.allCases) { language in
+                    Text(verbatim: language.nativeName).tag(language)
+                }
+            }
+        }
+        Section(tr("Aspetto")) {
+            Picker(tr("Tema"), selection: $appearance.appearance) {
+                Text(tr("Scuro")).tag(AppAppearance.dark)
+                Text(tr("Chiaro")).tag(AppAppearance.light)
+                Text(tr("Sistema")).tag(AppAppearance.system)
+            }
+            .pickerStyle(.segmented)
         }
     }
 }
@@ -175,15 +224,21 @@ private struct EngineDetail: View {
                 }
             }
             if let install = instance.install {
-                Section(tr("Installazione e accesso")) {
+                Section {
                     if let command = install.command?.darwin {
-                        CommandRow(command: command, label: tr("Installa"))
+                        CommandRow(command: command, label: tr("Installa"), runsHere: !model.isRemote)
                     }
                     if let signIn = install.signInCommand {
-                        CommandRow(command: signIn, label: tr("Accedi"))
+                        CommandRow(command: signIn, label: tr("Accedi"), runsHere: !model.isRemote)
                     }
                     if let docs = install.docsUrl, let url = URL(string: docs) {
                         Link(tr("Documentazione"), destination: url)
+                    }
+                } header: {
+                    Text(tr("Installazione e accesso"))
+                } footer: {
+                    if model.isRemote {
+                        Text(tr("Questi comandi vanno eseguiti sul server: Server remoti › Azioni › Apri un terminale sul server."))
                     }
                 }
             }
@@ -203,12 +258,14 @@ private struct EngineDetail: View {
 private struct CommandRow: View {
     let command: String
     let label: String
+    /// False for a server's engine: the command is shown, not run in this Mac's Terminal.
+    var runsHere = true
 
     var body: some View {
         HStack {
             Text(command).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled).lineLimit(2)
             Spacer()
-            Button(label) { TerminalLauncher.run(command) }
+            if runsHere { Button(label) { TerminalLauncher.run(command) } }
         }
     }
 }
@@ -238,12 +295,13 @@ private struct KeysPane: View {
     @State private var values: [WorkspaceCredential: String] = [:]
     @State private var endpointURL = ""
     @State private var vpsAlias = ""
-    @State private var importResult: String?
 
     var body: some View {
         Form {
             Section {
-                Text(tr("Le chiavi restano nel Portachiavi di macOS e arrivano al motore all'avvio; non vengono scritte in config.json."))
+                Text(model.isRemote
+                     ? tr("Le chiavi vanno al motore del server, che le tiene nel suo secrets.json (leggibile solo da lui); non passano dal Portachiavi di questo Mac e non vengono scritte in config.json.")
+                     : tr("Le chiavi restano nel Portachiavi di macOS e arrivano al motore all'avvio; non vengono scritte in config.json."))
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             }
             Section(tr("Chiavi")) {
@@ -263,31 +321,24 @@ private struct KeysPane: View {
                     Button(tr("Salva")) { Task { await model.saveConfig(["localEndpoint": ["baseUrl": endpointURL]]) } }
                 }
             }
-            Section(tr("VPS")) {
-                HStack {
-                    TextField(tr("Alias SSH (da ~/.ssh/config)"), text: $vpsAlias)
-                    Button(tr("Salva")) { Task { await model.saveConfig(["vps": ["sshAlias": vpsAlias]]) } }
-                }
-            }
-            Section(tr("Dall'app Electron")) {
-                Text(tr("Importa le chiavi salvate dalla versione Electron. macOS chiederà il permesso di leggere la voce \"SwarmeBot Safe Storage\" del Portachiavi."))
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
-                Button(tr("Importa credenziali")) {
-                    do {
-                        let imported = try CredentialStore.importFromElectron()
-                        importResult = imported.isEmpty ? tr("Nessuna chiave da importare.") : tr("Importate: %@. Riavvia SwarmeBot per usarle.", imported.joined(separator: ", "))
-                    } catch {
-                        importResult = error.localizedDescription
+            // the computers of a server are not reachable from afar (501)
+            if !model.isRemote {
+                Section(tr("VPS")) {
+                    HStack {
+                        TextField(tr("Alias SSH (da ~/.ssh/config)"), text: $vpsAlias)
+                        Button(tr("Salva")) { Task { await model.saveConfig(["vps": ["sshAlias": vpsAlias]]) } }
                     }
                 }
-                if let importResult { Text(importResult).font(.system(size: 12)) }
             }
         }
         .formStyle(.grouped)
-        .onAppear {
-            endpointURL = model.config?.localEndpoint?.baseUrl ?? ""
-            vpsAlias = model.config?.vps?.sshAlias ?? ""
-        }
+        .onAppear(perform: load)
+        .onChange(of: model.config == nil) { _, _ in load() }
+    }
+
+    private func load() {
+        endpointURL = model.config?.localEndpoint?.baseUrl ?? ""
+        vpsAlias = model.config?.vps?.sshAlias ?? ""
     }
 
     private func configured(_ credential: WorkspaceCredential) -> Bool {
