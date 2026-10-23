@@ -29,7 +29,9 @@ final class MacServerTests: XCTestCase {
         let result = try await ProcessRunner.run("/bin/sh", ["-n", "-c", RemoteScripts.rootMac])
         XCTAssertEqual(result.status, 0, result.stderr)
         for script in [RemoteScripts.rootLinux, RemoteScripts.caddyLinux, RemoteScripts.serviceLinux, RemoteScripts.probe,
-                       RemoteScripts.installKey, RemoteScripts.installEngine, RemoteScripts.removeKey, RemoteScripts.addDevice] {
+                       RemoteScripts.installKey, RemoteScripts.installEngine, RemoteScripts.removeKey, RemoteScripts.addDevice,
+                       RemoteScripts.restartEngine, RemoteScripts.configurePushRelay, RemoteScripts.servicePushLinux,
+                       RemoteScripts.rootMacPush] {
             let check = try await ProcessRunner.run("/bin/sh", ["-n", "-c", script])
             XCTAssertEqual(check.status, 0, check.stderr)
         }

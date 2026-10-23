@@ -451,8 +451,9 @@ public struct CompanionClient: Sendable {
 
     /// Make a room. The harness names it after the first member when `name`
     /// is empty, exactly as the desktop's dialog does.
-    public func createRoom(name: String?, memberIds: [String], cwd: String? = nil) async throws -> Room {
+    public func createRoom(name: String?, memberIds: [String], cwd: String? = nil, guests: [RoomGuest] = []) async throws -> Room {
         var body: [String: Any] = ["memberIds": memberIds]
+        if !guests.isEmpty { body["guests"] = guests.map(\.body) }
         if let cwd, !cwd.isEmpty { body["cwd"] = cwd }
         if let name, !name.trimmingCharacters(in: .whitespaces).isEmpty { body["name"] = name }
         return try await send(try makeRequest("POST", "/api/groups", body: body), as: CreatedRoom.self).group

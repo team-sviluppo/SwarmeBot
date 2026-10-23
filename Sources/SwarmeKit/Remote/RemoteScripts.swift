@@ -58,8 +58,10 @@ public enum RemoteScripts {
     if command -v systemctl >/dev/null 2>&1; then
       echo "service=$(systemctl --user is-active swarmebot.service 2>/dev/null || true)"
       echo "linger=$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null || echo unknown)"
+      echo "pushRelay=$(systemctl --user is-active swarmebot-push.service 2>/dev/null || true)"
     elif command -v launchctl >/dev/null 2>&1; then
       if launchctl print "system/it.swarmebot.engine.$(id -un)" >/dev/null 2>&1; then echo "service=active"; else echo "service=inactive"; fi
+      if launchctl print "system/it.swarmebot.push.$(id -un)" >/dev/null 2>&1; then echo "pushRelay=active"; else echo "pushRelay=inactive"; fi
     fi
     echo "probe=ok"
     """#
@@ -190,6 +192,15 @@ public enum RemoteScripts {
     	}
     }
     EOF
+    # the iOS app's push relay, when this user hosts it (servicePushLinux)
+    home="$(getent passwd "$user" | cut -d: -f6)"
+    if [ -f "$home/.config/systemd/user/swarmebot-push.service" ]; then
+      cat >> "$routes" <<EOF
+    handle_path $prefix/push/* {
+    	reverse_proxy unix/$sock/push.sock
+    }
+    EOF
+    fi
     case "$tls" in
       internal) tlsline="tls internal" ;;
       off) tlsline="" ; case "$site" in http://*|:*) ;; *) site="http://$site" ;; esac ;;
@@ -303,6 +314,14 @@ public enum RemoteScripts {
     	}
     }
     EOF
+    # the iOS app's push relay, when this user hosts it (rootMacPush)
+    if [ -f "/Library/LaunchDaemons/it.swarmebot.push.$user.plist" ]; then
+      cat >> "$routes" <<EOF
+    handle_path $prefix/push/* {
+    	reverse_proxy unix/$sock/push.sock
+    }
+    EOF
+    fi
     case "$tls" in
       off) case "$site" in http://*|:*) ;; *) site="http://$site" ;; esac ;;
     esac
@@ -356,6 +375,108 @@ public enum RemoteScripts {
     exit 4
     """#
 
+    // MARK: Push relay — docs/push-relay.md
+
+    /// The relay's OneSignal app and key (stdin, JSON) into ~/.swarmebot/push-relay.json, 0600.
+    /// The relay's own secret is made there and never leaves the server.
+    public static let configurePushRelay = #"""
+    set -eu
+    "$HOME/.swarmebot/bin/swarme-harness" push-relay configure
+    """#
+
+    /// The relay as a systemd user unit, on a socket next to the engine's. $1 socket dir.
+    public static let servicePushLinux = #"""
+    set -eu
+    unit="$HOME/.config/systemd/user"
+    mkdir -p "$unit"
+    cat > "$unit/swarmebot-push.service" <<EOF
+    [Unit]
+    Description=SwarmeBot push relay
+    After=network-online.target
+
+    [Service]
+    ExecStart=$HOME/.swarmebot/bin/swarme-harness push-relay serve --socket $1/push.sock
+    Restart=on-failure
+    RestartSec=3
+
+    [Install]
+    WantedBy=default.target
+    EOF
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    systemctl --user daemon-reload
+    systemctl --user enable swarmebot-push.service >/dev/null 2>&1
+    systemctl --user restart swarmebot-push.service
+    for i in $(seq 1 20); do
+      [ -S "$1/push.sock" ] && { echo "pushRelay=active"; exit 0; }
+      sleep 1
+    done
+    journalctl --user -u swarmebot-push.service -n 20 --no-pager >&2 || true
+    echo "the push relay did not open its socket within 20 seconds" >&2
+    exit 4
+    """#
+
+    /// On a Mac server, as root: the relay as a LaunchDaemon running as the
+    /// user, its route next to the engine's, Caddy restarted. $1 user, $2 prefix.
+    public static let rootMacPush = #"""
+    set -eu
+    user="$1"; prefix="$2"
+    home="$(dscl . -read "/Users/$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+    [ -n "$home" ] && [ -d "$home" ] || { echo "no such user $user" >&2; exit 2; }
+    engine="$home/.swarmebot/bin/swarme-harness"
+    [ -x "$engine" ] || { echo "the engine is not installed in $engine" >&2; exit 2; }
+    sock="$home/.swarmebot/run"
+    label="it.swarmebot.push.$user"
+    plist="/Library/LaunchDaemons/$label.plist"
+    cat > "$plist" <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0"><dict>
+      <key>Label</key><string>$label</string>
+      <key>UserName</key><string>$user</string>
+      <key>ProgramArguments</key><array>
+        <string>$engine</string><string>push-relay</string><string>serve</string>
+        <string>--socket</string><string>$sock/push.sock</string>
+      </array>
+      <key>EnvironmentVariables</key><dict>
+        <key>HOME</key><string>$home</string>
+      </dict>
+      <key>RunAtLoad</key><true/>
+      <key>KeepAlive</key><true/>
+      <key>StandardOutPath</key><string>$home/Library/Logs/swarmebot-push.log</string>
+      <key>StandardErrorPath</key><string>$home/Library/Logs/swarmebot-push.log</string>
+    </dict></plist>
+    EOF
+    chown root:wheel "$plist"; chmod 644 "$plist"
+    launchctl bootout "system/$label" 2>/dev/null || true
+    launchctl bootstrap system "$plist"
+    ok=""
+    for i in $(seq 1 20); do [ -S "$sock/push.sock" ] && { ok=yes; break; }; sleep 1; done
+    [ -n "$ok" ] || { tail -n 20 "$home/Library/Logs/swarmebot-push.log" >&2 || true; echo "the push relay did not open its socket within 20 seconds" >&2; exit 4; }
+    conf=/usr/local/etc/swarmebot
+    routes="$conf/routes/$user.routes"
+    [ -f "$routes" ] || { echo "the engine's routes are not there: set the server up first" >&2; exit 2; }
+    if ! grep -qF "$prefix/push/*" "$routes"; then
+      cp -p "$routes" "$routes.backup"
+      cat >> "$routes" <<EOF
+    handle_path $prefix/push/* {
+    	reverse_proxy unix/$sock/push.sock
+    }
+    EOF
+      caddy="$(command -v caddy || true)"
+      for c in /opt/homebrew/bin/caddy /usr/local/bin/caddy; do [ -z "$caddy" ] && [ -x "$c" ] && caddy="$c"; done
+      if ! "$caddy" validate --config "$conf/Caddyfile" --adapter caddyfile >/tmp/swarmebot-caddy.log 2>&1; then
+        mv -f "$routes.backup" "$routes"
+        tail -n 5 /tmp/swarmebot-caddy.log >&2
+        echo "the Caddy configuration was not valid; nothing was changed" >&2
+        exit 5
+      fi
+      # admin is off, so a config change is a restart
+      launchctl bootout system/it.swarmebot.caddy 2>/dev/null || true
+      launchctl bootstrap system /Library/LaunchDaemons/it.swarmebot.caddy.plist
+    fi
+    echo "pushRelay=active"
+    """#
+
     // MARK: Engine restart (as the user)
 
     /// Restart the engine so a new binary or new secrets take effect: systemd
@@ -366,8 +487,11 @@ public enum RemoteScripts {
     if command -v systemctl >/dev/null 2>&1; then
       export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
       systemctl --user restart swarmebot.service
+      # the push relay runs the same binary: it follows the engine's updates
+      systemctl --user try-restart swarmebot-push.service 2>/dev/null || true
     else
       pkill -TERM -u "$(id -u)" -f "swarme-harness serve --remote" || true
+      pkill -TERM -u "$(id -u)" -f "swarme-harness push-relay serve" || true
     fi
     echo "restart=ok"
     """#

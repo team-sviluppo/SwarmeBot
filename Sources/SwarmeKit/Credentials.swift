@@ -44,7 +44,7 @@ public enum WorkspaceCredential: String, CaseIterable, Sendable {
         case .xaiApiKey: return tr("Chiave API xAI")
         case .boxToken: return tr("Token Box (computer cloud)")
         case .opencodeGoApiKey: return tr("Chiave OpenCode Go")
-        case .localEndpointApiKey: return tr("Chiave Local Endpoint")
+        case .localEndpointApiKey: return tr("Chiave del server compatibile OpenAI")
         }
     }
 }

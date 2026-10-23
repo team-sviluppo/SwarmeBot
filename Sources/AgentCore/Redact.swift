@@ -7,13 +7,13 @@ public enum Redact {
     private static let secretKeyParts = ["token", "secret", "password", "passwd", "apikey", "api_key", "authorization", "auth_token"]
 
     /// `key` alone is too broad (keyboard, hotkey): only as a whole word or suffix.
-    static func isSecretName(_ name: String) -> Bool {
+    public static func isSecretName(_ name: String) -> Bool {
         let lower = name.lowercased()
         if secretKeyParts.contains(where: lower.contains) { return true }
         return lower.range(of: #"(^|[_.-])keys?$"#, options: .regularExpression) != nil
     }
 
-    static func mask(_ value: String) -> String { "«redacted \(value.utf16.count) chars»" }
+    public static func mask(_ value: String) -> String { "«redacted \(value.utf16.count) chars»" }
 
     private static func regex(_ pattern: String, _ options: NSRegularExpression.Options = []) -> NSRegularExpression {
         // patterns are constants: a failure here is a programming error

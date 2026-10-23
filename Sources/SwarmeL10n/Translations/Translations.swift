@@ -4,7 +4,7 @@
 public enum Translations {
     public static let english: [String: String] = {
         var all: [String: String] = [:]
-        for part in [chat, settings, remote, engine, skills] {
+        for part in [chat, settings, remote, engine, skills, ios] {
             all.merge(part) { first, _ in first }
         }
         return all

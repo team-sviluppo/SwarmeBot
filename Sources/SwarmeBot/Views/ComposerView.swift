@@ -32,7 +32,9 @@ struct ComposerView: View {
         )
         VStack(alignment: .leading, spacing: 8) {
             if let candidates = mentionCandidates, !candidates.isEmpty {
-                MentionList(bots: candidates) { insertMention($0) }
+                MentionList(candidates: candidates, serverName: { id in model.remoteEngines.first { $0.id == id }?.name }) {
+                    insertMention($0.name)
+                }
             }
             if let candidates = skillCandidates, !candidates.isEmpty {
                 SkillSuggestionList(skills: candidates) { insertSkill($0) }
@@ -159,7 +161,7 @@ struct ComposerView: View {
             return
         }
         if let refused = unreadableForEndpoint(pending) {
-            model.lastError = tr("Il Local Endpoint riceve i file come testo: %@ non si può leggere. Allega testo, codice, CSV, JSON, Markdown, PDF o immagini.", refused)
+            model.lastError = tr("Il server compatibile OpenAI riceve i file come testo: %@ non si può leggere. Allega testo, codice, CSV, JSON, Markdown, PDF o immagini.", refused)
             return
         }
         drafts[threadId] = ""
@@ -281,22 +283,23 @@ struct ComposerView: View {
     // MARK: Mentions
 
     /// Room members matching the `@word` being typed at the end of the draft.
-    private var mentionCandidates: [Bot]? {
+    /// Members of the room, guests from servers included.
+    private var mentionCandidates: [MentionCandidate]? {
         guard let room = model.selectedRoom else { return nil }
         let text = drafts[threadId] ?? ""
         guard let at = text.lastIndex(of: "@") else { return nil }
         if at > text.startIndex, !text[text.index(before: at)].isWhitespace { return nil }
         let partial = text[text.index(after: at)...]
         guard !partial.contains(where: \.isWhitespace) else { return nil }
-        return room.memberIds.compactMap { model.state.bot($0) }.filter {
-            partial.isEmpty || $0.name.localizedCaseInsensitiveContains(partial)
-        }
+        let members = room.memberIds.compactMap { model.state.bot($0) }.map(MentionCandidate.bot)
+            + (room.guests ?? []).map(MentionCandidate.guest)
+        return members.filter { partial.isEmpty || $0.name.localizedCaseInsensitiveContains(partial) }
     }
 
-    private func insertMention(_ bot: Bot) {
+    private func insertMention(_ name: String) {
         var text = drafts[threadId] ?? ""
         guard let at = text.lastIndex(of: "@") else { return }
-        text.replaceSubrange(at..., with: "@\(bot.name) ")
+        text.replaceSubrange(at..., with: "@\(name) ")
         drafts[threadId] = text
     }
 }
@@ -359,20 +362,49 @@ private struct SkillSuggestionList: View {
     }
 }
 
+/// Someone an `@` can call in a room: one of its bots, or a guest from a server.
+private enum MentionCandidate: Identifiable {
+    case bot(Bot)
+    case guest(RoomGuest)
+
+    var id: String {
+        switch self {
+        case let .bot(bot): return bot.id
+        case let .guest(guest): return guest.memberId
+        }
+    }
+
+    var name: String {
+        switch self {
+        case let .bot(bot): return bot.name
+        case let .guest(guest): return guest.name
+        }
+    }
+}
+
 private struct MentionList: View {
-    let bots: [Bot]
-    let pick: (Bot) -> Void
+    let candidates: [MentionCandidate]
+    /// A guest's server, by id.
+    let serverName: (String) -> String?
+    let pick: (MentionCandidate) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(bots.prefix(6)) { bot in
+            ForEach(candidates.prefix(6)) { candidate in
                 Button {
-                    pick(bot)
+                    pick(candidate)
                 } label: {
                     HStack(spacing: 8) {
-                        BotAvatar(bot: bot, size: 24, animated: false)
-                        Text(bot.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
-                        Text(bot.title.isEmpty ? tr("Agente") : bot.title).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
+                        switch candidate {
+                        case let .bot(bot):
+                            BotAvatar(bot: bot, size: 24, animated: false)
+                            Text(bot.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
+                            Text(bot.title.isEmpty ? tr("Agente") : bot.title).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
+                        case let .guest(guest):
+                            SwarmeAvatar(color: guest.color, size: 24, state: .idle, animated: false)
+                            Text(guest.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
+                            Text(serverName(guest.peerId) ?? tr("server")).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
+                        }
                         Spacer()
                     }
                     .padding(.horizontal, 10)

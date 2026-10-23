@@ -2,19 +2,23 @@ import CompanionCore
 import SwarmeKit
 import SwiftUI
 
-/// ⌘, — profile, engines, connectors, control of this Mac, keys and services, DeepSeek Harness, updates.
+/// ⌘, — profile, engines, connectors, the phone, control of this Mac, keys and services, DeepSeek Harness, updates.
 struct SettingsView: View {
+    /// Debug aid for screenshots: `SWARMEBOT_SETTINGS_TAB=phone` opens on that pane.
+    @State private var tab = ProcessInfo.processInfo.environment["SWARMEBOT_SETTINGS_TAB"] ?? "general"
+
     var body: some View {
-        TabView {
-            GeneralPane().tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }
-            EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }
-            RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }
-            ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }
-            SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }
-            MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }
-            KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }
-            DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }
-            UpdatesPane().tabItem { Label(tr("Aggiornamenti"), systemImage: "arrow.down.circle") }
+        TabView(selection: $tab) {
+            GeneralPane().tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }.tag("general")
+            EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
+            RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }.tag("remote")
+            ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
+            SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
+            PhonePane().tabItem { Label(tr("Telefono"), systemImage: "iphone") }.tag("phone")
+            MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }.tag("mac")
+            KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
+            DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
+            UpdatesPane().tabItem { Label(tr("Aggiornamenti"), systemImage: "arrow.down.circle") }.tag("updates")
         }
         .frame(width: 920, height: 560)
     }
@@ -89,9 +93,9 @@ private struct EnginesPane: View {
                     Circle()
                         .fill(instance.snapshot.isAvailable ? Theme.success : Theme.danger)
                         .frame(width: 8, height: 8)
-                    ProviderMark(driverKind: instance.driverKind, name: instance.displayName ?? instance.driverKind, size: 16)
+                    ProviderMark(driverKind: instance.driverKind, name: instance.shownName, size: 16)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(instance.displayName ?? instance.driverKind).font(.system(size: 13, weight: .medium))
+                        Text(instance.shownName).font(.system(size: 13, weight: .medium))
                         Text(instance.driverKind).font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 }
@@ -253,7 +257,7 @@ private struct KeysPane: View {
                     }
                 }
             }
-            Section(tr("Local Endpoint (LiteLLM, vLLM, OpenAI-compatibile)")) {
+            Section(tr("Server compatibile OpenAI (LiteLLM, vLLM, Ollama…)")) {
                 HStack {
                     TextField(tr("URL base, es. http://127.0.0.1:4000/v1"), text: $endpointURL)
                     Button(tr("Salva")) { Task { await model.saveConfig(["localEndpoint": ["baseUrl": endpointURL]]) } }

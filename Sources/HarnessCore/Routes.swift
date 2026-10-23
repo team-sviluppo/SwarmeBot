@@ -338,18 +338,36 @@ public final class Routes {
             return ok(threadEvents(m[0], limit: min(2000, max(1, Int(r.query["limit"] ?? "") ?? 300))))
         }
 
-        // MARK: rooms (management only — room turns are not ported yet)
+        // MARK: mixed channels (MixedRooms.swift)
+        if path == "/api/peer-engines" {
+            if method == "PUT" { return .response(harness.setPeerEngines(try r.json())) }
+            if method == "GET" {
+                let engines = harness.peerEngines.values.sorted { $0.name < $1.name }
+                return ok(["engines": .array(engines.map { ["id": .string($0.id), "name": .string($0.name)] })])
+            }
+        }
+        if path == "/api/guest-turns", method == "POST" {
+            return .response(await harness.guestTurn(try r.json(), deviceId: r.deviceId ?? "local"))
+        }
+        if path == "/api/guest-turns/interrupt", method == "POST" {
+            return .response(await harness.interruptGuestTurn(try r.json(), deviceId: r.deviceId ?? "local"))
+        }
+
+        // MARK: rooms
         if path == "/api/groups", method == "POST" {
             let body = try r.json()
             let members = (body["memberIds"]?.array ?? []).compactMap(\.string).filter { store.bot($0) != nil }
-            guard !members.isEmpty else { return fail(400, "memberIds must name at least one bot") }
+            let guests = harness.parseGuests(body["guests"]) ?? []
+            guard !members.isEmpty || !guests.isEmpty else { return fail(400, "memberIds must name at least one bot") }
             let name = body["name"]?.string?.trimmingCharacters(in: .whitespaces) ?? ""
             var folder: String?
             if let cwd = body["cwd"], !cwd.isNull, cwd.string != "" {
                 guard let path = Self.existingFolder(cwd) else { return fail(400, "cwd must be an existing absolute folder") }
                 folder = path
             }
-            var group = store.createGroup(name: name.isEmpty ? (store.bot(members[0])?["name"]?.string ?? "Room") : name, memberIds: members)
+            let firstName = members.first.flatMap { store.bot($0)?["name"]?.string } ?? guests.first?["name"]?.string ?? "Room"
+            var group = store.createGroup(name: name.isEmpty ? firstName : name, memberIds: members)
+            if !guests.isEmpty { group = store.patchGroup(group["id"]!.string!, ["guests": .array(guests)]) ?? group }
             if let folder { group = store.patchGroup(group["id"]!.string!, ["cwd": .string(folder)]) ?? group }
             var out = harness.wireGroup(group)
             out["messages"] = .array([])
@@ -368,8 +386,14 @@ public final class Routes {
                 if let ids = body["memberIds"]?.array?.compactMap(\.string).filter({ store.bot($0) != nil }), !ids.isEmpty {
                     patch["memberIds"] = .strings(ids)
                 }
+                if let guests = harness.parseGuests(body["guests"]) {
+                    if existing["guest"] != nil { return fail(400, "a guest channel has no guests of its own") }
+                    patch["guests"] = guests.isEmpty ? .null : .array(guests)
+                }
                 if let responder = body["defaultResponder"] {
-                    let members = patch["memberIds"]?.array?.compactMap(\.string) ?? existing["memberIds"]?.array?.compactMap(\.string) ?? []
+                    var changed = existing
+                    for (key, value) in patch { changed[key] = value.isNull ? Optional<JSON>.none : value }
+                    let members = Store.responderIds(changed)
                     switch responder["kind"]?.string {
                     case "everyone", "mentions": patch["defaultResponder"] = ["kind": responder["kind"]!]
                     case "member" where members.contains(responder["botId"]?.string ?? ""):
@@ -395,6 +419,7 @@ public final class Routes {
             return ok(["group": .object(harness.wireGroup(group))])
         }
         if let m = match(#"^/api/groups/([\w-]+)/messages$"#, path), method == "POST" {
+            if store.group(m[0])?["guest"] != nil { return fail(409, "this channel is written from where it lives") }
             let text = (try r.json()["text"].flatMap(Harness.text) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if text.isEmpty { return fail(400, "text required") }
             try harness.startGroupTurn(groupId: m[0], text: text)

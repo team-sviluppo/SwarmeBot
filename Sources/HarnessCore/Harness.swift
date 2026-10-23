@@ -73,6 +73,13 @@ public final class Harness {
     /// One chain per room: members speak one at a time.
     var groupQueues: [String: Task<Void, Never>] = [:]
     var roomStallHandlers: [String: () -> Void] = [:]
+    /// Engines whose bots may be guests in this engine's rooms (MixedRooms.swift),
+    /// in memory only: the Mac app hands them over at every start.
+    var peerEngines: [String: PeerEngine] = [:]
+    /// The guest turn a room is waiting on, to stop it.
+    var peerTurns: [String: (peer: PeerEngine, conversationId: String, task: Task<GuestOutcome, Never>)] = [:]
+    /// How guest engines show where a mixed channel lives.
+    var hostName = "SwarmeBot"
     var unattendedBots: [String: Date] = [:]
     var delegationWatch: [String: (channelId: String?, toBotId: String)] = [:]
     /// Last session window per instance (UsageLimits.swift).
@@ -204,7 +211,8 @@ public final class Harness {
             if let group = self.store.groupByThread(turn.threadId), group["busyBotId"]?.string == turn.botId,
                self.groupSpeakers[turn.threadId]?["botId"]?.string == turn.botId {
                 self.groupSpeakers[turn.threadId] = nil
-                self.store.patchGroup(group["id"]?.string ?? "", ["busyBotId": .null, "unread": true])
+                // a mirror room is read on its host (MixedRooms.swift)
+                self.store.patchGroup(group["id"]?.string ?? "", group["guest"] == nil ? ["busyBotId": .null, "unread": true] : ["busyBotId": .null])
             }
             if Store.isBusy(self.store.bot(turn.botId)) { self.store.setActivity(turn.botId, "idle") }
         }
@@ -316,7 +324,12 @@ public final class Harness {
         return String(line.prefix(max - 1)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
-    func notify(_ kind: String, bot: JSONObject, threadId: String, detail: String) {
+    /// Every notification, with the request it is about when there is one:
+    /// the remote engine hands it to the phones' push relay (Push.swift).
+    /// Not on the wire: the `notify` frame stays as it is.
+    public var onNotify: ((_ notification: JSONObject, _ requestId: String?) -> Void)?
+
+    func notify(_ kind: String, bot: JSONObject, threadId: String, detail: String, requestId: String? = nil) {
         guard bot["notifications"]?.bool != false else { return }
         let name = bot["name"]?.string ?? "Bot"
         let body = Self.summarize(detail)
@@ -328,10 +341,12 @@ public final class Harness {
         case "takeover": title = "\(name) needs your hands"
         default: title = "\(name) finished"
         }
-        hub.broadcast(["kind": "notify", "notification": [
+        let notification: JSONObject = [
             "kind": .string(kind), "botId": bot["id"] ?? "", "botName": .string(name),
             "threadId": .string(threadId), "title": .string(title), "body": .string(body),
-        ]])
+        ]
+        hub.broadcast(["kind": "notify", "notification": .object(notification)])
+        onNotify?(notification, requestId)
     }
 
     // MARK: - The fold
@@ -471,7 +486,8 @@ public final class Harness {
             if let member = groupSpeakers[threadId], let room = store.groupByThread(threadId),
                room["busyBotId"]?.string == member["botId"]?.string, let memberId = member["botId"]?.string {
                 groupSpeakers[threadId] = nil
-                store.patchGroup(room["id"]?.string ?? "", ["busyBotId": .null, "unread": true])
+                // a mirror room is read on its host (MixedRooms.swift)
+                store.patchGroup(room["id"]?.string ?? "", room["guest"] == nil ? ["busyBotId": .null, "unread": true] : ["busyBotId": .null])
                 if Store.isBusy(store.bot(memberId)) {
                     store.setActivity(memberId, "idle")
                     store.patchBot(memberId, ["unread": true])
@@ -561,7 +577,7 @@ public final class Harness {
         DecisionLog.append(paths, shown)
         if let asker, let askerId {
             if Store.isBusy(asker) { store.setActivity(askerId, "waiting-on-you") }
-            notify(permission ? "approval" : "question", bot: asker, threadId: threadId, detail: summary)
+            notify(permission ? "approval" : "question", bot: asker, threadId: threadId, detail: summary, requestId: event.requestId)
         }
     }
 

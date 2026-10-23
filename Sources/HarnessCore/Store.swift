@@ -90,7 +90,7 @@ public final class Store {
         }
         for index in groups.indices {
             groups[index]["busyBotId"] = nil
-            let members = groups[index]["memberIds"]?.array?.compactMap(\.string) ?? []
+            let members = Self.responderIds(groups[index])
             groups[index]["defaultResponder"] = Self.normalizeResponder(
                 groups[index]["defaultResponder"], members: members, dm: groups[index]["dm"]?.truthy == true
             )
@@ -622,6 +622,16 @@ public final class Store {
 
     // MARK: Rooms
 
+    /// Who may be a room's default responder: its bots, then its guests
+    /// from other engines (MixedRooms.swift).
+    static func responderIds(_ group: JSONObject) -> [String] {
+        (group["memberIds"]?.array?.compactMap(\.string) ?? [])
+            + (group["guests"]?.array ?? []).compactMap { guest in
+                guard let peer = guest["peerId"]?.string, let bot = guest["botId"]?.string else { return nil }
+                return GuestId.make(peer: peer, bot: bot)
+            }
+    }
+
     static func normalizeResponder(_ value: JSON?, members: [String], dm: Bool) -> JSON {
         if dm { return ["kind": "mentions"] }
         switch value?["kind"]?.string {
@@ -655,7 +665,7 @@ public final class Store {
     public func patchGroup(_ id: String, _ patch: JSONObject) -> JSONObject? {
         guard let index = groupIndex(id) else { return nil }
         for (key, value) in patch { if value.isNull && key != "busyBotId" { groups[index][key] = Optional<JSON>.none } else { groups[index][key] = value } }
-        let members = groups[index]["memberIds"]?.array?.compactMap(\.string) ?? []
+        let members = Self.responderIds(groups[index])
         groups[index]["defaultResponder"] = Self.normalizeResponder(groups[index]["defaultResponder"], members: members, dm: groups[index]["dm"]?.truthy == true)
         saveGroups()
         emit(.group(groupId: id))

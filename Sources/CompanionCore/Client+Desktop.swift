@@ -103,9 +103,13 @@ public struct RoomPatch: Sendable {
     /// The channel's working folder; an empty string clears it. Refused (409)
     /// once the room has had its first turn.
     public var cwd: String?
+    /// Members from other engines; an empty list removes them all.
+    public var guests: [RoomGuest]?
 
-    public init(name: String? = nil, bulletin: String? = nil, memberIds: [String]? = nil, responder: String? = nil, responderBotId: String? = nil, cwd: String? = nil) {
+    public init(name: String? = nil, bulletin: String? = nil, memberIds: [String]? = nil, responder: String? = nil, responderBotId: String? = nil,
+                cwd: String? = nil, guests: [RoomGuest]? = nil) {
         self.cwd = cwd
+        self.guests = guests
         self.name = name
         self.bulletin = bulletin
         self.memberIds = memberIds
@@ -119,6 +123,7 @@ public struct RoomPatch: Sendable {
         if let bulletin { out["bulletin"] = bulletin }
         if let memberIds { out["memberIds"] = memberIds }
         if let cwd { out["cwd"] = cwd }
+        if let guests { out["guests"] = guests.map(\.body) }
         if let responder {
             var value: [String: Any] = ["kind": responder]
             if let responderBotId { value["botId"] = responderBotId }

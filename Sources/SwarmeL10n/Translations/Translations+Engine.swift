@@ -7,7 +7,7 @@ extension Translations {
         "Nessun modello": "No model",
         // AppModel+Desktop
         "Non è un JSON valido: incolla un oggetto come {\"mcpServers\": {…}}": "Not valid JSON: paste an object like {\"mcpServers\": {…}}",
-        "Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex, gli agenti ACP e il Local Endpoint.": "This bot's engine doesn't use connectors: they work with Claude, Codex, ACP agents and the Local Endpoint.",
+        "Il motore scelto per questo bot non usa i connettori: valgono con Claude, Codex, gli agenti ACP e il server compatibile OpenAI.": "This bot's engine doesn't use connectors: they work with Claude, Codex, ACP agents and the OpenAI-compatible server.",
         "Questo modello è un profilo Hermes: usa i suoi strumenti e ignora i connettori di SwarmeBot.": "This model is a Hermes profile: it uses its own tools and ignores SwarmeBot's connectors.",
         // HarnessLauncher
         "VACUUM INTO di messages.db è uscito con codice %@": "VACUUM INTO of messages.db exited with code %@",
@@ -28,7 +28,7 @@ extension Translations {
         "Chiave API xAI": "xAI API key",
         "Token Box (computer cloud)": "Box token (cloud computer)",
         "Chiave OpenCode Go": "OpenCode Go key",
-        "Chiave Local Endpoint": "Local Endpoint key",
+        "Chiave del server compatibile OpenAI": "OpenAI-compatible server key",
         "Portachiavi: %@": "Keychain: %@",
         "errore %@": "error %@",
         "Nessun archivio credenziali dell'app Electron trovato.": "No credential store from the Electron app was found.",

@@ -30,7 +30,7 @@ struct ChatHeader: View {
                 } else if let room = model.selectedRoom {
                     Image(systemName: "number").font(.system(size: 14)).foregroundStyle(Theme.secondary)
                     Text(room.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
-                    Text(tr("%@ membri", String(room.memberIds.count))).font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                    Text(tr("%@ membri", String(room.memberIds.count + (room.guests?.count ?? 0)))).font(.system(size: 12)).foregroundStyle(Theme.secondary)
                     if room.busyBotId != nil { ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 14, height: 14) }
                 }
             }
@@ -336,6 +336,7 @@ struct RoomSettingsSheet: View {
     @State private var name = ""
     @State private var bulletin = ""
     @State private var members: Set<String> = []
+    @State private var guests: Set<String> = []
     @State private var responder = "mentions"
     @State private var responderBot = ""
     @State private var folder = ""
@@ -344,8 +345,18 @@ struct RoomSettingsSheet: View {
     var body: some View {
         Form {
             TextField(tr("Nome"), text: $name)
-            TextField(tr("Bacheca (visibile a tutti i membri)"), text: $bulletin, axis: .vertical)
-                .lineLimit(2...5)
+            Section {
+                // a real multi-line editor: the instructions can be long
+                TextEditor(text: $bulletin)
+                    .font(.system(size: 13))
+                    .lineSpacing(2)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 120, maxHeight: 240)
+            } header: {
+                Text(tr("Istruzioni del canale"))
+            } footer: {
+                Text(tr("Le leggono tutti i membri a ogni turno, insieme alle loro istruzioni."))
+            }
             Picker(tr("Risponde"), selection: $responder) {
                 Text(tr("Solo chi è @menzionato")).tag("mentions")
                 Text(tr("Tutti")).tag("everyone")
@@ -354,6 +365,7 @@ struct RoomSettingsSheet: View {
             if responder == "member" {
                 Picker(tr("Membro"), selection: $responderBot) {
                     ForEach(memberBots) { Text($0.name).tag($0.id) }
+                    ForEach(chosenGuests, id: \.memberId) { Text(verbatim: $0.name).tag($0.memberId) }
                 }
             }
             RoomFolderField(folder: $folder, locked: room.pinnedCwd != nil)
@@ -365,9 +377,10 @@ struct RoomSettingsSheet: View {
                     ))
                 }
             }
+            if room.guest == nil { GuestSections(selected: $guests, known: room.guests ?? []) }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 580)
+        .frame(width: 440, height: 680)
         .toolbar {
             ToolbarItem(placement: .destructiveAction) {
                 Button(tr("Elimina canale"), role: .destructive) { confirmDelete = true }
@@ -376,15 +389,17 @@ struct RoomSettingsSheet: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button(tr("Salva")) {
                     let patch = RoomPatch(
-                        name: name, bulletin: bulletin, memberIds: Array(members),
+                        name: name, bulletin: bulletin, memberIds: members.isEmpty ? nil : Array(members),
                         responder: responder, responderBotId: responder == "member" ? responderBot : nil,
                         // once the first turn has pinned it the folder cannot move
-                        cwd: room.pinnedCwd == nil && folder != (room.cwd ?? "") ? folder : nil
+                        cwd: room.pinnedCwd == nil && folder != (room.cwd ?? "") ? folder : nil,
+                        guests: room.guest == nil && guests != Set((room.guests ?? []).map(\.memberId)) ? chosenGuests : nil
                     )
                     Task { await model.patch(room, patch) }
                     dismiss()
                 }
-                .disabled(members.isEmpty || (responder == "member" && !members.contains(responderBot)))
+                .disabled((members.isEmpty && guests.isEmpty)
+                          || (responder == "member" && !members.contains(responderBot) && !guests.contains(responderBot)))
             }
         }
         .confirmationDialog(tr("Eliminare #%@?", room.name), isPresented: $confirmDelete) {
@@ -397,6 +412,7 @@ struct RoomSettingsSheet: View {
             name = room.name
             bulletin = room.bulletin
             members = Set(room.memberIds)
+            guests = Set((room.guests ?? []).map(\.memberId))
             responder = room.defaultResponder.kind
             responderBot = room.defaultResponder.botId ?? room.memberIds.first ?? ""
             folder = room.pinnedCwd ?? room.cwd ?? ""
@@ -404,6 +420,52 @@ struct RoomSettingsSheet: View {
     }
 
     private var memberBots: [Bot] { members.compactMap { model.state.bot($0) } }
+
+    /// The guests ticked: the ones the room has keep their names, new ones come from the servers.
+    private var chosenGuests: [RoomGuest] {
+        let kept = (room.guests ?? []).filter { guests.contains($0.memberId) }
+        let added = model.roomGuests(guests.subtracting(kept.map(\.memberId)))
+        return kept + added
+    }
+}
+
+/// Bots of the remote servers, by server, to add to a channel of this Mac as
+/// guests: they answer from their server, in their own folders there.
+struct GuestSections: View {
+    @Binding var selected: Set<String>
+    /// The room's guests, shown even when their server is offline.
+    var known: [RoomGuest] = []
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let candidates = model.guestCandidates
+        let offline = known.filter { guest in !candidates.contains { $0.engine.id == guest.peerId && $0.bots.contains { $0.id == guest.botId } } }
+        ForEach(candidates, id: \.engine.id) { entry in
+            Section {
+                ForEach(entry.bots) { bot in
+                    let id = RoomGuest(peerId: entry.engine.id, botId: bot.id, name: bot.name, color: bot.color).memberId
+                    Toggle(isOn: Binding(get: { selected.contains(id) }, set: { if $0 { selected.insert(id) } else { selected.remove(id) } })) {
+                        HStack {
+                            BotAvatar(bot: bot, size: 28, animated: false)
+                            Text(bot.name)
+                        }
+                    }
+                }
+            } header: {
+                Text(tr("Ospiti da %@", entry.engine.name))
+            } footer: {
+                Text(tr("Rispondono dal loro server e lavorano nelle loro cartelle: la cartella del canale vale solo per i bot di questo Mac."))
+            }
+        }
+        if !offline.isEmpty {
+            Section(tr("Ospiti non raggiungibili")) {
+                ForEach(offline, id: \.memberId) { guest in
+                    Toggle(guest.name, isOn: Binding(get: { selected.contains(guest.memberId) },
+                                                     set: { if $0 { selected.insert(guest.memberId) } else { selected.remove(guest.memberId) } }))
+                }
+            }
+        }
+    }
 }
 
 /// The channel's working folder: where every member's tools run. Chosen with
@@ -456,6 +518,7 @@ struct NewRoomSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var members: Set<String> = []
+    @State private var guests: Set<String> = []
     @State private var folder = ""
 
     var body: some View {
@@ -475,6 +538,7 @@ struct NewRoomSheet: View {
                     }
                 }
             }
+            GuestSections(selected: $guests)
         }
         .formStyle(.grouped)
         .frame(width: 380, height: 520)
@@ -483,10 +547,11 @@ struct NewRoomSheet: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button(tr("Crea")) {
                     let ordered = model.state.bots.map(\.id).filter(members.contains)
-                    Task { await model.createRoom(name: name, memberIds: ordered, cwd: folder) }
+                    let chosen = model.roomGuests(guests)
+                    Task { await model.createRoom(name: name, memberIds: ordered, cwd: folder, guests: chosen) }
                     dismiss()
                 }
-                .disabled(members.isEmpty)
+                .disabled(members.isEmpty && guests.isEmpty)
             }
         }
     }

@@ -273,6 +273,10 @@ public struct Room: Codable, Hashable, Identifiable, Sendable {
     public var cwd: String?
     public var pinnedCwd: String?
     public var pinnedMessageId: String?
+    /// Members from other engines (a mixed channel hosted here).
+    public var guests: [RoomGuest]?
+    /// Set on a mirror: a mixed channel hosted elsewhere, written only there.
+    public var guest: GuestOf?
 }
 
 // MARK: - Responses

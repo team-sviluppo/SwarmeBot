@@ -106,6 +106,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let wanted = ProcessInfo.processInfo.environment["SWARMEBOT_SNAPSHOT_WINDOW"]
             let windows = NSApp.windows.filter { $0.isVisible && $0.contentView != nil }
+            if let wanted, !windows.contains(where: { $0.title == wanted }) {
+                FileHandle.standardError.write(Data("snapshot: no window \(wanted) among \(windows.map(\.title))\n".utf8))
+            }
             let window = wanted.flatMap { title in windows.first { $0.title == title } } ?? windows.first { $0.identifier?.rawValue.hasPrefix("main") == true } ?? windows.first
             let target = window?.attachedSheet ?? window
             guard let view = target?.contentView?.superview,

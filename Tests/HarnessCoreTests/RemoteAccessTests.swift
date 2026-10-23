@@ -143,7 +143,9 @@ final class RemoteGateTests: XCTestCase {
         let (access, token) = try makeAccess()
         var browser = remoteRequest("/api/bots", headers: ["authorization": "Bearer \(token)", "origin": "https://bot.example.it"])
         XCTAssertEqual(refusal(access.gate(&browser)), 403)
-        for path in ["/api/local-computer", "/api/local-computer/start", "/api/bots/abc/computer", "/api/bots/abc/computer/control"] {
+        // the device tokens of other engines are handed over by the Mac only (MixedRooms.swift)
+        for path in ["/api/local-computer", "/api/local-computer/start", "/api/bots/abc/computer", "/api/bots/abc/computer/control",
+                     "/api/peer-engines"] {
             var request = remoteRequest(path, headers: ["authorization": "Bearer \(token)"])
             XCTAssertEqual(refusal(access.gate(&request)), 501, path)
         }

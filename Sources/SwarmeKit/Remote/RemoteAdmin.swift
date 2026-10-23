@@ -29,6 +29,8 @@ public struct RemoteProbe: Equatable, Sendable {
     public var pi: String? { values["pi"] }
     public var caddy: String? { values["caddy"] }
     public var serviceActive: Bool { values["service"] == "active" }
+    /// The iOS app's push relay runs next to the engine (docs/push-relay.md).
+    public var pushRelayActive: Bool { values["pushRelay"] == "active" }
     public var isLinux: Bool { os != "macos" && !os.isEmpty }
 
     /// Ubuntu 24.04 and 26.04 are what the Linux engine is built for (R2);
@@ -204,6 +206,50 @@ public struct RemoteAdmin: Sendable {
                                          probe: probe, sudoPassword: sudoPassword, timeout: 180)
         let socketDirectory = RemoteScripts.values(result.text)["socketDir"] ?? "~/.swarmebot/run"
         return LinuxSetup(socketDirectory: socketDirectory, chatURL: chatURL)
+    }
+
+    // MARK: Push relay (docs/push-relay.md)
+
+    /// The iOS app's push relay next to the engine: the same binary
+    /// (`swarme-harness push-relay`), its own service, `<prefix>/push` in
+    /// Caddy. The OneSignal key goes on stdin into a 0600 file the engine
+    /// does not read; the relay's secret is made on the server. Returns the
+    /// relay's URL, for the app's build (`SWARMEBOT_PUSH_RELAY`).
+    public func installPushRelay(appId: String, apiKey: String, caddy: CaddySettings, chatURL: String, probe: RemoteProbe,
+                                 sudoPassword: String?) async throws -> String {
+        let keys = try JSONSerialization.data(withJSONObject: ["appId": appId.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                               "apiKey": apiKey.trimmingCharacters(in: .whitespacesAndNewlines)])
+        try await ssh.run(RemoteScripts.command(RemoteScripts.configurePushRelay), stdin: keys, timeout: 60)
+        if probe.isMac {
+            _ = try await runAsRoot(RemoteScripts.rootMacPush, [identity.user, caddy.prefix], probe: probe, sudoPassword: sudoPassword,
+                                    timeout: 120)
+        } else {
+            let socketDirectory = "/run/swarmebot/\(identity.user)"
+            try await ssh.run(RemoteScripts.command(RemoteScripts.servicePushLinux, [socketDirectory]), timeout: 90)
+            _ = try await runAsRoot(RemoteScripts.caddyLinux, [identity.user, caddy.site, caddy.prefix, socketDirectory, caddy.tls.rawValue],
+                                    probe: probe, sudoPassword: sudoPassword, timeout: 180)
+        }
+        let relay = (chatURL.hasSuffix("/") ? String(chatURL.dropLast()) : chatURL) + "/push"
+        try await Self.waitForRelay(relay)
+        return relay
+    }
+
+    /// The relay answers on its public URL (Caddy reloads in a moment).
+    static func waitForRelay(_ relay: String, session: URLSession = .shared) async throws {
+        guard let url = URL(string: relay + "/health") else { throw ProcessRunner.Failure(message: tr("L'URL del relay non è valido")) }
+        let deadline = Date().addingTimeInterval(30)
+        var last = ""
+        while Date() < deadline {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 10
+            if let (data, response) = try? await session.data(for: request) {
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status == 200, String(decoding: data, as: UTF8.self).contains("swarme-push-relay") { return }
+                last = "HTTP \(status)"
+            }
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+        throw ProcessRunner.Failure(message: tr("Il relay è installato, ma %@ non risponde da qui (%@)", relay, last.isEmpty ? tr("nessuna risposta") : last))
     }
 
     // MARK: CLI logins

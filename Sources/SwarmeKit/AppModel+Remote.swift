@@ -102,7 +102,41 @@ extension AppModel {
     }
 
     /// A peer for every engine but the shown one; none for engines forgotten.
+    /// Bots of the remote engines that may join a channel of this Mac as
+    /// guests (a mixed channel): only while this Mac's engine is shown.
+    public var guestCandidates: [(engine: RemoteEngine, bots: [Bot])] {
+        guard engineChoice == .local else { return [] }
+        return remoteEngines.compactMap { engine in
+            guard let peer = peers[.remote(engine.id)], !peer.visibleBots.isEmpty else { return nil }
+            return (engine, peer.visibleBots)
+        }
+    }
+
+    /// The guests a selection of `RoomGuest.memberId`s names, from the servers' bots.
+    public func roomGuests(_ ids: Set<String>) -> [RoomGuest] {
+        guestCandidates.flatMap { entry in
+            entry.bots.map { RoomGuest(peerId: entry.engine.id, botId: $0.id, name: $0.name, color: $0.color, title: $0.title.isEmpty ? nil : $0.title) }
+        }
+        .filter { ids.contains($0.memberId) }
+    }
+
+    /// Tell this Mac's engine which servers its channels may call, with this
+    /// Mac's device token for each. The engine keeps them in memory only, so
+    /// this runs again whenever it (re)starts or the servers change.
+    func handOverPeerEngines() {
+        guard let localPort else { return }
+        let client = CompanionClient(connection: Connection(name: "Questo Mac", host: "127.0.0.1", port: localPort), token: nil)
+        let engines = remoteEngines.compactMap { engine -> (id: String, name: String, url: String, token: String)? in
+            guard let token = RemoteEngineStore.token(engineId: engine.id) else { return nil }
+            let url = engine.chatURL.hasSuffix("/") ? String(engine.chatURL.dropLast()) : engine.chatURL
+            return (engine.id, engine.name, url, token)
+        }
+        let name = Host.current().localizedName ?? "Mac"
+        Task { try? await client.setPeerEngines(name: name, engines: engines) }
+    }
+
     func syncPeers() {
+        handOverPeerEngines()
         var wanted: [EngineChoice] = remoteEngines.map { .remote($0.id) }
         if localPort != nil { wanted.append(.local) }
         wanted.removeAll { $0 == engineChoice }
@@ -237,6 +271,24 @@ extension AppModel {
     }
 
     /// Claude Code and omp on a server this Mac administers, as its setup does (ServerAgents).
+    /// Host the iOS app's push relay on a server this Mac administers
+    /// (docs/push-relay.md). Returns the relay's URL.
+    public func installPushRelay(on engine: RemoteEngine, appId: String, apiKey: String, sudoPassword: String?) async throws -> String {
+        guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
+        guard let site = engine.site, let prefix = engine.prefix else {
+            throw ProcessRunner.Failure(message: tr("Di %@ non conosco il sito Caddy: rifai la configurazione del server da questo Mac", engine.name))
+        }
+        let admin = RemoteAdmin(identity: identity, store: identityStore)
+        let caddy = CaddySettings(site: site, prefix: prefix, tls: engine.tls.flatMap(CaddySettings.TLS.init(rawValue:)) ?? .public)
+        let relay = try await admin.installPushRelay(appId: appId, apiKey: apiKey, caddy: caddy, chatURL: engine.chatURL,
+                                                     probe: try await admin.probe(), sudoPassword: sudoPassword)
+        var updated = engine
+        updated.pushRelayURL = relay
+        try remoteStore.save(updated)
+        reloadRemoteEngines()
+        return relay
+    }
+
     public func configureAgents(on engine: RemoteEngine) async throws -> [String] {
         guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
         let admin = RemoteAdmin(identity: identity, store: identityStore)

@@ -121,21 +121,7 @@ extension Harness {
 /// tool loop (docs/plans/2026-10-15-connettori-mcp.md §5).
 @MainActor
 public final class ConnectorGateway {
-    public struct Tool: Sendable {
-        public var connectorId: String
-        public var connectorName: String
-        public var name: String
-        public var description: String
-        public var inputSchema: JSON
-
-        public init(connectorId: String, connectorName: String, name: String, description: String, inputSchema: JSON) {
-            self.connectorId = connectorId
-            self.connectorName = connectorName
-            self.name = name
-            self.description = description
-            self.inputSchema = inputSchema
-        }
-    }
+    public typealias Tool = ChatTool
 
     public struct Result: Sendable {
         public var text: String
@@ -194,24 +180,8 @@ public final class ConnectorGateway {
         }
     }
 
-    /// An MCP result as the text a chat model reads: the text parts, else
-    /// the structured content; pictures and binaries become a note.
+    /// An MCP result as the text a chat model reads (`MCPClient.resultText`).
     static func text(of result: JSON) -> String {
-        var parts: [String] = []
-        for item in result["content"]?.array ?? [] {
-            switch item["type"]?.string {
-            case "text": if let text = item["text"]?.string { parts.append(text) }
-            case "image": parts.append("[immagine dal connettore omessa]")
-            case "audio": parts.append("[audio dal connettore omesso]")
-            case "resource":
-                if let text = item["resource"]?["text"]?.string { parts.append(text) } else { parts.append("[risorsa \(item["resource"]?["uri"]?.string ?? "") omessa]") }
-            case "resource_link": parts.append("[link: \(item["uri"]?.string ?? "")]")
-            default: break
-            }
-        }
-        if parts.isEmpty, let structured = result["structuredContent"], !structured.isNull { parts.append(structured.serialized()) }
-        let text = parts.joined(separator: "\n")
-        guard text.count > maxResultCharacters else { return text.isEmpty ? "(nessun risultato)" : text }
-        return String(text.prefix(maxResultCharacters)) + "\n…troncato (\(text.count) caratteri in tutto)"
+        MCPClient.resultText(result, limit: maxResultCharacters)
     }
 }

@@ -13,11 +13,18 @@ struct ChatView: View {
                 ChatHeader()
                 TranscriptView(threadId: threadId)
                     .id(threadId)
-                ComposerView(threadId: threadId)
-                    .frame(maxWidth: Theme.transcriptMaxWidth)
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 24)
-                    .padding(.top, 8)
+                if let host = model.selectedRoom?.guest {
+                    // a mirror of a mixed channel: written where it lives
+                    Text(tr("Canale misto di %@: si scrive da lì.", host.hostName ?? tr("un altro dispositivo")))
+                        .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                        .padding(.bottom, 24).padding(.top, 8)
+                } else {
+                    ComposerView(threadId: threadId)
+                        .frame(maxWidth: Theme.transcriptMaxWidth)
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 24)
+                        .padding(.top, 8)
+                }
             }
             .frame(maxWidth: .infinity)
         }
@@ -429,6 +436,8 @@ struct PromptParts {
         var files: [String] = []
         extract(#"<attached-image\s+path="([^"]*)"\s*/?>\n?"#, into: &images)
         extract(#"<attached-file\s+path="([^"]*)"\s*/?>\n?"#, into: &files)
+        // a PDF's text the phone extracted and put in the prompt: shown as its name
+        extract(#"<attached-file name="([^"]*)"[^>]*>[\s\S]*?</attached-file>\n*"#, into: &files)
         var pasted: [String] = []
         extract(#"<pasted-text index="(\d+)">[\s\S]*?</pasted-text>"#, into: &pasted)
         self.images = images
@@ -759,7 +768,7 @@ private struct LiveTail: View {
             ReasoningView(text: reasoning, live: model.live.text[threadId]?.isEmpty ?? true)
         }
         if let streaming = model.live.text[threadId], !streaming.isEmpty {
-            BotBubble(color: speaker?.color) { MarkdownText(source: streaming, caret: true) }
+            BotBubble(color: speaker?.color) { MarkdownText(source: streaming) }
         }
         // under the streaming reply too: text arriving does not mean the
         // turn is over, and the indicator keeps one identity (and its clock)

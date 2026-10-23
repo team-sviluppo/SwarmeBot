@@ -394,7 +394,9 @@ struct SidebarView: View {
         }
     }
     private var filteredRooms: [Room] {
-        let rooms = model.state.rooms.filter { $0.dm != true }
+        // not the mirrors of this Mac's own mixed channels on the server shown
+        let me = model.activeRemoteEngine?.deviceId
+        let rooms = model.state.rooms.filter { $0.dm != true && ($0.guest == nil || $0.guest?.deviceId != me) }
         guard !query.isEmpty else { return rooms }
         return rooms.filter { matches($0.name) }
     }
@@ -603,7 +605,8 @@ private struct RoomRow: View {
                 }
                 .frame(height: 19.5)
                 HStack {
-                    Text(members.map(\.name).joined(separator: ", "))
+                    Text(room.guest.map { tr("Specchio di %@", $0.hostName ?? tr("un altro dispositivo")) }
+                         ?? (members.map(\.name) + (room.guests ?? []).map(\.name)).joined(separator: ", "))
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.secondary)
                         .lineLimit(1)

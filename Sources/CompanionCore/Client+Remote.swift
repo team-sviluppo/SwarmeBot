@@ -71,6 +71,40 @@ extension CompanionClient {
     }
 }
 
+/// A phone's push subscription on a remote engine (docs/plans/2026-10-22-app-ios.md §6).
+public struct PushSubscription: Codable, Hashable, Identifiable, Sendable {
+    public var id: String
+    public var deviceId: String
+    public var relayUrl: String
+    public var kinds: [String]
+    public var createdAt: Double?
+}
+
+private struct PushSubscriptionList: Codable {
+    var subscriptions: [PushSubscription]
+}
+
+private struct PushSubscriptionCreated: Codable {
+    var subscription: PushSubscription
+}
+
+extension CompanionClient {
+    /// Hand the engine this phone's relay token; it replaces one with the same token.
+    public func subscribePush(token: String, relayUrl: String, kinds: [String]? = nil) async throws -> PushSubscription {
+        var body: [String: Any] = ["pushToken": token, "relayUrl": relayUrl]
+        if let kinds { body["kinds"] = kinds }
+        return try await send(try makeRequest("POST", "/api/push/subscriptions", body: body), as: PushSubscriptionCreated.self).subscription
+    }
+
+    public func pushSubscriptions() async throws -> [PushSubscription] {
+        try await send(try makeRequest("GET", "/api/push/subscriptions"), as: PushSubscriptionList.self).subscriptions
+    }
+
+    public func unsubscribePush(_ id: String) async throws {
+        try await send(try makeRequest("DELETE", "/api/push/subscriptions/\(id)"))
+    }
+}
+
 /// What the pairing QR carries (§4.3): where the engine is and a one-time
 /// code — never a token. `swarmebot://pair?url=…&code=…&name=…`
 public struct RemotePairingLink: Equatable, Sendable {
