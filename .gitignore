@@ -6,6 +6,8 @@ build/
 release/
 .env.mac-release.local
 Resources/linux-engines.json
+docs/
+scripts/
 
 # iOS app: generated project, local signing
 iOS/Local.xcconfig
