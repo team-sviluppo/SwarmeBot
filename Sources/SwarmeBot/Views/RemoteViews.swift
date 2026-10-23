@@ -11,6 +11,7 @@ import SwiftUI
 
 struct RemoteServersPane: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     @State private var adding = false
     @State private var pairingWithCode = false
     @State private var devicesFor: RemoteEngine?
@@ -51,6 +52,8 @@ struct RemoteServersPane: View {
                             }
                         }
                         Spacer()
+                        Button(tr("Impostazioni server remoto")) { openWindow(id: "remote-settings", value: engine.id) }
+                            .fixedSize()
                         Menu(tr("Azioni")) {
                             Button(tr("Mostra i suoi bot")) { model.select(engine: .remote(engine.id)) }
                             Button(tr("Abbina un telefono o un altro Mac…")) { qrFor = engine }

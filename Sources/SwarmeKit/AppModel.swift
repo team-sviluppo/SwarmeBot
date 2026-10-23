@@ -76,11 +76,25 @@ public final class AppModel {
     /// Hooks the app layer sets: system notifications and the Dock badge.
     @ObservationIgnored public var onNotify: ((NotificationFrame) -> Void)?
     @ObservationIgnored public var onUnreadChange: ((Int) -> Void)?
+    /// A settings window's model (AppModel+Settings.swift): config, engines,
+    /// connectors and skills of one engine, no chats, no harness of its own.
+    @ObservationIgnored public private(set) var settingsOnly = false
+    @ObservationIgnored weak var owner: AppModel?
+    /// The settings-only models of the engines the window does not show.
+    @ObservationIgnored var settingsModels: [EngineChoice: AppModel] = [:]
 
     public init() {
         launcher.onChange = { [weak self] state in self?.harnessChanged(state) }
         remoteEngines = remoteStore.all()
         engineChoice = EngineChoice.restored(from: remoteEngines)
+    }
+
+    init(settingsFor choice: EngineChoice, owner: AppModel) {
+        settingsOnly = true
+        self.owner = owner
+        remoteEngines = owner.remoteEngines
+        engineChoice = choice
+        localPort = owner.localPort
     }
 
     // MARK: - Lifecycle
@@ -102,6 +116,8 @@ public final class AppModel {
     public var engine: HarnessEngine { HarnessEngine.selected }
 
     public func retry() {
+        // restarting this Mac's engine is the window's model's job
+        if settingsOnly, let owner { return owner.retry() }
         streamTask?.cancel()
         streamTask = nil
         start()
@@ -109,6 +125,7 @@ public final class AppModel {
 
     private func harnessChanged(_ harness: HarnessState) {
         // the local engine's progress only matters while it is the one shown
+        if case let .running(port, _) = harness { localEngineRunning(on: port) }
         guard engineChoice == .local else {
             if case let .running(port, _) = harness {
                 localPort = port
@@ -146,18 +163,22 @@ public final class AppModel {
                     reconnectDelay = 0
                     if case let .hello(helloCursor, resumed) = frame.frame {
                         if !resumed {
-                            try await hydrate()
+                            if !settingsOnly { try await hydrate() }
                             cursor = helloCursor
                         }
                         status = .live
                         Task { await self.refreshInstances() }
                         Task { await self.refreshConfig() }
-                        Task { await self.refreshAutomations() }
+                        if !settingsOnly { Task { await self.refreshAutomations() } }
                         Task { await self.refreshMCPConnectors() }
                         Task { await self.refreshSkills() }
                         continue
                     }
                     advance(to: frame.seq)
+                    if settingsOnly {
+                        settingsFrame(frame.frame)
+                        continue
+                    }
                     switch frame.frame {
                     case let .runtime(event):
                         // the hot path: never touches `state`

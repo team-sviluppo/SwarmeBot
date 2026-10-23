@@ -17,10 +17,9 @@ History you need to read the docs correctly:
 - The Swift engine is now the only engine the app starts (`HarnessEngine.selected == .swift`) and it
   works on the **real data** in `~/.swarmebot` (backed up once to
   `~/Library/Application Support/SwarmeBot/backup-before-swift-engine`). Node and Electron
-  leftovers are still in the code: the `HarnessEngine.node` case, the embedded-`node` and
-  `../SwarmeBot` mentions in `scripts/bundle-app.sh` and `scripts/release-mac.sh`, and the
-  "Dall'app Electron" key import in Settings. Don't build on them. The README is user-facing
-  and must not mention Electron or Node.
+  leftovers are still in the code: the `HarnessEngine.node` case and the embedded-`node` and
+  `../SwarmeBot` mentions in `scripts/bundle-app.sh` and `scripts/release-mac.sh`. Don't build on
+  them. The README is user-facing and must not mention Electron or Node.
 - This repo used to be called `SwarmeBotSwift`; older notes refer to it by that name.
 
 The project language is **Italian** for UI strings, plans and design docs. Code, code comments

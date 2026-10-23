@@ -1,8 +1,9 @@
 // Remote engines in the window — bot-remoto §7.
 //
-// One engine at a time in the window: the chat, inspector, automations and
-// settings are those of the engine whose chat is open, this Mac's or a remote
-// one. The sidebar lists every engine's bots (the others through an
+// One engine at a time in the window: the chat, inspector and automations
+// are those of the engine whose chat is open, this Mac's or a remote one.
+// Settings are not: ⌘, is this Mac's, a server has its own window
+// (AppModel+Settings.swift). The sidebar lists every engine's bots (the others through an
 // EnginePeer each); opening a chat of another engine switches to it, which
 // re-points the client (chat URL, device token) and hydrates from scratch.
 import CompanionCore
@@ -44,6 +45,7 @@ extension AppModel {
         remoteEngines = remoteStore.all()
         if case let .remote(id) = engineChoice, !remoteEngines.contains(where: { $0.id == id }) { select(engine: .local) }
         syncPeers()
+        syncSettingsModels()
     }
 
     /// The engine a sidebar row belongs to, for the engines not shown.
@@ -81,6 +83,8 @@ extension AppModel {
         taken?.stop()
         engineChoice = choice
         AppPaths.defaults.set(choice.saved, forKey: EngineChoice.defaultsKey)
+        // its settings window now uses this model
+        closeSettings(for: choice)
         streamTask?.cancel()
         streamTask = nil
         // the peer's bots keep the sidebar filled until the hydrate replaces them

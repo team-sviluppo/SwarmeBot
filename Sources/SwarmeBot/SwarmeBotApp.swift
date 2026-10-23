@@ -34,6 +34,17 @@ struct SwarmeBotApp: App {
         }
         .defaultSize(width: 720, height: 560)
 
+        // a server's settings (Impostazioni › Server remoti), one window per server
+        WindowGroup(id: "remote-settings", for: String.self) { $engineId in
+            if let engineId {
+                RemoteSettingsView(engineId: engineId)
+                    .environment(delegate.model)
+                    .appLanguage()
+                    .appAppearance()
+            }
+        }
+        .windowResizability(.contentSize)
+
         Settings {
             SettingsView()
                 .environment(delegate.model)

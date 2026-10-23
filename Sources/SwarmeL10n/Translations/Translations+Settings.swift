@@ -53,20 +53,22 @@ extension Translations {
         "Accedi": "Sign in",
         "Documentazione": "Documentation",
         "Fatto. Puoi chiudere questa finestra.": "Done. You can close this window.",
+        "Questi comandi vanno eseguiti sul server: Server remoti › Azioni › Apri un terminale sul server.": "Run these commands on the server: Remote servers › Actions › Open a terminal on the server.",
+
+        // A server's settings window
+        "Impostazioni server remoto": "Remote server settings",
+        "[SERVER REMOTO] - %@": "[REMOTE SERVER] - %@",
+        "Questo server non è più tra i server remoti di questo Mac.": "This server is no longer among this Mac's remote servers.",
 
         // Keys and services
         "Le chiavi restano nel Portachiavi di macOS e arrivano al motore all'avvio; non vengono scritte in config.json.": "Keys stay in the macOS Keychain and reach the engine at launch; they are not written to config.json.",
+        "Le chiavi vanno al motore del server, che le tiene nel suo secrets.json (leggibile solo da lui); non passano dal Portachiavi di questo Mac e non vengono scritte in config.json.": "Keys go to the server's engine, which keeps them in its own secrets.json (readable only by it); they don't pass through this Mac's Keychain and are not written to config.json.",
         "Chiavi": "Keys",
         "Configurata": "Configured",
         "Server compatibile OpenAI (LiteLLM, vLLM, Ollama…)": "OpenAI-Compatible Server (LiteLLM, vLLM, Ollama…)",
         "URL base, es. http://127.0.0.1:4000/v1": "Base URL, e.g. http://127.0.0.1:4000/v1",
         "VPS": "VPS",
         "Alias SSH (da ~/.ssh/config)": "SSH alias (from ~/.ssh/config)",
-        "Dall'app Electron": "From the Electron app",
-        "Importa le chiavi salvate dalla versione Electron. macOS chiederà il permesso di leggere la voce \"SwarmeBot Safe Storage\" del Portachiavi.": "Import the keys saved by the Electron version. macOS will ask for permission to read the \"SwarmeBot Safe Storage\" Keychain item.",
-        "Importa credenziali": "Import credentials",
-        "Nessuna chiave da importare.": "No keys to import.",
-        "Importate: %@. Riavvia SwarmeBot per usarle.": "Imported: %@. Restart SwarmeBot to use them.",
 
         // DeepSeek Harness
         "Connessione": "Connection",

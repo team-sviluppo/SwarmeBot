@@ -31,10 +31,5 @@ extension Translations {
         "Chiave del server compatibile OpenAI": "OpenAI-compatible server key",
         "Portachiavi: %@": "Keychain: %@",
         "errore %@": "error %@",
-        "Nessun archivio credenziali dell'app Electron trovato.": "No credential store from the Electron app was found.",
-        "Chiave 'SwarmeBot Safe Storage' non leggibile dal Portachiavi (%@).": "Couldn't read the 'SwarmeBot Safe Storage' key from the Keychain (%@).",
-        "Archivio Electron in un formato non riconosciuto: %@": "The Electron store is in an unrecognized format: %@",
-        "JSON non valido": "invalid JSON",
-        "prefisso mancante": "missing prefix",
     ]
 }

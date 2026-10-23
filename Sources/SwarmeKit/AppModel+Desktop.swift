@@ -267,6 +267,11 @@ extension AppModel {
     // MARK: - Settings
 
     public func saveCredential(_ credential: WorkspaceCredential, _ value: String) async {
+        // a server keeps its keys in its own secrets.json, never in this Mac's Keychain
+        if isRemote {
+            await saveConfig(credential.configPatch(value.trimmingCharacters(in: .whitespacesAndNewlines)), externalSecrets: true)
+            return
+        }
         do {
             try CredentialStore.set(credential, value)
         } catch {
