@@ -33,8 +33,14 @@ for arch in "${arches[@]}"; do
     "$IMAGE" bash -euo pipefail -c '
       apt-get update -qq >/dev/null
       apt-get install -y -qq libsqlite3-dev >/dev/null
-      swift build --package-path /src --scratch-path /build --product swarme-harness -c release --static-swift-stdlib
-      cp /build/release/swarme-harness /out/swarme-harness-'"$arch"'
+      # /src is read-only. Swift 6.4 opens Package.resolved read-write to refresh
+      # pins (EROFS, errno 30, reported as an I/O error while reading). Build from
+      # a writable copy on the cache volume; scratch stays beside it.
+      rm -rf /build/src
+      mkdir -p /build/src
+      tar -C /src --exclude .build --exclude .git --exclude .swiftpm --exclude build --exclude release -cf - . | tar -C /build/src -xf -
+      swift build --package-path /build/src --scratch-path /build/spm --product swarme-harness -c release --static-swift-stdlib
+      cp /build/spm/release/swarme-harness /out/swarme-harness-'"$arch"'
       strip /out/swarme-harness-'"$arch"'
     '
   (cd "$OUT" && shasum -a 256 "swarme-harness-$arch" | cut -d" " -f1 > "swarme-harness-$arch.sha256")
