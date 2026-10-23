@@ -249,6 +249,8 @@ struct ModelPickerPopover: View {
                     Text(tr("Nessun motore configurato"))
                         .foregroundStyle(Theme.secondary)
                         .padding()
+                        // the list may have failed to load (a slow server): ask again
+                        .task { if model.instances.isEmpty { await model.refreshInstances() } }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -9,7 +9,12 @@ extension AppModel {
 
     public func refreshConfig() async {
         guard let client else { return }
-        if let status = try? await client.config() { config = status }
+        do {
+            config = try await client.config()
+            loadError = nil
+        } catch {
+            loadError = tr("Non riesco a leggere la configurazione di %@: %@", engineName, error.localizedDescription)
+        }
     }
 
     public func refreshAutomations() async {

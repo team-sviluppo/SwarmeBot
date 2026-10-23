@@ -419,7 +419,11 @@ public struct CompanionClient: Sendable {
     }
 
     public func instances() async throws -> [Instance] {
-        try await send(try makeRequest("GET", "/api/instances"), as: InstanceList.self).instances
+        var request = try makeRequest("GET", "/api/instances")
+        // the engine probes every CLI and remote catalog in turn: on a server
+        // with an endpoint that answers slowly this takes well over twenty seconds
+        request.timeoutInterval = 90
+        return try await send(request, as: InstanceList.self).instances
     }
 
     /// The CLI an instance runs (`omp` for the pi driver); "" is the driver's default.

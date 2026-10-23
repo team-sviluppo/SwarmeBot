@@ -95,6 +95,7 @@ extension AppModel {
         stateVersion &+= 1
         instances = []
         config = nil
+        loadError = nil
         mcpConnectors = []
         skills = []
         skillsFolder = nil

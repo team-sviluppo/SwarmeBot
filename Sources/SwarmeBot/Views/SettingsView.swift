@@ -28,6 +28,7 @@ struct SettingsView: View {
             DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
             UpdatesPane().tabItem { Label(tr("Aggiornamenti"), systemImage: "arrow.down.circle") }.tag("updates")
         }
+        .safeAreaInset(edge: .bottom) { SettingsProblem() }
         .frame(width: 920, height: 560)
     }
 }
@@ -49,6 +50,7 @@ struct RemoteSettingsView: View {
                 KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
                 DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
             }
+            .safeAreaInset(edge: .bottom) { SettingsProblem() }
             .frame(width: 920, height: 560)
             .navigationTitle(tr("[SERVER REMOTO] - %@", engine.name))
             .environment(app.settingsModel(for: .remote(engineId)))
@@ -57,6 +59,33 @@ struct RemoteSettingsView: View {
             Text(tr("Questo server non è più tra i server remoti di questo Mac."))
                 .foregroundStyle(.secondary)
                 .frame(width: 420, height: 160)
+        }
+    }
+}
+
+/// What went wrong reading or saving this engine's settings: without it a
+/// server that does not answer looks like one with empty settings.
+private struct SettingsProblem: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let problem = model.lastError ?? model.loadError {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+                Text(problem).font(.system(size: 12)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Button(tr("Riprova")) {
+                    model.lastError = nil
+                    Task {
+                        await model.refreshConfig()
+                        await model.refreshInstances()
+                    }
+                }
+                Button { model.lastError = nil; model.loadError = nil } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+            }
+            .padding(10)
+            .background(.bar)
         }
     }
 }
@@ -98,9 +127,12 @@ private struct GeneralPane: View {
             }
         }
         .formStyle(.grouped)
-        // a settings window's own model gets the config after it appears
-        .onAppear(perform: load)
-        .onChange(of: model.config == nil) { _, _ in load() }
+        // shown again: what the engine has now, not what this window read before
+        .task {
+            load()
+            await model.refreshConfig()
+            load()
+        }
     }
 
     private func load() {
@@ -332,8 +364,11 @@ private struct KeysPane: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear(perform: load)
-        .onChange(of: model.config == nil) { _, _ in load() }
+        .task {
+            load()
+            await model.refreshConfig()
+            load()
+        }
     }
 
     private func load() {

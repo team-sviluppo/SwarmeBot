@@ -9,7 +9,7 @@ extension Translations {
         "Nella build dell'app iOS (iOS/Local.xcconfig o Shared.xcconfig) metti:": "In the iOS app's build (iOS/Local.xcconfig or Shared.xcconfig) set:",
         "OneSignal App ID": "OneSignal App ID",
         "OneSignal REST API key": "OneSignal REST API key",
-        "Password di sudo (se il server la chiede)": "sudo password (if the server asks for one)",
+        "Password di sudo di %@ (se il server la chiede)": "sudo password of %@ (if the server asks for one)",
         "Installo il relay sul server…": "Installing the relay on the server…",
         "Aggiorna le chiavi": "Update Keys",
         "Di %@ non conosco il sito Caddy: rifai la configurazione del server da questo Mac": "I don't know %@'s Caddy site: set the server up again from this Mac",
@@ -191,7 +191,7 @@ extension Translations {
             "The key was added, but the server doesn't accept it: check PubkeyAuthentication in sshd",
         "Risposta inattesa dal server": "Unexpected response from the server",
         "Serve la password di sudo": "The sudo password is required",
-        "Password di sudo non accettata": "sudo password not accepted",
+        "Password di sudo non accettata: serve la password dell'utente %@ sul server": "sudo password not accepted: it must be the password of the user %@ on the server",
         "L'utente %@ non può usare sudo: serve root una volta per Caddy e il servizio":
             "User %@ can't use sudo: root is needed once for Caddy and the service",
         "Su questo Mac non c'è una configurazione di pi (%@)": "There is no pi configuration on this Mac (%@)",

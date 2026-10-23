@@ -51,6 +51,8 @@ public final class AppModel {
     public var selection: ChatID?
     /// The last error an action produced, for a transient banner.
     public var lastError: String?
+    /// Config or engines could not be read: settings would show empty fields.
+    public var loadError: String?
 
     @ObservationIgnored private let launcher = HarnessLauncher()
     @ObservationIgnored public internal(set) var client: CompanionClient?
@@ -245,7 +247,12 @@ public final class AppModel {
 
     public func refreshInstances() async {
         guard let client else { return }
-        if let list = try? await client.instances() { instances = list }
+        do {
+            instances = try await client.instances()
+            loadError = nil
+        } catch {
+            loadError = tr("Non riesco a leggere i motori di %@: %@", engineName, error.localizedDescription)
+        }
     }
 
     private func advance(to seq: Int?) {

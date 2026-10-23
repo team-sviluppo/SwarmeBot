@@ -159,7 +159,7 @@ public struct RemoteAdmin: Sendable {
             do {
                 try await ssh.run("sudo -k -S -p '' -v", stdin: line, timeout: 30)
             } catch {
-                throw ProcessRunner.Failure(message: tr("Password di sudo non accettata"))
+                throw ProcessRunner.Failure(message: tr("Password di sudo non accettata: serve la password dell'utente %@ sul server", identity.user))
             }
             return try await ssh.run("sudo -k -S -p '' " + command, stdin: line, timeout: timeout)
         default:

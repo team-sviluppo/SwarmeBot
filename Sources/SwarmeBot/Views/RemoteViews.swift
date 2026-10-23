@@ -500,7 +500,7 @@ struct PushRelaySheet: View {
             } else {
                 TextField(tr("OneSignal App ID"), text: $appId)
                 SecureField(tr("OneSignal REST API key"), text: $apiKey)
-                SecureField(tr("Password di sudo (se il server la chiede)"), text: $sudoPassword)
+                SecureField(tr("Password di sudo di %@ (se il server la chiede)", model.identity(for: engine)?.user ?? "?"), text: $sudoPassword)
             }
             if let error { Text(error).foregroundStyle(Theme.danger) }
             HStack {

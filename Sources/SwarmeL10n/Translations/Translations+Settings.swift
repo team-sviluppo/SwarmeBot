@@ -59,6 +59,9 @@ extension Translations {
         "Impostazioni server remoto": "Remote server settings",
         "[SERVER REMOTO] - %@": "[REMOTE SERVER] - %@",
         "Questo server non è più tra i server remoti di questo Mac.": "This server is no longer among this Mac's remote servers.",
+        "Non riesco a leggere la configurazione di %@: %@": "Couldn't read the settings of %@: %@",
+        "Non riesco a leggere i motori di %@: %@": "Couldn't read the engines of %@: %@",
+        "Riprova": "Try again",
 
         // Keys and services
         "Le chiavi restano nel Portachiavi di macOS e arrivano al motore all'avvio; non vengono scritte in config.json.": "Keys stay in the macOS Keychain and reach the engine at launch; they are not written to config.json.",

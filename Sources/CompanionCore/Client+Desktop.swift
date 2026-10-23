@@ -312,7 +312,9 @@ extension CompanionClient {
         var body: [String: Any] = [:]
         if let cli { body["cli"] = cli }
         if let pickerVisible { body["pickerVisible"] = pickerVisible.map { $0 as Any } ?? NSNull() }
-        return try await send(try jsonRequest("PATCH", "/api/instances/\(instanceId)", body: body), as: InstancesResponse.self).instances
+        var request = try jsonRequest("PATCH", "/api/instances/\(instanceId)", body: body)
+        request.timeoutInterval = 90 // answers with the whole list, probed again (instances())
+        return try await send(request, as: InstancesResponse.self).instances
     }
 
     public func cliCandidates(name: String) async throws -> [String] {
