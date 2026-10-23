@@ -10,5 +10,6 @@
 SWARMEBOT_BUNDLE_ID = it.hextra.swarmebot
 // the official build's OneSignal app (an identifier, not a secret; the REST key lives on the relay only)
 SWARMEBOT_PUSH_APP_ID = aa91ee8d-57d6-445d-a90d-465e0ae5a012
-SWARMEBOT_PUSH_RELAY =
+// the official build's relay, hosted next to a remote engine (docs/push-relay.md); a URL, not a secret
+SWARMEBOT_PUSH_RELAY = https:/$()/swarmebot.hextra.it/swarmebot/cristiano/push
 #include? "Local.xcconfig"
