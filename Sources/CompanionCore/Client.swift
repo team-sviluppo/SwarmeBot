@@ -467,6 +467,11 @@ public struct CompanionClient: Sendable {
         try await send(try makeRequest("POST", "/api/bots/\(botId)/messages", body: ["text": text]))
     }
 
+    /// A line in the bot's chat that nobody said (Swift engine only).
+    public func addNote(_ text: String, toBot botId: String) async throws {
+        try await send(try makeRequest("POST", "/api/bots/\(botId)/notes", body: ["text": text]))
+    }
+
     public func send(text: String, toRoom groupId: String) async throws {
         try await send(try makeRequest("POST", "/api/groups/\(groupId)/messages", body: ["text": text]))
     }

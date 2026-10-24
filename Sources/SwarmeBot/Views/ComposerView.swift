@@ -14,6 +14,8 @@ struct ComposerView: View {
     @Environment(AppModel.self) private var model
     @State private var drafts: [String: String] = [:]
     @State private var attachments: [String: [ComposerAttachment]] = [:]
+    /// Bots picked from the `@` list of a bot's chat, per thread: two bots may share a name.
+    @State private var pickedTags: [String: Set<String>] = [:]
     /// One 20 pt line: taller, the field outgrows the bottom-aligned buttons
     /// and its first line rides above the "+".
     @State private var height: CGFloat = 20
@@ -33,6 +35,7 @@ struct ComposerView: View {
         VStack(alignment: .leading, spacing: 8) {
             if let candidates = mentionCandidates, !candidates.isEmpty {
                 MentionList(candidates: candidates, serverName: { id in model.remoteEngines.first { $0.id == id }?.name }) {
+                    if case let .target(target) = $0 { pickedTags[threadId, default: []].insert(target.id) }
                     insertMention($0.name)
                 }
             }
@@ -143,7 +146,7 @@ struct ComposerView: View {
 
     private var placeholder: String {
         if busy, let bot = model.selectedBot { return tr("%@ sta lavorando — invia quando il turno finisce", bot.name) }
-        if let bot = model.selectedBot { return tr("Scrivi a %@", bot.name) }
+        if let bot = model.selectedBot { return tr("Scrivi a %@ — @nome per passare la chat a un altro bot", bot.name) }
         if let room = model.selectedRoom { return tr("Scrivi in #%@ — @nome per chiamare un bot", room.name) }
         return tr("Scrivi…")
     }
@@ -164,8 +167,23 @@ struct ComposerView: View {
             model.lastError = tr("Il server compatibile OpenAI riceve i file come testo: %@ non si può leggere. Allega testo, codice, CSV, JSON, Markdown, PDF o immagini.", refused)
             return
         }
+        if model.selectedBot != nil {
+            let tagged = BotTagging.mentioned(in: text, among: model.tagTargets, preferred: pickedTags[threadId] ?? [])
+            if !tagged.isEmpty {
+                if let busyTarget = tagged.first(where: model.isBusy) {
+                    model.lastError = tr("%@ sta lavorando: riprova quando il turno finisce", busyTarget.bot.name)
+                    return
+                }
+                drafts[threadId] = ""
+                attachments[threadId] = []
+                pickedTags[threadId] = nil
+                Task { await model.sendTagged(text, attachments: pending, to: tagged) }
+                return
+            }
+        }
         drafts[threadId] = ""
         attachments[threadId] = []
+        pickedTags[threadId] = nil
         Task {
             if pending.isEmpty { await model.send(text) } else { await model.send(text, attachments: pending) }
         }
@@ -285,14 +303,19 @@ struct ComposerView: View {
     /// Room members matching the `@word` being typed at the end of the draft.
     /// Members of the room, guests from servers included.
     private var mentionCandidates: [MentionCandidate]? {
-        guard let room = model.selectedRoom else { return nil }
         let text = drafts[threadId] ?? ""
-        guard let at = text.lastIndex(of: "@") else { return nil }
+        guard model.selectedRoom != nil || model.selectedBot != nil, let at = text.lastIndex(of: "@") else { return nil }
         if at > text.startIndex, !text[text.index(before: at)].isWhitespace { return nil }
         let partial = text[text.index(after: at)...]
         guard !partial.contains(where: \.isWhitespace) else { return nil }
-        let members = room.memberIds.compactMap { model.state.bot($0) }.map(MentionCandidate.bot)
-            + (room.guests ?? []).map(MentionCandidate.guest)
+        let members: [MentionCandidate]
+        if let room = model.selectedRoom {
+            members = room.memberIds.compactMap { model.state.bot($0) }.map(MentionCandidate.bot)
+                + (room.guests ?? []).map(MentionCandidate.guest)
+        } else {
+            // a bot's chat: any other bot, on this Mac or a server, can be handed the conversation
+            members = model.tagTargets.map(MentionCandidate.target)
+        }
         return members.filter { partial.isEmpty || $0.name.localizedCaseInsensitiveContains(partial) }
     }
 
@@ -366,11 +389,14 @@ private struct SkillSuggestionList: View {
 private enum MentionCandidate: Identifiable {
     case bot(Bot)
     case guest(RoomGuest)
+    /// From a bot's chat: a bot to hand the conversation to.
+    case target(TagTarget)
 
     var id: String {
         switch self {
         case let .bot(bot): return bot.id
         case let .guest(guest): return guest.memberId
+        case let .target(target): return target.id
         }
     }
 
@@ -378,6 +404,7 @@ private enum MentionCandidate: Identifiable {
         switch self {
         case let .bot(bot): return bot.name
         case let .guest(guest): return guest.name
+        case let .target(target): return target.bot.name
         }
     }
 }
@@ -404,6 +431,11 @@ private struct MentionList: View {
                             SwarmeAvatar(color: guest.color, size: 24, state: .idle, animated: false)
                             Text(guest.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
                             Text(serverName(guest.peerId) ?? tr("server")).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
+                        case let .target(target):
+                            BotAvatar(bot: target.bot, size: 24, animated: false)
+                            Text(target.bot.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
+                            Text(target.bot.title.isEmpty ? target.engineName : "\(target.bot.title) · \(target.engineName)")
+                                .font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
                         }
                         Spacer()
                     }

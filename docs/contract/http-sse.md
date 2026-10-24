@@ -141,6 +141,7 @@ ospite l'host chiama il motore dell'ospite, che tiene una **stanza specchio** de
 | Metodo | Path | Request | Risposta | React | CC |
 |---|---|---|---|---|---|
 | POST | `/api/bots/:id/messages` | `{text}` | 202 `{ok:true}`; se il bot è busy: 202 `{ok:true, queued:true, messageId}` (messaggio con `queued:true`, inviato al settle) | ✅ | ✅ |
+| POST | `/api/bots/:id/notes` | `{text}` (1..500) | 201 `{message}`: una riga `kind:"activity"` con solo `text`, scritta nella chat del bot senza avviare un turno; 400 se vuoto/troppo lungo, 404 se il bot non esiste. La usa il Mac quando un messaggio con `@altro-bot` passa la chat a quel bot | — (solo Swift) | ❌ |
 | POST | `/api/bots/:id/messages/:mid/edit` | `{text}` | 202 `{ok:true}` (fork del thread + nuovo turno; 409 se busy o istanza assente; 404 se non è un messaggio utente `text`) | ✅ | ✅ |
 | POST | `/api/bots/:id/active-branch` | `{messageId}` | `{activeLeafId}` (409 se busy) | ✅ | ✅ |
 | PATCH | `/api/bots/:id/cards/:mid` | `{answered?, dismissed?}` | `{message}` | ✅ | ❌ |

@@ -181,6 +181,14 @@ public final class Routes {
             try harness.startTurn(botId: m[0], text: text)
             return ok(["ok": true], 202)
         }
+        // A line in the bot's chat that nobody said: the Mac app uses it to record that a message went to another bot.
+        if let m = match(#"^/api/bots/([\w-]+)/notes$"#, path), method == "POST" {
+            let text = try r.json()["text"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !text.isEmpty, text.count <= 500 else { return fail(400, "text required (at most 500 characters)") }
+            guard let bot = store.bot(m[0]), let threadId = bot["threadId"]?.string else { return fail(404, "no such bot") }
+            let note = store.appendMessage(threadId, ["role": "bot", "kind": "activity", "text": .string(text)])
+            return ok(["message": .object(note)], 201)
+        }
         if let m = match(#"^/api/bots/([\w-]+)/messages/([\w-]+)/edit$"#, path), method == "POST" {
             guard let bot = store.bot(m[0]), let threadId = bot["threadId"]?.string else { return fail(404, "no such bot") }
             let text = try r.json()["text"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

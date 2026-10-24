@@ -156,7 +156,7 @@ extension AppModel {
         }
     }
 
-    private func peerClient(_ choice: EngineChoice) -> CompanionClient? {
+    func peerClient(_ choice: EngineChoice) -> CompanionClient? {
         switch choice {
         case .local:
             return localPort.map { CompanionClient(connection: Connection(name: "Questo Mac", host: "127.0.0.1", port: $0), token: nil) }
