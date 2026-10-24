@@ -172,4 +172,70 @@ final class LocalTests: XCTestCase {
         let parameters = try XCTUnwrap(function["parameters"] as? [String: any Sendable])
         XCTAssertEqual((parameters["required"] as? [any Sendable])?.first as? String, "text")
     }
+
+    // MARK: Phone tools
+
+    func testPhoneToolsReadLocalDatesAndTimes() throws {
+        let morning = try XCTUnwrap(PhoneTools.parseDate("2026-10-24T09:05"))
+        XCTAssertTrue(morning.time)
+        XCTAssertEqual(Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: morning.date),
+                       DateComponents(year: 2026, month: 10, day: 24, hour: 9, minute: 5))
+        // a zone or seconds after the minutes are ignored: the user's own time
+        XCTAssertEqual(PhoneTools.parseDate("2026-10-24 09:05:00Z")?.date, morning.date)
+        let day = try XCTUnwrap(PhoneTools.parseDate("2026-10-24"))
+        XCTAssertFalse(day.time)
+        XCTAssertNil(PhoneTools.parseDate("domani"))
+        XCTAssertNil(PhoneTools.parseDate("2026-10-24T25:00"))
+        XCTAssertEqual(PhoneTools.parseClock("7:30")?.hour, 7)
+        XCTAssertEqual(PhoneTools.parseClock("19.05")?.minute, 5)
+        XCTAssertNil(PhoneTools.parseClock("7"))
+    }
+
+    func testPhoneToolSchemasListTheRequiredParameters() throws {
+        let add = try XCTUnwrap(PhoneTool.all.first { $0.name == "calendar_add" })
+        XCTAssertEqual(add.inputSchema["required"], ["title", "start"])
+        XCTAssertEqual(add.inputSchema["properties"]?["minutes"]?["type"], "integer")
+        XCTAssertEqual(Set(PhoneTool.all.map(\.group)), Set(PhoneToolGroup.allCases), "every group has tools")
+        XCTAssertEqual(PhoneTool.tools([.contacts]).map(\.name), ["contacts_search"])
+    }
+
+    func testABotGetsOnlyThePhoneToolsItTurnedOn() async throws {
+        let local = LocalBots(store: try temporaryStore())
+        var bot = LocalBot(id: "b1", name: "Prova", kind: .apple, createdAt: Date())
+        XCTAssertNil(local.toolBox(for: bot))
+        bot.phoneTools = [.reminders]
+        let box = try XCTUnwrap(local.toolBox(for: bot))
+        let listed = await box.tools()
+        XCTAssertEqual(listed.tools.map(\.name), ["reminders_list", "reminder_add"])
+        XCTAssertEqual(Set(listed.tools.map(\.connectorId)), [PhoneTools.connectorId])
+        // a tool of a group left off is refused without touching the phone
+        let refused = await box.callPhone("contacts_search", arguments: ["query": "Rossi"])
+        XCTAssertFalse(refused.ok)
+        // Apple's model gets them as Foundation Models tools
+        let sink = TurnSink(delta: { _ in }, toolStarted: { _, _ in "" }, toolDone: { _, _, _ in }, note: { _ in })
+        XCTAssertEqual(AppleDriver.tools(box, sink: sink).map(\.name), ["reminders_list", "reminder_add"])
+        XCTAssertTrue(AppleDriver.instructions(bot, history: [], tools: true).contains("Now is "))
+    }
+
+    func testAWriteWaitsForTheUserAndStopsAtNo() async throws {
+        let phone = PhoneTools()
+        // a bad argument fails before asking
+        let invalid = await phone.call("timer_set", arguments: ["minutes": 0])
+        XCTAssertFalse(invalid.ok)
+        XCTAssertNil(phone.pending)
+        let call = Task { await phone.call("timer_set", arguments: ["minutes": 5, "label": "pasta"]) }
+        while phone.pending == nil { await Task.yield() }
+        XCTAssertEqual(phone.pending?.detail.contains("pasta"), true)
+        phone.answer(try XCTUnwrap(phone.pending?.id), false)
+        let result = await call.value
+        XCTAssertFalse(result.ok)
+        XCTAssertTrue(result.text.contains("declined"))
+        XCTAssertNil(phone.pending)
+        // a stopped turn answers no by itself
+        let stopped = Task { await phone.confirm("t", "d") }
+        while phone.pending == nil { await Task.yield() }
+        stopped.cancel()
+        let answer = await stopped.value
+        XCTAssertFalse(answer)
+    }
 }

@@ -9,12 +9,13 @@ enum LocalBotKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case endpoint
     /// Gemma on the phone, through MLX.
     case gemma
-    /// Apple Foundation Models: chat only, no tools (D2).
+    /// Apple Foundation Models: chat and the phone's tools, no connectors (D2).
     case apple
 
     var id: String { rawValue }
 
-    /// Connectors can be offered to the model (D2: not to Apple's).
+    /// Connectors can be offered to the model (D2: not to Apple's, whose
+    /// context is too short for them; phone tools go to every kind).
     var takesTools: Bool { self != .apple }
 }
 
@@ -55,6 +56,8 @@ struct LocalBot: Codable, Hashable, Identifiable, Sendable {
     /// The system prompt; empty means none.
     var instructions: String = ""
     var connectorIds: [String] = []
+    /// The phone tools the bot may use (PhoneTools.swift); nil on older bots.
+    var phoneTools: [PhoneToolGroup]?
     /// The Hermes session the first chat continues (later chats keep theirs in `chats`).
     var sessionId: String?
     var createdAt: Date
