@@ -203,7 +203,8 @@ final class GemmaModel: LocalDriver {
 
         // model-facing text stays English, like the engine's; the answer follows the user's language
         var chat: [Chat.Message] = [.system((input.bot.instructions.isEmpty ? "You are a helpful assistant on the user's phone." : input.bot.instructions)
-            + "\nToday is \(Date().formatted(.iso8601.year().month().day())). Always answer in the language the user writes in.")]
+            + "\n" + (input.tools?.phoneTools.isEmpty == false ? PhoneTools.now() : "Today is \(Date().formatted(.iso8601.year().month().day())).")
+            + " Always answer in the language the user writes in.")]
         for message in input.history {
             switch message.role {
             case .user: chat.append(.user(transcriptText(message)))

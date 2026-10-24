@@ -6,7 +6,7 @@ import AuthenticationServices
 import Foundation
 import UIKit
 
-/// What one turn may call: the bot's connectors.
+/// What one turn may call: the bot's connectors and the phone's own tools.
 @MainActor
 final class ToolBox {
     struct Result {
@@ -19,14 +19,22 @@ final class ToolBox {
 
     let connectors: [LocalConnector]
     private let pool: ConnectorPool
+    /// The phone tools the bot turned on (PhoneTools.swift).
+    let phoneTools: [PhoneTool]
+    private let phone: PhoneTools
 
-    init(connectors: [LocalConnector], pool: ConnectorPool) {
+    init(connectors: [LocalConnector], pool: ConnectorPool, phoneTools: [PhoneTool] = [], phone: PhoneTools) {
         self.connectors = connectors
         self.pool = pool
+        self.phoneTools = phoneTools
+        self.phone = phone
     }
 
     func tools() async -> (tools: [ChatTool], failures: [String]) {
-        var tools: [ChatTool] = []
+        var tools = phoneTools.map {
+            ChatTool(connectorId: PhoneTools.connectorId, connectorName: tr("Telefono"), name: $0.name, description: $0.description,
+                     inputSchema: $0.inputSchema)
+        }
         var failures: [String] = []
         for connector in connectors {
             do {
@@ -43,14 +51,19 @@ final class ToolBox {
     }
 
     func call(_ route: ChatTool?, arguments: String) async -> Result {
-        guard let route, let connector = connectors.first(where: { $0.id == route.connectorId }) else {
-            return Result(text: "Unknown tool.", ok: false)
-        }
+        guard let route else { return Result(text: "Unknown tool.", ok: false) }
         let trimmed = arguments.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parsed = trimmed.isEmpty ? .object(JSONObject()) : try? JSON.parse(trimmed), parsed.object != nil else {
             return Result(text: "The arguments are not a valid JSON object: \(trimmed.prefix(200))", ok: false)
         }
+        if route.connectorId == PhoneTools.connectorId { return await callPhone(route.name, arguments: parsed) }
+        guard let connector = connectors.first(where: { $0.id == route.connectorId }) else { return Result(text: "Unknown tool.", ok: false) }
         return await call(connector, tool: route.name, arguments: parsed)
+    }
+
+    func callPhone(_ name: String, arguments: JSON) async -> Result {
+        guard phoneTools.contains(where: { $0.name == name }) else { return Result(text: "Unknown tool \(name).", ok: false) }
+        return await phone.call(name, arguments: arguments)
     }
 
     func call(_ connector: LocalConnector, tool: String, arguments: JSON) async -> Result {

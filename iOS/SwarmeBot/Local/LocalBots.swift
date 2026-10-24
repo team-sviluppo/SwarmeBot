@@ -19,6 +19,8 @@ final class LocalBots {
 
     @ObservationIgnored let store: LocalStore?
     @ObservationIgnored let pool = ConnectorPool()
+    /// The phone's own tools, and the confirmation they may be waiting for.
+    let phone = PhoneTools()
     @ObservationIgnored private var chats: [String: LocalChat] = [:]
     @ObservationIgnored var roomChats: [String: LocalRoomChat] = [:]
     /// A paired server by id, for the guests of mixed channels (set by AppModel).
@@ -271,9 +273,9 @@ final class LocalBots {
     }
 
     func toolBox(for bot: LocalBot) -> ToolBox? {
-        guard bot.kind.takesTools else { return nil }
-        let chosen = connectors.filter { bot.connectorIds.contains($0.id) }
-        return chosen.isEmpty ? nil : ToolBox(connectors: chosen, pool: pool)
+        let chosen = bot.kind.takesTools ? connectors.filter { bot.connectorIds.contains($0.id) } : []
+        let phoneTools = PhoneTool.tools(bot.phoneTools ?? [])
+        return chosen.isEmpty && phoneTools.isEmpty ? nil : ToolBox(connectors: chosen, pool: pool, phoneTools: phoneTools, phone: phone)
     }
 }
 

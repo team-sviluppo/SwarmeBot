@@ -150,14 +150,26 @@ struct ComposerBar: View {
 
     @State private var pickingPhoto = false
     @State private var pickingPDF = false
+    @State private var dictation = Dictation()
+    /// What the field held when dictation started: the words heard go after it.
+    @State private var dictationBase = ""
     private var empty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attached.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if !mentions.isEmpty { mentionList }
             if !attached.isEmpty { chips }
+            if let error = dictation.error {
+                Text(verbatim: error).font(.footnote).foregroundStyle(Theme.danger).padding(.horizontal, 8)
+            }
             bar
         }
+        .onChange(of: dictation.text) { _, heard in
+            guard dictation.running || dictation.preparing else { return }
+            let separator = dictationBase.isEmpty || dictationBase.last?.isWhitespace == true || heard.isEmpty ? "" : " "
+            text = dictationBase + separator + heard
+        }
+        .onDisappear { dictation.cancel() }
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
         .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
@@ -205,6 +217,32 @@ struct ComposerBar: View {
         }
     }
 
+    private var dictateButton: some View {
+        Button {
+            if dictation.running {
+                Task { await dictation.stop() }
+            } else {
+                dictationBase = text
+                Task { await dictation.start() }
+            }
+        } label: {
+            Group {
+                if dictation.preparing {
+                    ProgressView()
+                } else {
+                    Image(systemName: dictation.running ? "stop.circle.fill" : "mic")
+                }
+            }
+            .font(.title3)
+            .foregroundStyle(dictation.running ? Theme.danger : Theme.secondary)
+            .frame(width: 38, height: 38)
+            .contentShape(Rectangle())
+        }
+        .disabled(dictation.preparing)
+        .padding(.bottom, 6)
+        .accessibilityLabel(dictation.running ? tr("Smetti di dettare") : tr("Detta"))
+    }
+
     private var bar: some View {
         HStack(alignment: .bottom, spacing: 10) {
             if takesImages || attachPDF != nil {
@@ -237,7 +275,11 @@ struct ComposerBar: View {
                     .padding(.bottom, 6)
                     .accessibilityLabel(tr("Ferma"))
                 } else {
-                    Button(action: send) {
+                    dictateButton
+                    Button {
+                        if dictation.running { dictation.cancel() }
+                        send()
+                    } label: {
                         Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(.black)
                             .frame(width: 38, height: 38).background(Color.white.opacity(empty || !enabled ? 0.35 : 1), in: Circle())
                     }

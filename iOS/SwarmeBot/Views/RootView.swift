@@ -170,6 +170,14 @@ struct RootView: View {
             }
         }
         .sheet(item: Binding(get: { model.pendingImport }, set: { model.pendingImport = $0 })) { ImportView(source: $0) }
+        // a phone bot wants to write to the calendar, the reminders, an alarm (PhoneTools)
+        .alert(model.local.phone.pending?.title ?? "", isPresented: Binding(get: { model.local.phone.pending != nil }, set: { _ in }),
+               presenting: model.local.phone.pending) { request in
+            Button(tr("Conferma")) { model.local.phone.answer(request.id, true) }
+            Button(tr("Annulla"), role: .cancel) { model.local.phone.answer(request.id, false) }
+        } message: { request in
+            Text(verbatim: request.detail)
+        }
     }
 
     /// The chief of staff of the first server, as Grok Bot shows its own.

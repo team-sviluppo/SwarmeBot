@@ -36,7 +36,7 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "2"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 targets:
   SwarmeBot-iOS:
@@ -95,6 +95,13 @@ targets:
     info:
       path: SwarmeBot/Info.plist
       properties:
+        # what the phone bots' tools and dictation use (PhoneTools.swift, Dictation.swift)
+        NSCalendarsFullAccessUsageDescription: "I bot del telefono leggono gli appuntamenti e, se lo confermi, ne aggiungono."
+        NSRemindersFullAccessUsageDescription: "I bot del telefono leggono i promemoria e, se lo confermi, ne aggiungono."
+        NSContactsUsageDescription: "I bot del telefono cercano numeri ed email nella rubrica quando glielo chiedi."
+        NSAlarmKitUsageDescription: "I bot del telefono impostano sveglie e timer, se lo confermi."
+        NSMicrophoneUsageDescription: "SwarmeBot usa il microfono per la dettatura: la voce diventa testo sul telefono."
+        NSSpeechRecognitionUsageDescription: "SwarmeBot trascrive sul telefono quello che detti."
         # endpoints and test engines on the local network may be plain HTTP (plan §8)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
