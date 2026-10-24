@@ -2,6 +2,8 @@
 extension Translations {
     static let ios: [String: String] = [
         "Abbina questo telefono": "Pair This Phone",
+        "Questo telefono": "This Phone",
+        "Le immagini non passano da un motore a un altro: toglile o scrivi di nuovo il messaggio.": "Pictures can't move from one engine to another: remove them or write the message again.",
         "Abbina un server dal Mac: Impostazioni › server › Abbina telefono, poi inquadra il QR.": "Pair a server from the Mac: Settings › server › Pair Phone, then scan the QR code.",
         "Abbina un server": "Pair a Server",
         "Abbinamento…": "Pairing…",

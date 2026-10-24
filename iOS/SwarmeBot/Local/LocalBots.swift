@@ -374,6 +374,11 @@ final class LocalChat {
         }
     }
 
+    /// A line in the chat nobody said.
+    func addNote(_ text: String) {
+        append(LocalMessage(id: newId(), botId: key, role: .note, text: text, at: Date()))
+    }
+
     private func finish(text: String, interrupted: Bool) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty || interrupted && !streaming.isEmpty {

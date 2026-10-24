@@ -331,6 +331,16 @@ struct UserMessage: View {
                     ForEach(parts.images, id: \.self) { AttachmentThumb(path: $0) }
                 }
             }
+            if let from = parts.historyFrom {
+                HStack(spacing: 6) {
+                    Spacer()
+                    Label(tr("Cronologia della chat con %@", from), systemImage: "arrow.turn.up.right")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.secondary)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Capsule().fill(Theme.raised))
+                }
+            }
             if !parts.files.isEmpty || parts.pastes > 0 {
                 HStack(spacing: 6) {
                     Spacer()
@@ -421,9 +431,14 @@ struct PromptParts {
     var images: [String] = []
     var files: [String] = []
     var pastes = 0
+    /// The bot whose chat this message was handed over from.
+    var historyFrom: String?
 
     init(_ text: String) {
-        var rest = text
+        // the conversation a tagged bot is handed folds into a line
+        let handed = BotTagging.split(text)
+        historyFrom = handed.from
+        var rest = handed.rest
         func extract(_ pattern: String, into list: inout [String]) {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
             let ns = rest as NSString

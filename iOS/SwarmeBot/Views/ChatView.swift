@@ -15,6 +15,9 @@ struct ChatView: View {
     @State private var documents: [AttachedDocument] = []
     @State private var attachError: String?
     @State private var sending = false
+    /// Bots picked from the `@` list: two bots may share a name.
+    @State private var pickedTags: Set<String> = []
+    @Environment(AppModel.self) private var model
     @State private var showChats = false
     @State private var deletingRoom = false
     @Environment(\.dismiss) private var dismiss
@@ -183,6 +186,7 @@ struct ChatView: View {
                             if index < attachments.count { attachments.remove(at: index) } else { documents.remove(at: index - attachments.count) }
                         },
                         busy: busy, enabled: session.isLive && !sending,
+                        mentions: mentionOptions, pickMention: pick,
                         send: { Task { await send() } }, stop: { Task { await session.interrupt(chat) } })
         }
     }
@@ -204,13 +208,48 @@ struct ChatView: View {
         }
     }
 
+    // MARK: Tags
+
+    /// The chat can hand over to another bot only from a bot's chat, not a room's.
+    private var source: TagSource? { bot.map { .server(session, $0) } }
+    private var targets: [TagTarget] { source.map(model.tagTargets) ?? [] }
+
+    private var mentionOptions: [MentionOption] {
+        guard let partial = BotTagging.partial(in: draft) else { return [] }
+        return targets.filter { partial.isEmpty || $0.name.localizedCaseInsensitiveContains(partial) }
+            .map { MentionOption(id: $0.id, name: $0.name, detail: $0.title.isEmpty ? $0.placeName : "\($0.title) · \($0.placeName)", color: $0.color) }
+    }
+
+    private func pick(_ option: MentionOption) {
+        pickedTags.insert(option.id)
+        draft = BotTagging.completing(draft, with: option.name)
+    }
+
     private func send() async {
         sending = true
         defer { sending = false }
+        if let source {
+            let tagged = BotTagging.mentioned(in: draft, among: targets, preferred: pickedTags)
+            if !tagged.isEmpty {
+                if let busyTarget = tagged.first(where: model.isBusy) {
+                    attachError = tr("%@ sta lavorando: riprova quando il turno finisce", busyTarget.name)
+                    return
+                }
+                attachError = nil
+                let (text, tags, docs) = (draft, attachments, documents)
+                draft = ""
+                attachments = []
+                documents = []
+                pickedTags = []
+                await model.handOff(text: text, documents: docs, attachments: .uploaded(tags), from: source, to: tagged)
+                return
+            }
+        }
         let text = (documents.map(\.promptBlock) + attachments + [draft]).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         draft = ""
         attachments = []
         documents = []
+        pickedTags = []
         await session.send(text, to: chat)
     }
 }
@@ -226,13 +265,22 @@ struct MessageRow: View {
     var body: some View {
         switch message.kind {
         case .text, .unknown:
-            ChatBubble(text: message.role == .user ? Self.visibleText(message.text ?? "") : message.text ?? "",
-                       isUser: message.role == .user, color: color,
-                       header: inRoom && message.role == .bot ? message.from?.name : nil, headerColor: message.from?.color,
-                       footnote: message.interrupted == true ? tr("Interrotto") : nil)
+            let handed = message.role == .user ? BotTagging.split(message.text ?? "") : (from: nil, rest: message.text ?? "")
+            VStack(alignment: .trailing, spacing: 4) {
+                if let from = handed.from {
+                    ActivityLine(text: tr("Cronologia della chat con %@", from), symbol: "arrowshape.turn.up.right")
+                }
+                ChatBubble(text: message.role == .user ? Self.visibleText(handed.rest) : handed.rest,
+                           isUser: message.role == .user, color: color,
+                           header: inRoom && message.role == .bot ? message.from?.name : nil, headerColor: message.from?.color,
+                           footnote: message.interrupted == true ? tr("Interrotto") : nil)
+            }
         case .activity:
             if let tool = message.tool {
                 ActivityLine(text: tool.name, failed: tool.ok == false)
+            } else if let note = message.text, !note.isEmpty {
+                // a line nobody said, e.g. that a message went to another bot
+                ActivityLine(text: note, symbol: "arrowshape.turn.up.right")
             }
         case .options:
             if let card = message.card { CardView(card: card, answer: answer) }

@@ -36,28 +36,32 @@ extension AppModel {
     /// prompt shape `src/lib/composer-attachments.ts` builds.
     public func send(_ text: String, attachments: [ComposerAttachment]) async {
         guard let client else { return }
-        var parts = [text.trimmingCharacters(in: .whitespacesAndNewlines)]
         do {
-            for (index, attachment) in attachments.enumerated() {
-                switch attachment.kind {
-                case let .image(data, mime):
-                    let saved = try await client.uploadAttachment(data, mime: mime)
-                    parts.append("<attached-image path=\"\(Self.escapeAttribute(saved.path))\" />")
-                case let .file(path):
-                    parts.append("<attached-file path=\"\(Self.escapeAttribute(path))\" />")
-                case let .paste(pasted):
-                    parts.append("<pasted-text index=\"\(index + 1)\">\n\(pasted)\n</pasted-text>")
-                }
-            }
+            await send(try await composePrompt(text, attachments: attachments, uploadingTo: client))
         } catch {
             lastError = error.localizedDescription
-            return
         }
-        await send(parts.filter { !$0.isEmpty }.joined(separator: "\n\n"))
+    }
+
+    /// The text and one tag per attachment, images uploaded to `client`'s engine.
+    func composePrompt(_ text: String, attachments: [ComposerAttachment], uploadingTo client: CompanionClient) async throws -> String {
+        var parts = [text.trimmingCharacters(in: .whitespacesAndNewlines)]
+        for (index, attachment) in attachments.enumerated() {
+            switch attachment.kind {
+            case let .image(data, mime):
+                let saved = try await client.uploadAttachment(data, mime: mime)
+                parts.append("<attached-image path=\"\(Self.escapeAttribute(saved.path))\" />")
+            case let .file(path):
+                parts.append("<attached-file path=\"\(Self.escapeAttribute(path))\" />")
+            case let .paste(pasted):
+                parts.append("<pasted-text index=\"\(index + 1)\">\n\(pasted)\n</pasted-text>")
+            }
+        }
+        return parts.filter { !$0.isEmpty }.joined(separator: "\n\n")
     }
 
     /// Paths are untrusted prompt content: keep them inside the attribute.
-    public static func escapeAttribute(_ value: String) -> String {
+    nonisolated public static func escapeAttribute(_ value: String) -> String {
         value
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "\"", with: "&quot;")

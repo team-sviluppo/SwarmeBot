@@ -121,8 +121,15 @@ struct ActivityLine: View {
     }
 }
 
-/// The floating composer: "+" for a picture or a PDF, what is attached, the
-/// field, dictation, send (or stop).
+/// A bot the `@` being typed can name.
+struct MentionOption: Identifiable {
+    let id: String
+    let name: String
+    let detail: String
+    let color: String
+}
+
+/// The floating composer: "+" for a picture or a PDF, what is attached, the field, send (or stop).
 struct ComposerBar: View {
     @Binding var text: String
     let placeholder: String
@@ -135,6 +142,9 @@ struct ComposerBar: View {
     var detach: (Int) -> Void = { _ in }
     var busy = false
     var enabled = true
+    /// Bots the `@` being typed matches; picking one completes the tag.
+    var mentions: [MentionOption] = []
+    var pickMention: (MentionOption) -> Void = { _ in }
     let send: () -> Void
     var stop: (() -> Void)? = nil
 
@@ -147,6 +157,7 @@ struct ComposerBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if !mentions.isEmpty { mentionList }
             if !attached.isEmpty { chips }
             if let error = dictation.error {
                 Text(verbatim: error).font(.footnote).foregroundStyle(Theme.danger).padding(.horizontal, 8)
@@ -165,6 +176,26 @@ struct ComposerBar: View {
         .fileImporter(isPresented: $pickingPDF, allowedContentTypes: [.pdf]) { result in
             if case let .success(url) = result { attachPDF?(url) }
         }
+    }
+
+    private var mentionList: some View {
+        VStack(spacing: 0) {
+            ForEach(mentions.prefix(5)) { option in
+                Button { pickMention(option) } label: {
+                    HStack(spacing: 10) {
+                        Circle().fill(SwarmePalette.color(option.color)).frame(width: 22, height: 22)
+                        Text(verbatim: option.name).font(.body.weight(.medium)).foregroundStyle(Theme.ink)
+                        Text(verbatim: option.detail).font(.footnote).foregroundStyle(Theme.secondary).lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(Theme.pill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var chips: some View {

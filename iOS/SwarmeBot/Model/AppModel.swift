@@ -9,7 +9,7 @@ import UIKit
 @Observable
 final class AppModel {
     private(set) var sessions: [RemoteSession] = []
-    let local = LocalBots()
+    let local: LocalBots
     var lastError: String?
     /// A chat to show, asked by a tapped notification.
     var open: Route?
@@ -22,11 +22,12 @@ final class AppModel {
     /// While the app is off screen: the streams kept open, a turn on the phone finishing.
     @ObservationIgnored private var grace: (id: UIBackgroundTaskIdentifier, task: Task<Void, Never>)?
 
-    init() {
+    init(local: LocalBots? = nil) {
+        self.local = local ?? LocalBots()
         sessions = ServerStore.load().map { RemoteSession(server: $0) }
         for session in sessions { listen(session) }
         // guests of mixed channels speak through their server's session
-        local.remoteSession = { [weak self] id in self?.session(id) }
+        self.local.remoteSession = { [weak self] id in self?.session(id) }
     }
 
     func session(_ id: String) -> RemoteSession? { sessions.first { $0.id == id } }
