@@ -435,16 +435,10 @@ struct PromptParts {
     var historyFrom: String?
 
     init(_ text: String) {
-        var rest = text
-        // the conversation a tagged bot is handed (BotTagging.handoffPrompt) folds into a line
-        if let regex = try? NSRegularExpression(pattern: #"<conversation-history with="([^"]*)">[\s\S]*?</conversation-history>\n*"#),
-           let match = regex.firstMatch(in: rest, range: NSRange(location: 0, length: (rest as NSString).length)) {
-            historyFrom = Self.unescape((rest as NSString).substring(with: match.range(at: 1)))
-            rest = (rest as NSString).replacingCharacters(in: match.range, with: "")
-            if rest.hasPrefix("The user was chatting with "), let end = rest.range(of: "in a new chat.\n\n") {
-                rest.removeSubrange(rest.startIndex..<end.upperBound)
-            }
-        }
+        // the conversation a tagged bot is handed folds into a line
+        let handed = BotTagging.split(text)
+        historyFrom = handed.from
+        var rest = handed.rest
         func extract(_ pattern: String, into list: inout [String]) {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
             let ns = rest as NSString

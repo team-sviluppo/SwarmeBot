@@ -1,5 +1,6 @@
 // A chat with one of the phone's bots: private, stored on this phone only,
 // with its older chats a tap on the title away — as the remote ones.
+import CompanionCore
 import PhotosUI
 import SwiftUI
 
@@ -15,12 +16,49 @@ struct LocalChatView: View {
     @State private var editing = false
     @State private var showChats = false
     @State private var deleting: LocalBot?
+    /// Bots picked from the `@` list: two bots may share a name.
+    @State private var pickedTags: Set<String> = []
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
     private var bot: LocalBot? { model.local.bot(botId) }
     private var chat: LocalChat { model.local.chat(botId) }
     private var color: String { bot?.paletteColor ?? "blue" }
+    private var targets: [TagTarget] { model.tagTargets(excluding: .phone(botId)) }
+
+    private var mentionOptions: [MentionOption] {
+        guard let partial = BotTagging.partial(in: draft) else { return [] }
+        return targets.filter { partial.isEmpty || $0.name.localizedCaseInsensitiveContains(partial) }
+            .map { MentionOption(id: $0.id, name: $0.name, detail: $0.title.isEmpty ? $0.placeName : "\($0.title) · \($0.placeName)", color: $0.color) }
+    }
+
+    private func pick(_ option: MentionOption) {
+        pickedTags.insert(option.id)
+        draft = BotTagging.completing(draft, with: option.name)
+    }
+
+    private func send() {
+        let tagged = BotTagging.mentioned(in: draft, among: targets, preferred: pickedTags)
+        if !tagged.isEmpty {
+            if let busyTarget = tagged.first(where: model.isBusy) {
+                attachError = tr("%@ sta lavorando: riprova quando il turno finisce", busyTarget.name)
+                return
+            }
+            attachError = nil
+            let (text, pictures, docs) = (draft, images, documents)
+            draft = ""
+            images = []
+            documents = []
+            pickedTags = []
+            Task { await model.handOff(text: text, documents: docs, attachments: .pictures(pictures), from: .phone(botId), to: tagged) }
+            return
+        }
+        chat.send(draft, images: images, documents: documents)
+        draft = ""
+        images = []
+        documents = []
+        pickedTags = []
+    }
 
     var body: some View {
         ScrollView {
@@ -64,12 +102,8 @@ struct LocalChatView: View {
                                 if index < images.count { images.remove(at: index) } else { documents.remove(at: index - images.count) }
                             },
                             busy: chat.busy,
-                            send: {
-                                chat.send(draft, images: images, documents: documents)
-                                draft = ""
-                                images = []
-                                documents = []
-                            },
+                            mentions: mentionOptions, pickMention: pick,
+                            send: send,
                             stop: { chat.stop() })
             }
         }
@@ -168,7 +202,11 @@ private struct LocalMessageRow: View {
                         .padding(.vertical, 8)
                         .background(Theme.pill, in: Capsule())
                 }
-                if !message.text.isEmpty { ChatBubble(text: message.text, isUser: true, color: color) }
+                let handed = BotTagging.split(message.text)
+                if let from = handed.from {
+                    ActivityLine(text: tr("Cronologia della chat con %@", from), symbol: "arrowshape.turn.up.right")
+                }
+                if !handed.rest.isEmpty { ChatBubble(text: handed.rest, isUser: true, color: color) }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         case .bot:

@@ -201,6 +201,23 @@ final class RemoteSession: Identifiable {
         }
     }
 
+    /// A new chat on `botId` that opens with `text`; unlike `send`, a failure goes to the caller.
+    func startChat(botId: String, title: String?, text: String) async throws {
+        guard let client else { throw APIError.badURL }
+        do {
+            state.apply(.bot(try await client.createTask(botId: botId, title: title)))
+            try await client.send(text: text, toBot: botId)
+        } catch {
+            if (error as? APIError)?.isUnauthorized == true { status = .unpaired }
+            throw error
+        }
+    }
+
+    /// A line in the bot's chat nobody said. An engine from before notes answers 404: nothing to show then.
+    func addNote(_ text: String, botId: String) async {
+        try? await client?.addNote(text, toBot: botId)
+    }
+
     /// An image for the next message: the engine keeps it and the prompt
     /// carries its path (`<attached-image path="…"/>`).
     func attach(_ data: Data, mime: String) async -> String? {
