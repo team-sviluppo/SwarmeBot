@@ -5,18 +5,17 @@
 // in its `mcp-connector-secrets.json` (0600, this user's). The copy reads that
 // file, puts each value back into the connector's form and sends it to the
 // remote engine over HTTPS, in the `{secret: true, value}` shape the API takes.
-// OAuth connectors are not copied: their tokens rotate and belong to one engine.
+// An OAuth connector goes with its settings (client id and secret, scope,
+// redirect) but not its tokens: they rotate and belong to one engine, so the
+// login is done again on the server.
 import CompanionCore
 import Foundation
 
 public enum ConnectorCopyError: LocalizedError, Equatable {
-    case oauth(String)
     case missingSecret(connector: String, name: String)
 
     public var errorDescription: String? {
         switch self {
-        case let .oauth(name):
-            return tr("%@ usa OAuth: sui server remoti si configura a parte (i token OAuth non si copiano)", name)
         case let .missingSecret(connector, name):
             return tr("%@: il segreto %@ non è salvato su questo Mac, quindi non si può copiare", connector, name)
         }
@@ -24,7 +23,8 @@ public enum ConnectorCopyError: LocalizedError, Equatable {
 }
 
 public enum ConnectorCopy {
-    /// `{id: {env: {NAME: value}, headers: {Name: value}}}`
+    /// `{id: {env: {NAME: value}, headers: {Name: value}, oauth: {clientSecret: value}}}`;
+    /// of `oauth` only the client secret, never the tokens.
     public typealias Secrets = [String: [String: [String: String]]]
 
     public static var localSecretsFile: URL {
@@ -43,13 +43,15 @@ public enum ConnectorCopy {
                     if let text = secret as? String { out[id, default: [:]][kind, default: [:]][name] = text }
                 }
             }
+            if let oauth = kinds["oauth"] as? [String: Any], let secret = oauth["clientSecret"] as? String {
+                out[id, default: [:]]["oauth", default: [:]]["clientSecret"] = secret
+            }
         }
         return out
     }
 
     /// The connector's form with every secret filled in from this Mac.
     public static func input(for connector: MCPConnector, secrets: Secrets) throws -> MCPConnectorInput {
-        guard !connector.usesOAuth else { throw ConnectorCopyError.oauth(connector.name) }
         var input = MCPConnectorInput(connector)
         func fill(_ entries: inout [MCPConnectorInput.Entry], kind: String) throws {
             for index in entries.indices where entries[index].secret {
@@ -62,11 +64,19 @@ public enum ConnectorCopy {
         }
         try fill(&input.env, kind: "env")
         try fill(&input.headers, kind: "headers")
+        if input.oauthClientSecretStored {
+            guard let value = secrets[connector.id]?["oauth"]?["clientSecret"], !value.isEmpty else {
+                throw ConnectorCopyError.missingSecret(connector: connector.name, name: "client secret")
+            }
+            input.oauthClientSecret = value
+            input.oauthClientSecretStored = false
+        }
         return input
     }
 
     /// Create it on the remote engine, or replace the one of the same id; then
     /// have that engine try it, since a command found on this Mac may be missing there.
+    /// An OAuth connector is not tried: it has no login there yet.
     @discardableResult
     public static func copy(_ connector: MCPConnector, secrets: Secrets, to remote: CompanionClient) async throws -> MCPConnector {
         let input = try input(for: connector, secrets: secrets)
@@ -75,6 +85,9 @@ public enum ConnectorCopy {
             try await remote.updateMCPConnector(connector.id, input)
         } else {
             try await remote.createMCPConnector(input)
+        }
+        if connector.usesOAuth {
+            return try await remote.mcpConnectors().first { $0.id == connector.id } ?? connector
         }
         return try await remote.testMCPConnector(connector.id)
     }

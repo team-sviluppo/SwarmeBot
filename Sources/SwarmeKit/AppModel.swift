@@ -291,7 +291,7 @@ public final class AppModel {
 
     // MARK: - Reading
 
-    private var defaultSelection: ChatID? {
+    var defaultSelection: ChatID? {
         if let pinned = visibleBots.first { return .bot(pinned.id) }
         return state.rooms.first.map { .room($0.id) }
     }

@@ -201,8 +201,6 @@ extension Translations {
         "Il motore non ha restituito un token": "The engine did not return a token",
 
         // Connectors, host keys, Linux engines, ssh
-        "%@ usa OAuth: sui server remoti si configura a parte (i token OAuth non si copiano)":
-            "%@ uses OAuth: set it up separately on remote servers (OAuth tokens are not copied)",
         "%@: il segreto %@ non è salvato su questo Mac, quindi non si può copiare":
             "%@: the secret %@ is not saved on this Mac, so it can't be copied",
         "nessuna risposta ssh da %@:%@": "no ssh response from %@:%@",

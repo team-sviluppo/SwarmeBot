@@ -19,11 +19,22 @@ final class ConnectorCopyTests: XCTestCase {
         XCTAssertEqual(token?["value"] as? String, "ghp_123")
     }
 
-    func testOAuthAndMissingSecretsAreRefused() throws {
-        let oauth = try connector(#"{"id":"notion","name":"Notion","transport":"http","url":"https://x","auth":"oauth"}"#)
-        XCTAssertThrowsError(try ConnectorCopy.input(for: oauth, secrets: [:])) { error in
-            XCTAssertEqual(error as? ConnectorCopyError, .oauth("Notion"))
+    func testOAuthGoesWithItsClientSecretButNotItsTokens() throws {
+        let notion = try connector(#"{"id":"notion","name":"Notion","transport":"http","url":"https://x","auth":"oauth","oauth":{"clientId":"cid","scope":"read","clientSecret":{"secret":true,"set":true}},"oauthState":{"status":"connected"}}"#)
+        let input = try ConnectorCopy.input(for: notion, secrets: ["notion": ["oauth": ["clientSecret": "cs-1"]]])
+        let oauth = input.json["oauth"] as? [String: Any]
+        XCTAssertEqual(input.json["auth"] as? String, "oauth")
+        XCTAssertEqual(oauth?["clientId"] as? String, "cid")
+        XCTAssertEqual((oauth?["clientSecret"] as? [String: Any])?["value"] as? String, "cs-1")
+        XCTAssertThrowsError(try ConnectorCopy.input(for: notion, secrets: [:])) { error in
+            XCTAssertEqual(error as? ConnectorCopyError, .missingSecret(connector: "Notion", name: "client secret"))
         }
+        // dynamic registration: no client secret of its own, nothing to fill
+        let open = try connector(#"{"id":"linear","name":"Linear","transport":"http","url":"https://x","auth":"oauth"}"#)
+        XCTAssertNil((try ConnectorCopy.input(for: open, secrets: [:]).json["oauth"] as? [String: Any])?["clientSecret"])
+    }
+
+    func testMissingSecretsAreRefused() throws {
         let api = try connector(#"{"id":"api","name":"API","transport":"http","url":"https://x","headers":{"Authorization":{"secret":true,"set":false}}}"#)
         XCTAssertThrowsError(try ConnectorCopy.input(for: api, secrets: [:])) { error in
             XCTAssertEqual(error as? ConnectorCopyError, .missingSecret(connector: "API", name: "Authorization"))
@@ -33,10 +44,11 @@ final class ConnectorCopyTests: XCTestCase {
     func testTheSecretsFileIsReadAsTheEngineWritesIt() throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("sbcs-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: file) }
-        try Data(#"{"github":{"env":{"TOKEN":"a"},"headers":{"X":"b"}},"bad":7}"#.utf8).write(to: file)
+        try Data(#"{"github":{"env":{"TOKEN":"a"},"headers":{"X":"b"}},"notion":{"oauth":{"access":"t","refresh":"r","clientSecret":"cs"}},"bad":7}"#.utf8).write(to: file)
         let secrets = ConnectorCopy.readSecrets(file)
         XCTAssertEqual(secrets["github"]?["env"]?["TOKEN"], "a")
         XCTAssertEqual(secrets["github"]?["headers"]?["X"], "b")
+        XCTAssertEqual(secrets["notion"]?["oauth"], ["clientSecret": "cs"], "the tokens stay on this Mac")
         XCTAssertNil(secrets["bad"])
     }
 }
