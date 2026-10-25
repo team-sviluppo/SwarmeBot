@@ -348,6 +348,12 @@ public struct SendTurnInput: Sendable {
     /// The same connectors for an engine that runs the tool loop itself
     /// (`connectors == .inline`, the Local Endpoint). Nil changes nothing.
     public var connectorGateway: ConnectorGateway?
+    /// The vault's `run_with_secrets` helper, only for drivers that mount the
+    /// engine's MCP helpers (`agentsMcp`). Nil changes nothing.
+    public var secrets: MCPServer?
+    /// Vault secrets the user put in the CLI's environment for this turn
+    /// ("env" mode), for drivers that spawn a process. Empty changes nothing.
+    public var secretEnvironment: [String: String] = [:]
 
     public init(threadId: ThreadID, text: String, model: String? = nil, effort: String? = nil, resumeCursor: JSON? = nil,
                 transcript: [(role: String, text: String)] = [], system: String? = nil, cwd: String? = nil,

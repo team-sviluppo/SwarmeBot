@@ -116,6 +116,9 @@ extension Harness {
         }
         let library = self.library.prompt(botId, off: [], mode: Library.mode(instance.driverKind), message: roomContext(threadId, userName: human))
         if !library.isEmpty { roomSystem = "\(system)\n\n\(library)" }
+        // each member brings its own secrets, as it brings its own connectors
+        let secrets = turnSecrets(botId: botId, threadId: threadId, instance: instance, cwd: cwd, computerKind: nil)
+        if !secrets.prompt.isEmpty { roomSystem += "\n\n\(secrets.prompt)" }
 
         let minutes = config.roomTurnTimeoutMinutes
         var replyText = ""
@@ -157,6 +160,8 @@ extension Harness {
             // a room has no per-chat switches: each member brings its own defaults
             input.connectors = mountConnectors(bot: bot, task: nil, threadId: threadId, mount: instance.adapter.capabilities.connectors)
             input.connectorGateway = connectorGateway(bot: bot, task: nil, instance: instance, model: selection.model)
+            input.secrets = secrets.server
+            input.secretEnvironment = secrets.environment
             Task { @MainActor in
                 do {
                     _ = try await instance.adapter.sendTurn(input)

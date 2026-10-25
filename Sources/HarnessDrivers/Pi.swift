@@ -303,7 +303,8 @@ final class PiTurn {
 
     func start() {
         do {
-            process = try CLIProcess(cli: instance.cli, args: PiCatalog.args, cwd: turn.cwd, environment: instance.childEnvironment())
+            process = try CLIProcess(cli: instance.cli, args: PiCatalog.args, cwd: turn.cwd,
+                                     environment: instance.childEnvironment().merging(turn.secretEnvironment) { _, secret in secret })
         } catch {
             let failure = error as? SpawnFailure ?? SpawnFailure(message: "spawn failed: \(error.localizedDescription)", setup: false)
             emit(.turnStarted)

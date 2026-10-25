@@ -592,6 +592,11 @@ final class CodexTurn {
         if let agents = turn.agents { args += Self.mount(&env, name: "agents", agents) }
         if let computer = turn.computer { args += Self.mount(&env, name: "computer", computer) }
         for connector in turn.connectors { args += Self.mount(&env, name: connector.name, connector.server) }
+        if let secrets = turn.secrets {
+            args += Self.mount(&env, name: VaultTool.serverName, secrets)
+            args += ["-c", "mcp_servers.\(VaultTool.serverName).tool_timeout_sec=\(VaultTool.maxSeconds + 60)"]
+        }
+        for (key, value) in turn.secretEnvironment { env[key] = value }
         let cwd = turn.cwd ?? NSHomeDirectory()
         do {
             process = try CLIProcess(cli: instance.cli, args: args, cwd: cwd, environment: env)

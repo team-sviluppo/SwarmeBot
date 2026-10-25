@@ -36,6 +36,8 @@ public final class Store {
     private let paths: DataPaths
     private let db: MessageDB
     public var defaultSelection: () -> ModelSelection = { ModelSelection(instanceId: "", model: "") }
+    /// Known secret values out of every stored message (the vault's masking).
+    public var maskSecrets: ((JSONObject) -> JSONObject)?
 
     static let colors = ["green", "blue", "red", "orange", "purple", "cyan", "pink", "yellow", "teal", "coral"]
     static let names = [
@@ -209,7 +211,9 @@ public final class Store {
             ("at", message["at"] ?? .number(nowMillis())),
             ("parentId", JSON.from(t.activeLeafId)),
         ])
-        full = full.merging(Self.redactBotAuthored(message.removing("at")))
+        // the vault's names first: «secret GITHUB_TOKEN» says more than «redacted»
+        let content = message.removing("at")
+        full = full.merging(Self.redactBotAuthored(maskSecrets?(content) ?? content))
         t.messages.append(full)
         t.activeLeafId = full["id"]?.string
         if full["kind"]?.string == "screen" {
@@ -269,7 +273,7 @@ public final class Store {
         var t = thread(threadId)
         guard let index = t.messages.firstIndex(where: { $0["id"]?.string == messageId }) else { return nil }
         var merged = t.messages[index]
-        for (key, value) in patch {
+        for (key, value) in maskSecrets?(patch) ?? patch {
             // `{ ...m, ...patch }`, with JSON null standing in for undefined
             if value.isNull && key != "parentId" { merged[key] = Optional<JSON>.none } else { merged[key] = value }
         }

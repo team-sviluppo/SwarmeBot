@@ -56,6 +56,7 @@ public final class Routes {
         if let avatar = AvatarRoutes.handle(r, harness: harness) { return avatar }
         if let connectors = try await MCPConnectorRoutes.handle(r, harness: harness) { return connectors }
         if let skills = try SkillRoutes.handle(r, harness: harness) { return skills }
+        if let vault = try VaultRoutes.handle(r, harness: harness) { return vault }
 
         // Mutations that carry a body must declare JSON (no CSRF via HTML forms).
         // DELETE has no body and is not a form method, so a library delete is allowed without the header.
@@ -116,6 +117,7 @@ public final class Routes {
                 harness.discardDelegations(bot["threadId"]?.string ?? "")
                 harness.stopScreenPoller(m[0])
                 harness.computerControl.forget(m[0])
+                harness.vault.forgetBot(m[0])
                 _ = store.deleteBot(m[0])
                 return ok(["ok": true])
             }

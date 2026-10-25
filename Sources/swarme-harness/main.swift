@@ -33,6 +33,10 @@ if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mcp-container"
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mcp-vps" {
     McpBridge.runVPS(Array(CommandLine.arguments.dropFirst(2)))
 }
+// `swarme-harness mcp-secrets`: the vault's run_with_secrets for a bot's CLI (SecretsProxy.swift)
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "mcp-secrets" {
+    SecretsProxy.run()
+}
 
 let env = ProcessInfo.processInfo.environment
 let port = UInt16(env["OMB_PORT"] ?? env["OGB_PORT"] ?? "8799") ?? 8799
@@ -46,6 +50,10 @@ if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "device" {
 }
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "secret" {
     MainActor.assumeIsolated { runSecretCommand(Array(CommandLine.arguments.dropFirst(2)), paths: paths) }
+}
+// the vault of a remote engine, written over ssh by the Mac that administers it (VaultCommand.swift)
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "vault" {
+    runVaultCommand(Array(CommandLine.arguments.dropFirst(2)), paths: paths, environment: env)
 }
 // the push relay for the iOS app, next to a remote engine (PushRelay.swift, PushRelayCommand.swift)
 if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "push-relay" {

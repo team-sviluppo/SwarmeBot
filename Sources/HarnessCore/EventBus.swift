@@ -10,6 +10,8 @@ public final class EventBus {
     private var listeners: [(id: UUID, listener: RuntimeEventListener)] = []
     private var detachers: [() -> Void] = []
     private let eventsDir: URL
+    /// Known secret values out of the log (the vault's masking).
+    public var maskSecrets: ((JSON) -> JSON)?
 
     public init(eventsDir: URL) {
         self.eventsDir = eventsDir
@@ -33,7 +35,7 @@ public final class EventBus {
 
     public func publish(_ event: RuntimeEvent) {
         FileIO.appendLine(
-            Redact.json(event.json).serialized(),
+            Redact.json(maskSecrets?(event.json) ?? event.json).serialized(),
             to: eventsDir.appendingPathComponent("\(event.threadId).ndjson")
         )
         // registration order matters: the fold runs before the queue drain,

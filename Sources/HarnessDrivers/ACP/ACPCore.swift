@@ -191,7 +191,8 @@ final class ACPInstance: ProviderInstance, ProviderAdapter {
         }
         // before anything starts, as in the Node engine: a config writer that
         // refuses (droid's unreadable settings.json) fails the send itself
-        let env = childEnvironment()
+        var env = childEnvironment()
+        for (key, value) in turn.secretEnvironment { env[key] = value }
         let model = try support.resolveTurnModel.map { try $0(turn.model, env) } ?? turn.model
         let acpTurn = ACPTurn(instance: self, turn: turn, environment: env, model: model)
         active[turn.threadId] = acpTurn
@@ -321,7 +322,8 @@ final class ACPTurn {
         let selected: (String) -> JSON = { ["outcome": ["outcome": "selected", "optionId": .string($0)]] }
 
         // a connector's tools run without asking, like on Claude and Codex (plan D7)
-        if config.fullAuto || Self.isConnectorTool(params["toolCall"] ?? .null, names: turn.connectors.map(\.name)) {
+        let autoAllowed = turn.connectors.map(\.name) + (turn.secrets != nil ? [VaultTool.serverName] : [])
+        if config.fullAuto || Self.isConnectorTool(params["toolCall"] ?? .null, names: autoAllowed) {
             let allow = optionFor("allow")
             if allow == nil { missing("allow") }
             send(["jsonrpc": "2.0", "id": id, "result": allow.map(selected) ?? cancelled])
@@ -521,6 +523,7 @@ final class ACPTurn {
         if let agents = turn.agents { servers.append(agents.acp(name: "agents")) }
         if let computer = turn.computer { servers.append(computer.acp(name: "computer")) }
         for connector in turn.connectors { servers.append(connector.server.acp(name: connector.name)) }
+        if let secrets = turn.secrets { servers.append(secrets.acp(name: VaultTool.serverName)) }
         let mcpServers: JSON = .array(servers)
         var sessionResult: JSON = .null
         if let cursor = turn.resumeCursor?.string, !cursor.isEmpty {
