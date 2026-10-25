@@ -214,6 +214,10 @@ struct BotDetails: View {
             toggle("checkmark.shield", tint: Theme.success, tr("Approva da solo"),
                    tr("Esegue gli strumenti senza chiederti conferma."), value: bot.autoApprove ?? false) { BotPatch(autoApprove: $0) }
             CardDivider(leading: 48)
+            toggle("chevron.left.forwardslash.chevron.right", tint: Theme.accent, tr("Code mode"),
+                   tr("Mostra il branch git accanto alla cartella e raccoglie i file modificati a fine turno in un badge."),
+                   value: bot.codeMode ?? false) { BotPatch(codeMode: $0) }
+            CardDivider(leading: 48)
             toggle("bell", tint: Theme.warning, tr("Notifiche"),
                    tr("Avvisa quando finisce un turno o ti fa una domanda."), value: bot.notifications) { BotPatch(notifications: $0) }
             CardDivider(leading: 48)

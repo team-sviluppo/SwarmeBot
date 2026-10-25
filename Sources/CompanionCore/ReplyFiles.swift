@@ -11,6 +11,56 @@ public struct ReplyFile: Decodable, Hashable, Sendable, Identifiable {
     public var bytes: Int
 
     public var id: String { path }
+
+    public init(ref: String, path: String, name: String, bytes: Int) {
+        self.ref = ref
+        self.path = path
+        self.name = name
+        self.bytes = bytes
+    }
+}
+
+/// The git state of a chat's folder (`GET /api/threads/:tid/git`), as
+/// Code mode shows it. `repo == false` for a folder outside any work tree.
+public struct ThreadGitState: Decodable, Hashable, Sendable {
+    public struct Change: Decodable, Hashable, Sendable, Identifiable {
+        public var path: String
+        public var name: String
+        /// `M` modified, `A` added, `D` deleted, `R` renamed, `?` untracked.
+        public var status: String
+        public var bytes: Int
+
+        public var id: String { path }
+        /// A deleted file has nothing to open.
+        public var exists: Bool { status != "D" }
+        public var file: ReplyFile { ReplyFile(ref: path, path: path, name: name, bytes: bytes) }
+    }
+
+    public var repo: Bool
+    public var root: String?
+    /// The branch, or the short commit when `detached`.
+    public var branch: String?
+    public var detached: Bool?
+    public var changes: [Change]
+
+    public init(repo: Bool, root: String? = nil, branch: String? = nil, detached: Bool? = nil, changes: [Change] = []) {
+        self.repo = repo
+        self.root = root
+        self.branch = branch
+        self.detached = detached
+        self.changes = changes
+    }
+
+    private enum CodingKeys: String, CodingKey { case repo, root, branch, detached, changes }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        repo = try container.decodeIfPresent(Bool.self, forKey: .repo) ?? false
+        root = try container.decodeIfPresent(String.self, forKey: .root)
+        branch = try container.decodeIfPresent(String.self, forKey: .branch)
+        detached = try container.decodeIfPresent(Bool.self, forKey: .detached)
+        changes = try container.decodeIfPresent([Change].self, forKey: .changes) ?? []
+    }
 }
 
 /// The references to files in a reply's text: link targets that are not web

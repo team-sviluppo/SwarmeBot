@@ -91,7 +91,7 @@ Shape ricorrenti: **WireBot** = `BotRecord` senza `resumeCursors`, con `tasks[]`
 |---|---|---|---|---|---|
 | GET | `/api/bots` | query `messages=n` (0..200, opzionale) | `{bots: PublicBot[] (+hasMore se paginato), groups: (WireGroup+messages[]+hasMore?)[], computerControl: {[botId]: {held, helpReason}}}`. Senza `messages` = transcript completo; con `messages` = ultimi n, i `screen` ridotti a `{…,hasImage:true}` senza `png/mime` | ✅ (senza query) | ✅ (`fleet(messages:50)`, ignora `computerControl`) |
 | POST | `/api/bots` | — | 201 `{bot: WireBot+messages+activeLeafId}` (nome/colore/greeting scelti dal server, modelSelection = default) | ✅ | ✅ |
-| PATCH | `/api/bots/:id` | uno o più tra: `name`(≤100, non vuoto) `title`(≤200) `description`(≤8000) `notifications` `modelSelection{instanceId,model,effort?}` `unread` `computer`(**solo `"vm"`/`"off"`**) `cloudBackend`(`box`/`vps`, 409 se bot busy/VPS attivo) `color` `mascotExpression` `mascotSilhouette` `pinned` `hidden`(400 se chief of staff) `speakReplies` `voice` `mascotAvatarSvg`(solo null/"" per cancellare) `mascotAvatarImage`(solo clear) `mascotAvatarSheetRow`(0–8\|null) `pinnedMessageId`(id\|null\|"") `section`(≤60\|null) `composio`(bool) `chiefOfStaff`(bool) `cwd`(validato) `autoApprove`(bool) `approvePeerComms`(bool) `alwaysAllow`(string[], dedup, max 200). `effort` validato contro `effortLevelsForModel` dell'istanza (400) | `{bot: WireBot}` (+ frame `bot` via store) | ✅ | ❌ |
+| PATCH | `/api/bots/:id` | uno o più tra: `name`(≤100, non vuoto) `title`(≤200) `description`(≤8000) `notifications` `modelSelection{instanceId,model,effort?}` `unread` `computer`(**solo `"vm"`/`"off"`**) `cloudBackend`(`box`/`vps`, 409 se bot busy/VPS attivo) `color` `mascotExpression` `mascotSilhouette` `pinned` `hidden`(400 se chief of staff) `speakReplies` `voice` `mascotAvatarSvg`(solo null/"" per cancellare) `mascotAvatarImage`(solo clear) `mascotAvatarSheetRow`(0–8\|null) `pinnedMessageId`(id\|null\|"") `section`(≤60\|null) `composio`(bool) `chiefOfStaff`(bool) `cwd`(validato) `autoApprove`(bool) `codeMode`(bool) `approvePeerComms`(bool) `alwaysAllow`(string[], dedup, max 200). `effort` validato contro `effortLevelsForModel` dell'istanza (400) | `{bot: WireBot}` (+ frame `bot` via store) | ✅ | ❌ |
 | DELETE | `/api/bots/:id` | — | `{ok:true}` (interrompe turno, disabilita routine/webhook del bot, cancella log eventi) | ✅ | ❌ |
 | POST | `/api/bots/:id/read` | — | `{bot: WireBot}` + frame `bot` | ❌ (usa PATCH `unread:false`) | ✅ |
 | POST | `/api/bots/:id/avatar/upload` | **body raw**: `image/svg+xml` (validato, max `MAX_AVATAR_SVG_BYTES`) oppure immagine raster (max `AVATAR_IMAGE_MAX_BYTES`; sprite sheet 9×8 riconosciuto → `mascotAvatarSheetRow:0`) | `{bot: WireBot}` | ✅ | ❌ |
@@ -156,6 +156,7 @@ ospite l'host chiama il motore dell'ospite, che tiene una **stanza specchio** de
 | GET | `/api/attachments/:name` | — | bytes, `nosniff`, immutable | ✅ | ❌ |
 | POST | `/api/threads/:tid/files` | `{paths: string[]}` (max 20: link, percorsi assoluti, `~/…`, `file://…` o relativi alla cartella della chat) | `{files: {ref, path, name, bytes}[]}`, solo i file regolari che esistono; 404 se il thread non è di un bot né di una room. Da un client remoto solo i file dentro le cartelle della chat (task, bot, room, workspace dei membri; symlink risolti) o nominati da uno strumento di quella chat | — (solo Swift) | ❌ |
 | GET | `/api/threads/:tid/files/content` | `path` (come sopra) | bytes `application/octet-stream`, `nosniff`, `no-store`; 404 se non raggiungibile, 413 oltre 50 MB | — (solo Swift) | ❌ |
+| GET | `/api/threads/:tid/git` | — | `{repo:false}` se la cartella della chat (la prima tra task, bot, workspace) non è in un work tree git; altrimenti `{repo:true, root, branch, detached, changes: {path, name, status, bytes}[]}` con `status` `M`/`A`/`D`/`R`/`?` (file con modifiche non committate sotto la cartella, max 200, `path` assoluto). `branch` è lo short sha se `detached`. Sola lettura (`GIT_OPTIONAL_LOCKS=0`). 404 se il thread non è di un bot né di una room | — (solo Swift) | ❌ |
 
 ### 2.4 Task (contesti separati di un bot)
 
@@ -404,7 +405,7 @@ Campi in **grassetto** = presenti sul wire ma **assenti in `Models.swift`**.
 
 ### 4.2 Bot (WireBot da `BotRecord`)
 
-Presenti in Swift: `id, threadId, name, title, description, notifications, color, unread, modelSelection{instanceId, model}, createdAt, busy?, pinned?, hidden?, chiefOfStaff?, autoApprove?, alwaysAllow?, computer?, cloudBackend?, speakReplies?, voice?, mascotExpression?, tasks?, messages?, activeLeafId?, hasMore?`.
+Presenti in Swift: `id, threadId, name, title, description, notifications, color, unread, modelSelection{instanceId, model}, createdAt, busy?, pinned?, hidden?, chiefOfStaff?, autoApprove?, codeMode?, alwaysAllow?, computer?, cloudBackend?, speakReplies?, voice?, mascotExpression?, tasks?, messages?, activeLeafId?, hasMore?`.
 
 Mancanti in Swift: **`modelSelection.effort?`** (`none|minimal|low|medium|high|xhigh|max`), **`activity?`**
 (`working|waiting-on-you|idle|no-signal|dead`), **`mascotSilhouette?`**, **`mascotAvatarSvg?`**, **`mascotAvatarImage?`**

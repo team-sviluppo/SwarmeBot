@@ -213,6 +213,9 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     public var hidden: Bool?
     public var chiefOfStaff: Bool?
     public var autoApprove: Bool?
+    /// Desktop: show the folder's git branch under the chat, and fold the
+    /// files a turn changed into one badge.
+    public var codeMode: Bool?
     public var alwaysAllow: [String]?
     /// Desktop: the connectors this bot may use.
     public var connectors: [BotConnector]?

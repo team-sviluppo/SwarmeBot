@@ -546,6 +546,10 @@ public final class Routes {
                 ], body: data))
             }
         }
+        if method == "GET", let threadId = match(#"^/api/threads/([\w-]+)/git$"#, path)?.first {
+            guard let roots = ThreadFiles.roots(store, harness.paths, threadId: threadId) else { return fail(404, "no such thread") }
+            return ok(await ThreadGit.wire(folder: roots.first))
+        }
         if method == "GET", path == "/api/decisions" {
             return ok(["decisions": .array(DecisionLog.read(harness.paths, limit: Int(r.query["limit"] ?? "") ?? 200))])
         }
@@ -633,7 +637,7 @@ public final class Routes {
             guard ["local", "vm", "off"].contains(computer.string ?? "") else { return fail(400, "computer must be local, vm, or off") }
             patch["computer"] = computer
         }
-        for flag in ["autoApprove", "approvePeerComms", "chiefOfStaff", "composio"] {
+        for flag in ["autoApprove", "approvePeerComms", "chiefOfStaff", "composio", "codeMode"] {
             guard let value = body[flag] else { continue }
             guard value.bool != nil else { return fail(400, "\(flag) must be true or false") }
             patch[flag] = value

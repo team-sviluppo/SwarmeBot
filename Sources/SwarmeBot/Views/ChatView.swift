@@ -48,6 +48,8 @@ struct TranscriptView: View {
         let all = model.visibleTranscript(threadId)
         let messages = Array(all.suffix(window))
         let hiddenLocally = all.count - messages.count
+        // Code mode: a badge, not a card per file, where a turn ends
+        let turnEnds = model.selectedBot?.codeMode == true ? TurnEnds(messages) : nil
         GeometryReader { geo in
         let column = min(geo.size.width - 40, Theme.transcriptMaxWidth)
         ScrollViewReader { proxy in
@@ -88,7 +90,8 @@ struct TranscriptView: View {
                         .transition(.opacity.combined(with: .offset(y: 4)))
                     } else {
                     let message = row.first
-                    MessageRow(message: message, threadId: threadId, isRoom: model.selectedRoom != nil)
+                    MessageRow(message: message, threadId: threadId, isRoom: model.selectedRoom != nil,
+                               codeMode: turnEnds.map { .init(isTurnEnd: $0.ids.contains(message.id), isLatest: $0.latest == message.id) })
                         .id(message.id)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
@@ -255,9 +258,17 @@ struct HoverActions<Content: View>: View {
 }
 
 struct MessageRow: View {
+    /// Where a reply stands in a Code mode chat; nil outside it.
+    struct CodeModeContext {
+        var isTurnEnd: Bool
+        /// The newest turn's last reply.
+        var isLatest: Bool
+    }
+
     let message: Message
     let threadId: String
     let isRoom: Bool
+    var codeMode: CodeModeContext? = nil
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -284,7 +295,14 @@ struct MessageRow: View {
                             .contextMenu { messageMenu }
                     }
                     .replyFileLinks(threadId: threadId, model: model)
-                    ReplyFileCards(message: message, threadId: threadId)
+                    if let codeMode {
+                        // mid-turn replies show nothing; the newest turn waits for the bot to be idle
+                        if codeMode.isTurnEnd, !(codeMode.isLatest && model.selectedBot.map(model.isBusy) == true) {
+                            CodeModeBadge(message: message, threadId: threadId, latest: codeMode.isLatest)
+                        }
+                    } else {
+                        ReplyFileCards(message: message, threadId: threadId)
+                    }
                     if message.interrupted == true {
                         Label(tr("Interrotto"), systemImage: "stop.circle")
                             .font(.system(size: 12))

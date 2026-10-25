@@ -237,5 +237,18 @@ extension Translations {
         "Velocità media di risposta, in parte stimata": "Average reply speed, partly estimated",
         "Velocità stimata dal testo": "Speed estimated from the text",
         "VM locale": "Local VM",
+        "1 file modificato": "1 file modified",
+        "%@ file modificati": "%@ files modified",
+        "Commit & push": "Commit & push",
+        "Chiede all'agente di fare commit e push delle modifiche": "Asks the agent to commit and push the changes",
+        "Mostra i file": "Show files",
+        "Nascondi i file": "Hide files",
+        "Branch git attivo: %@": "Active git branch: %@",
+        "HEAD staccato su %@": "Detached HEAD at %@",
+        "Aggiunto": "Added",
+        "Eliminato": "Deleted",
+        "Rinominato": "Renamed",
+        "Non tracciato": "Untracked",
+        "Modificato": "Modified",
     ]
 }
