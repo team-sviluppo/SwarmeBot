@@ -32,3 +32,34 @@ final class ReplyFilesTests: XCTestCase {
         XCTAssertEqual(Set(found).count, found.count)
     }
 }
+
+// Code mode: the folder's git state and the flag that turns it on.
+final class CodeModeTests: XCTestCase {
+    func testDecodesARepoWithItsChanges() throws {
+        let json = #"{"repo":true,"root":"/p","branch":"main","detached":false,"changes":[{"path":"/p/a.swift","name":"a.swift","status":"M","bytes":12},{"path":"/p/b.swift","name":"b.swift","status":"D","bytes":0}]}"#
+        let state = try JSONDecoder().decode(ThreadGitState.self, from: Data(json.utf8))
+        XCTAssertTrue(state.repo)
+        XCTAssertEqual(state.branch, "main")
+        XCTAssertEqual(state.changes.map(\.name), ["a.swift", "b.swift"])
+        XCTAssertEqual(state.changes.map(\.exists), [true, false])
+        XCTAssertEqual(state.changes[0].file.path, "/p/a.swift")
+    }
+
+    func testAFolderOutsideARepoHasNoBranchAndNoChanges() throws {
+        let state = try JSONDecoder().decode(ThreadGitState.self, from: Data(#"{"repo":false}"#.utf8))
+        XCTAssertFalse(state.repo)
+        XCTAssertNil(state.branch)
+        XCTAssertTrue(state.changes.isEmpty)
+    }
+
+    func testTheFlagTravelsInThePatch() {
+        XCTAssertEqual(BotPatch(codeMode: true).bodyForTesting["codeMode"] as? Bool, true)
+        XCTAssertNil(BotPatch(pinned: true).bodyForTesting["codeMode"])
+    }
+
+    func testABotDecodesWithAndWithoutTheFlag() throws {
+        let base = #"{"id":"b","threadId":"t","name":"N","title":"","description":"","notifications":true,"color":"blue","unread":false,"modelSelection":{"instanceId":"i","model":"m"},"createdAt":1"#
+        XCTAssertEqual(try JSONDecoder().decode(Bot.self, from: Data((base + #","codeMode":true}"#).utf8)).codeMode, true)
+        XCTAssertNil(try JSONDecoder().decode(Bot.self, from: Data((base + "}").utf8)).codeMode)
+    }
+}

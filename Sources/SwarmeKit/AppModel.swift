@@ -58,6 +58,8 @@ public final class AppModel {
     @ObservationIgnored public internal(set) var client: CompanionClient?
     /// The files each settled reply points at, by thread and message (AppModel+Desktop.swift).
     @ObservationIgnored var replyFileCache: [String: [ReplyFile]] = [:]
+    /// Code mode: the git state of each chat's folder, by thread (AppModel+CodeMode.swift).
+    public internal(set) var gitStates: [String: ThreadGitState] = [:]
     /// Which engine the window shows: this Mac's, or a remote one (AppModel+Remote.swift).
     public internal(set) var engineChoice: EngineChoice = .local
     public internal(set) var remoteEngines: [RemoteEngine] = []

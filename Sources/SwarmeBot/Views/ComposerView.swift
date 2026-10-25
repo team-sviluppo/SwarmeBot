@@ -129,12 +129,14 @@ struct ComposerView: View {
                             Task { await model.setWorkingFolder(path) }
                         }
                     }
+                    if bot.codeMode == true { GitBranchChip(bot: bot) }
                     LibraryChip(bot: bot)
                     ConnectorsChip(bot: bot)
                     SkillsChip(bot: bot)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 6)
+                .refreshingGit(bot: bot, folder: workingFolder(bot), model: model)
             }
         }
     }

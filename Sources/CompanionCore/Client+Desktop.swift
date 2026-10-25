@@ -19,6 +19,7 @@ public struct BotPatch: Sendable {
     public var unread: Bool?
     public var notifications: Bool?
     public var autoApprove: Bool?
+    public var codeMode: Bool?
     /// "" clears the label.
     public var section: String?
     public var color: String?
@@ -36,7 +37,7 @@ public struct BotPatch: Sendable {
     public init(
         name: String? = nil, title: String? = nil, description: String? = nil,
         modelSelection: ModelSelection? = nil, pinned: Bool? = nil, hidden: Bool? = nil,
-        unread: Bool? = nil, notifications: Bool? = nil, autoApprove: Bool? = nil,
+        unread: Bool? = nil, notifications: Bool? = nil, autoApprove: Bool? = nil, codeMode: Bool? = nil,
         section: String? = nil, color: String? = nil, computer: String? = nil, cwd: String? = nil
     ) {
         self.computer = computer
@@ -50,6 +51,7 @@ public struct BotPatch: Sendable {
         self.unread = unread
         self.notifications = notifications
         self.autoApprove = autoApprove
+        self.codeMode = codeMode
         self.section = section
         self.color = color
     }
@@ -69,6 +71,7 @@ public struct BotPatch: Sendable {
         if let unread { out["unread"] = unread }
         if let notifications { out["notifications"] = notifications }
         if let autoApprove { out["autoApprove"] = autoApprove }
+        if let codeMode { out["codeMode"] = codeMode }
         if let section { out["section"] = section }
         if let color { out["color"] = color }
         if let computer { out["computer"] = computer }
@@ -286,6 +289,12 @@ extension CompanionClient {
         struct Answer: Decodable { var files: [ReplyFile] }
         let request = try makeRequest("POST", "/api/threads/\(threadId)/files", body: ["paths": references])
         return try await send(request, as: Answer.self).files
+    }
+
+    /// `GET /api/threads/:tid/git`: the branch and the uncommitted files of
+    /// the chat's folder.
+    public func threadGit(threadId: String) async throws -> ThreadGitState {
+        try await send(try makeRequest("GET", "/api/threads/\(threadId)/git"), as: ThreadGitState.self)
     }
 
     /// `GET /api/threads/:tid/files/content`: the bytes of one of those files.

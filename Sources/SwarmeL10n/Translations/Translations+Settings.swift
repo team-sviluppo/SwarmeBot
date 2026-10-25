@@ -350,5 +350,7 @@ extension Translations {
         "Telefono": "Phone",
         "Tempo scaduto: il Mac non offre più la configurazione.": "Time is up: the Mac no longer offers the settings.",
         "senza chiave: non è salvata su questo Mac": "without a key: it is not saved on this Mac",
+        "Code mode": "Code mode",
+        "Mostra il branch git accanto alla cartella e raccoglie i file modificati a fine turno in un badge.": "Shows the git branch next to the folder and gathers the files changed at the end of a turn into one badge.",
     ]
 }
