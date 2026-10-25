@@ -496,6 +496,26 @@ public enum RemoteScripts {
     echo "restart=ok"
     """#
 
+    // MARK: Vault (as the user, docs/plans/2026-10-25-vault.md V7)
+
+    /// Create or change the secret $1; stdin: one JSON line {preset, description, hint, value?}.
+    public static let vaultSet = #"""
+    set -eu
+    "$HOME/.swarmebot/bin/swarme-harness" vault set "$1"
+    """#
+
+    /// Remove the secret $1 and every grant naming it.
+    public static let vaultUnset = #"""
+    set -eu
+    "$HOME/.swarmebot/bin/swarme-harness" vault unset "$1"
+    """#
+
+    /// Replace the grants of bot $1; stdin: one JSON line {secrets: [{name, mode}], note}.
+    public static let vaultGrant = #"""
+    set -eu
+    "$HOME/.swarmebot/bin/swarme-harness" vault grant "$1"
+    """#
+
     // MARK: CLI logins (as the user)
 
     /// Store Claude's long-lived token (stdin) for the engine; `restartEngine` makes it live.

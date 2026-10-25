@@ -42,6 +42,8 @@ public final class AppModel {
     /// Settings › Skill: instruction folders bots can be given, and where the engine keeps them.
     public internal(set) var skills: [Skill] = []
     public internal(set) var skillsFolder: SkillsFolder?
+    /// The engine's secrets vault, without values (AppModel+Vault.swift).
+    public internal(set) var vault: VaultState?
     /// Where the transcript should land after a search jump.
     public var focusMessageId: String?
     public internal(set) var webhookIngress: WebhookIngress?
@@ -217,6 +219,9 @@ public final class AppModel {
                     }
                     if case .skills = frame.frame {
                         Task { await self.refreshSkills() }
+                    }
+                    if case .vault = frame.frame {
+                        Task { await self.refreshVault() }
                     }
                     if case let .notify(notification) = frame.frame { onNotify?(notification) }
                     onUnreadChange?(state.unreadCount)

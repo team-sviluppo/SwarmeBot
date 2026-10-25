@@ -340,6 +340,8 @@ public final class HarnessLauncher {
         environment.merge(command.environment) { _, new in new }
         // workspace secrets live in the Keychain, never in config.json
         environment.merge(CredentialStore.environment) { _, new in new }
+        // the vault's key: the engine takes it out of its environment at once
+        if let key = VaultKey.loadOrCreate() { environment[VaultKey.environmentName] = key.base64EncodedString() }
         process.environment = environment
 
         let handle = openLog()

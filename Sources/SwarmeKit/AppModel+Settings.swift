@@ -56,6 +56,8 @@ extension AppModel {
             Task { await refreshMCPConnectors() }
         case .skills:
             Task { await refreshSkills() }
+        case .vault:
+            Task { await refreshVault() }
         default:
             break
         }
