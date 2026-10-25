@@ -36,7 +36,12 @@ extension Translations {
         "Nessuna skill su questo Mac.": "No skills on this Mac.",
         "stdio: usa un comando di questo Mac, funziona solo se c'è anche sul server":
             "stdio: runs a command of this Mac, works only if the server has it too",
-        "OAuth: sul server si collega a parte": "OAuth: sign in on the server separately",
+        "HTTP con OAuth: sul server va rifatto il login": "HTTP with OAuth: sign in again on the server",
+        "I connettori OAuth si copiano senza il login: dopo la copia va rifatta l'autenticazione sul server.":
+            "OAuth connectors are copied without their login: sign in again on the server after the copy.",
+        "copiato: rifai il login OAuth sul server": "copied: sign in with OAuth again on the server",
+        "Copiato su %@. Il login OAuth non si copia: rifallo sul server, dalle sue impostazioni dei connettori.":
+            "Copied to %@. The OAuth login isn't copied: sign in again on the server, from its connector settings.",
         "contiene script": "contains scripts",
         "Copia (%@)": "Copy (%@)",
         "già sul server: verrà sostituito": "already on the server: it will be replaced",

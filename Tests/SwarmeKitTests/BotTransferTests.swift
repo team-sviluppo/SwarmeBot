@@ -116,6 +116,33 @@ final class BotTransferTests: XCTestCase {
     }
 }
 
+/// An OAuth connector copied to an engine: its settings and client secret go, its login does not.
+final class OAuthConnectorCopyTests: XCTestCase {
+    func testAnOAuthConnectorArrivesWithoutItsLogin() async throws {
+        let products = Bundle(for: Self.self).bundleURL.deletingLastPathComponent()
+        let binary = products.appendingPathComponent("swarme-harness")
+        guard FileManager.default.isExecutableFile(atPath: binary.path) else { throw XCTSkip("swarme-harness not built") }
+        let root = URL(fileURLWithPath: "/tmp/sbo-\(UUID().uuidString.prefix(4))", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let server = try await Engine.start(binary, data: root)
+        defer { server.stop() }
+
+        // as this Mac's engine shows it: logged in, its client secret only as "set"
+        let local = try JSONDecoder().decode(MCPConnector.self, from: Data(#"""
+        {"id":"notion","name":"Notion","transport":"http","url":"https://mcp.example.com/mcp","auth":"oauth",
+         "oauth":{"clientId":"cid","scope":"read","clientSecret":{"secret":true,"set":true}},"oauthState":{"status":"connected"}}
+        """#.utf8))
+        let copied = try await ConnectorCopy.copy(local, secrets: ["notion": ["oauth": ["clientSecret": "cs-1"]]], to: server.client)
+        XCTAssertTrue(copied.usesOAuth)
+        XCTAssertEqual(copied.oauth?.clientId, "cid")
+        guard case .secret(set: true)? = copied.oauth?.clientSecret else { return XCTFail("client secret not set") }
+        XCTAssertNotEqual(copied.oauthState?.status, "connected", "the login is done again there")
+        let secrets = try String(contentsOf: root.appendingPathComponent("mcp-connector-secrets.json"), encoding: .utf8)
+        XCTAssertTrue(secrets.contains("cs-1"))
+        XCTAssertFalse(secrets.contains("access"))
+    }
+}
+
 /// A throwaway engine on loopback ports of its own.
 private struct Engine {
     let process: Process

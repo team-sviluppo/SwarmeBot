@@ -5,8 +5,8 @@ import SwiftUI
 /// "Copia su server…": this Mac's connectors and skills, picked together and
 /// sent to a server in one go. HTTP connectors and skills start ticked; a
 /// stdio connector runs a command of this Mac, so it only works there if the
-/// server has it too, and starts unticked. OAuth connectors are signed in on
-/// the server itself.
+/// server has it too, and starts unticked. An OAuth connector goes without
+/// its login, which is done again on the server.
 struct ServerCopySheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -18,8 +18,6 @@ struct ServerCopySheet: View {
     @State private var outcomes: [ServerCopyOutcome]?
 
     private var engine: RemoteEngine? { model.remoteEngines.first { $0.id == engineId } }
-    private var copiable: [MCPConnector] { model.mcpConnectors.filter { !$0.usesOAuth } }
-    private var oauth: [MCPConnector] { model.mcpConnectors.filter(\.usesOAuth) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -33,7 +31,7 @@ struct ServerCopySheet: View {
             // opened from one pane, the other list may not be loaded yet
             await model.refreshMCPConnectors()
             await model.refreshSkills()
-            picked = Set(copiable.filter { $0.transport == "http" }.map { "c:\($0.id)" } + model.skills.map { "s:\($0.id)" })
+            picked = Set(model.mcpConnectors.filter { $0.transport == "http" }.map { "c:\($0.id)" } + model.skills.map { "s:\($0.id)" })
         }
         .task(id: engineId) {
             existing = nil
@@ -50,16 +48,9 @@ struct ServerCopySheet: View {
         List {
             Section(tr("Connettori")) {
                 if model.mcpConnectors.isEmpty { Text(tr("Nessun connettore su questo Mac.")).foregroundStyle(.secondary) }
-                ForEach(copiable) { connector in
-                    row(key: "c:\(connector.id)", name: connector.name,
-                        detail: connector.transport == "http"
-                            ? "HTTP"
-                            : tr("stdio: usa un comando di questo Mac, funziona solo se c'è anche sul server"),
+                ForEach(model.mcpConnectors) { connector in
+                    row(key: "c:\(connector.id)", name: connector.name, detail: detail(connector),
                         replaces: existing?.connectors.contains(connector.id) == true)
-                }
-                ForEach(oauth) { connector in
-                    row(key: "c:\(connector.id)", name: connector.name, detail: tr("OAuth: sul server si collega a parte"),
-                        replaces: false, disabled: true)
                 }
             }
             Section(tr("Skill")) {
@@ -69,6 +60,10 @@ struct ServerCopySheet: View {
                         replaces: existing?.skills.contains(skill.id) == true)
                 }
             }
+        }
+        if model.mcpConnectors.contains(where: { $0.usesOAuth && picked.contains("c:\($0.id)") }) {
+            Text(tr("I connettori OAuth si copiano senza il login: dopo la copia va rifatta l'autenticazione sul server."))
+                .font(.system(size: 12)).foregroundStyle(Theme.warning)
         }
         if let error { Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger).textSelection(.enabled) }
         HStack {
@@ -81,7 +76,12 @@ struct ServerCopySheet: View {
         }
     }
 
-    private func row(key: String, name: String, detail: String?, replaces: Bool, disabled: Bool = false) -> some View {
+    private func detail(_ connector: MCPConnector) -> String {
+        if connector.usesOAuth { return tr("HTTP con OAuth: sul server va rifatto il login") }
+        return connector.transport == "http" ? "HTTP" : tr("stdio: usa un comando di questo Mac, funziona solo se c'è anche sul server")
+    }
+
+    private func row(key: String, name: String, detail: String?, replaces: Bool) -> some View {
         Toggle(isOn: Binding(get: { picked.contains(key) }, set: { if $0 { picked.insert(key) } else { picked.remove(key) } })) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: name).font(.system(size: 13))
@@ -93,7 +93,7 @@ struct ServerCopySheet: View {
             }
         }
         .toggleStyle(.checkbox)
-        .disabled(disabled || busy)
+        .disabled(busy)
     }
 
     @ViewBuilder
@@ -119,7 +119,7 @@ struct ServerCopySheet: View {
         guard let engine else { return }
         busy = true
         defer { busy = false }
-        let connectors = copiable.filter { picked.contains("c:\($0.id)") }
+        let connectors = model.mcpConnectors.filter { picked.contains("c:\($0.id)") }
         let skills = model.skills.filter { picked.contains("s:\($0.id)") }
         outcomes = await model.copyToServer(connectors: connectors, skills: skills, engine: engine)
     }

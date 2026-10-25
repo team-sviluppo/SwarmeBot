@@ -40,7 +40,9 @@ extension AppModel {
             do {
                 let copied = try await ConnectorCopy.copy(connector, secrets: secrets, to: remote)
                 let check = copied.lastCheck
-                let note = check?.ok == true
+                let note = connector.usesOAuth
+                    ? tr("copiato: rifai il login OAuth sul server")
+                    : check?.ok == true
                     ? tr("provato sul server: %@ strumenti", String(check?.tools?.count ?? 0))
                     : tr("copiato, ma la prova sul server non è riuscita: %@", check?.error ?? tr("errore sconosciuto"))
                 outcomes.append(ServerCopyOutcome(kind: .connector, id: connector.id, name: connector.name, note: note))

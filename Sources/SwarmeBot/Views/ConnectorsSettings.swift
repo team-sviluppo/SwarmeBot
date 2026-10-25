@@ -192,7 +192,7 @@ private struct ConnectorEditor: View {
                         }
                         .disabled(busy)
                         // a connector of this Mac's engine can go to a server, with its secrets (R14)
-                        if !model.isRemote, !model.remoteEngines.isEmpty, !connector.usesOAuth {
+                        if !model.isRemote, !model.remoteEngines.isEmpty {
                             Menu(tr("Copia su server")) {
                                 ForEach(model.remoteEngines) { engine in
                                     Button(engine.name) { Task { await copy(connector, to: engine) } }
@@ -235,7 +235,9 @@ private struct ConnectorEditor: View {
         do {
             let remote = try await model.copyConnector(connector, to: engine)
             let check = remote.lastCheck
-            copied = check?.ok == true
+            copied = connector.usesOAuth
+                ? tr("Copiato su %@. Il login OAuth non si copia: rifallo sul server, dalle sue impostazioni dei connettori.", engine.name)
+                : check?.ok == true
                 ? tr("Copiato su %@: %@ strumenti, provato sul server", engine.name, String(check?.tools?.count ?? 0))
                 : tr("Copiato su %@, ma la prova sul server non è riuscita: %@", engine.name, check?.error ?? tr("errore sconosciuto"))
         } catch {

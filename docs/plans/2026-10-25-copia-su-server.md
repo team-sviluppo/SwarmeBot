@@ -38,9 +38,13 @@ dettaglio di ciascuno in Impostazioni. Mancavano la copia di più elementi insie
   il bot resta sull'origine senza automazioni.
 - **Copia multipla connettori/skill:** "Copia su server…" in Impostazioni › Connettori e › Skill apre lo stesso
   foglio con entrambe le liste. Spuntati di default i connettori HTTP e tutte le skill; gli stdio si possono
-  copiare (il server li prova subito) ma partono non spuntati, perché usano un comando di questo Mac; gli OAuth
-  non si copiano (token per motore). Quanto esiste già sul server viene segnalato e sostituito. Ogni elemento va
-  per conto suo: uno che fallisce non ferma gli altri.
+  copiare (il server li prova subito) ma partono non spuntati, perché usano un comando di questo Mac. Quanto
+  esiste già sul server viene segnalato e sostituito. Ogni elemento va per conto suo: uno che fallisce non ferma
+  gli altri.
+- **Connettori OAuth** (richiesta dell'utente, 2026-10-25): si copiano, sia singolarmente sia nella copia
+  multipla, con le impostazioni del login (client id, scope, redirect, segreto client letto da
+  `mcp-connector-secrets.json`) ma **senza i token**, che ruotano e appartengono a un motore. Il server non li
+  prova; l'app avvisa, prima e dopo la copia, che il login va rifatto sul server.
 
 ## Dove
 
@@ -57,12 +61,16 @@ dettaglio di ciascuno in Impostazioni. Mancavano la copia di più elementi insie
 - [x] Spostamento di un bot con routine, webhook e immagine.
 - [x] Copia multipla di connettori e skill su un server.
 - [x] Traduzioni inglesi (`Translations+Transfer.swift`).
+- [x] Copia dei connettori OAuth senza login, con avviso.
 
 Verificato:
 - `BotTransferTests`: due motori `swarme-harness` usa e getta su porte proprie; un bot con SVG, una routine e un
   webhook passa dall'uno all'altro (identità, routine e webhook puntati al nuovo bot, nuovo segreto restituito),
   sull'origine restano solo le automazioni degli altri bot; uno spostamento che fallisce (immagine non
   scaricabile) lascia entrambi i motori com'erano. Più i test unitari su routine passate e campi copiati.
+- `ConnectorCopyTests` (segreto client OAuth rimesso nel form, token mai letti dal file dei segreti) e
+  `OAuthConnectorCopyTests` (su un motore usa e getta il connettore arriva con il segreto client impostato e
+  senza login).
 - `swift build` senza warning nuovi, `swift test` verde, `LocalizationTests` verde.
 
 Non verificato:
