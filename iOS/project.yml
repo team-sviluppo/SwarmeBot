@@ -95,6 +95,9 @@ targets:
     info:
       path: SwarmeBot/Info.plist
       properties:
+        # the build settings' versions, which xcodegen would otherwise write as 1.0 / 1
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # what the phone bots' tools and dictation use (PhoneTools.swift, Dictation.swift)
         NSCalendarsFullAccessUsageDescription: "I bot del telefono leggono gli appuntamenti e, se lo confermi, ne aggiungono."
         NSRemindersFullAccessUsageDescription: "I bot del telefono leggono i promemoria e, se lo confermi, ne aggiungono."
@@ -142,32 +145,9 @@ targets:
       path: NotificationService/Info.plist
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.usernotifications.service
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(SWARMEBOT_BUNDLE_ID).OneSignalNotificationServiceExtension
-        GENERATE_INFOPLIST_FILE: YES
-        TARGETED_DEVICE_FAMILY: "1"
-        SKIP_INSTALL: YES
-  # OneSignal's Notification Service Extension: confirmed delivery, badges, attachments
-  OneSignalNotificationServiceExtension:
-    type: app-extension
-    platform: iOS
-    sources:
-      - path: NotificationService
-    dependencies:
-      - package: OneSignal
-        product: OneSignalExtension
-    entitlements:
-      path: NotificationService/NotificationService.entitlements
-      properties:
-        com.apple.security.application-groups: [group.$(SWARMEBOT_BUNDLE_ID).onesignal]
-    info:
-      path: NotificationService/Info.plist
-      properties:
-        CFBundleDisplayName: OneSignalNotificationServiceExtension
+        # an extension's versions must match the app's
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
