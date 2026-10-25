@@ -9,6 +9,7 @@ struct ConnectorsPane: View {
     @Environment(AppModel.self) private var model
     @State private var selected: String?
     @State private var importing = false
+    @State private var copyingToServer = false
     private static let newId = "__new__"
 
     var body: some View {
@@ -28,6 +29,10 @@ struct ConnectorsPane: View {
                         .help(tr("Aggiungi un connettore"))
                     Button(tr("Importa JSON…")) { importing = true }
                     Spacer()
+                    // this Mac's connectors and skills, many at once, to a server
+                    if !model.isRemote, !model.remoteEngines.isEmpty {
+                        Button(tr("Copia su server…")) { copyingToServer = true }
+                    }
                 }
                 .buttonStyle(.borderless)
                 .padding(8)
@@ -51,6 +56,7 @@ struct ConnectorsPane: View {
             }
         }
         .task { await model.refreshMCPConnectors() }
+        .sheet(isPresented: $copyingToServer) { ServerCopySheet() }
         .sheet(isPresented: $importing) { ConnectorImportSheet() }
     }
 }

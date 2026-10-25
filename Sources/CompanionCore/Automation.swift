@@ -100,6 +100,8 @@ public struct RoutineInput: Sendable {
     public var enabled: Bool
     public var schedule: RoutineSchedule
     public var durationMinutes: Int?
+    /// "maus" (the engine itself) or "cloud".
+    public var runOn = "maus"
 
     public init(name: String, prompt: String, botId: String, enabled: Bool, schedule: RoutineSchedule, durationMinutes: Int? = nil) {
         self.name = name
@@ -117,7 +119,7 @@ public struct RoutineInput: Sendable {
     var json: [String: Any] {
         var out: [String: Any] = [
             "name": name, "prompt": prompt, "botId": botId, "enabled": enabled,
-            "runOn": "maus", "schedule": schedule.json,
+            "runOn": runOn, "schedule": schedule.json,
         ]
         if let durationMinutes { out["durationMinutes"] = durationMinutes }
         return out
@@ -200,6 +202,10 @@ public struct WebhookInput: Sendable {
     public var botId: String
     public var enabled: Bool
     public var eventTypes: [String]
+    /// "maus" (the engine itself) or "cloud".
+    public var runOn = "maus"
+    /// Disabled while it captures a first delivery to look at.
+    public var verificationPending: Bool?
 
     public init(name: String, prompt: String, botId: String, enabled: Bool, eventTypes: [String] = []) {
         self.name = name
@@ -214,7 +220,9 @@ public struct WebhookInput: Sendable {
     }
 
     var json: [String: Any] {
-        ["name": name, "prompt": prompt, "botId": botId, "enabled": enabled, "runOn": "maus", "eventTypes": eventTypes]
+        var out: [String: Any] = ["name": name, "prompt": prompt, "botId": botId, "enabled": enabled, "runOn": runOn, "eventTypes": eventTypes]
+        if let verificationPending { out["verificationPending"] = verificationPending }
+        return out
     }
 }
 

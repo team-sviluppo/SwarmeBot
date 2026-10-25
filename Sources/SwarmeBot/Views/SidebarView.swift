@@ -17,6 +17,7 @@ struct SidebarView: View {
     @State private var layout = SectionLayout.shared
     @State private var naming: SectionNaming?
     @State private var dropTarget: String?
+    @State private var moving: BotTransferRequest?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,6 +43,7 @@ struct SidebarView: View {
         .sheet(item: $naming) { naming in
             SectionNameSheet(naming: naming) { name in commit(naming, name) }
         }
+        .sheet(item: $moving) { request in BotTransferSheet(request: request) }
         // a server's bots have no sections here, whatever label they carry
         .onAppear { if model.engineChoice == .local { layout.sync(model.sections.compactMap(\.name)) } }
         .onChange(of: model.sections.compactMap(\.name)) { _, names in
@@ -377,6 +379,13 @@ struct SidebarView: View {
                 Button(tr("Copia ID conversazione")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(bot.threadId, forType: .string)
+                }
+                if !model.transferTargets.isEmpty {
+                    Menu(tr("Trasferisci su")) {
+                        ForEach(model.transferTargets, id: \.self) { target in
+                            Button(model.engineName(target)) { moving = BotTransferRequest(bot: bot, target: target) }
+                        }
+                    }
                 }
                 Divider()
                 Button(tr("Nascondi")) { Task { await model.patch(bot, BotPatch(hidden: true)) } }

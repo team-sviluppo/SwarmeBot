@@ -13,6 +13,7 @@ struct SkillsPane: View {
     @State private var pendingImport: PendingImport?
     @State private var replaceImport: URL?
     @State private var error: String?
+    @State private var copyingToServer = false
     private static let newId = "__new__"
 
     /// A pick waiting for the user to accept that it ships scripts.
@@ -41,6 +42,10 @@ struct SkillsPane: View {
                     Button(tr("Importa…"), action: pickImport)
                         .help(tr("Una cartella con SKILL.md, oppure un .zip o .skill che la contiene"))
                     Spacer()
+                    // this Mac's connectors and skills, many at once, to a server
+                    if !model.isRemote, !model.remoteEngines.isEmpty {
+                        Button(tr("Copia su server…")) { copyingToServer = true }
+                    }
                 }
                 .buttonStyle(.borderless)
                 .padding(8)
@@ -70,6 +75,7 @@ struct SkillsPane: View {
             }
         }
         .task { await model.refreshSkills() }
+        .sheet(isPresented: $copyingToServer) { ServerCopySheet() }
         .confirmationDialog(tr("Questa skill contiene script"), isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } }),
                             presenting: pendingImport) { pending in
             Button(tr("Importa")) { Task { await upload(pending.url, replace: false) } }
