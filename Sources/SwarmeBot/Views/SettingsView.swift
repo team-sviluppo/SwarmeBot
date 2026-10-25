@@ -22,6 +22,7 @@ struct SettingsView: View {
             RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }.tag("remote")
             ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
             SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
+            VaultPane().tabItem { Label(tr("Vault"), systemImage: "lock.shield") }.tag("vault")
             PhonePane().tabItem { Label(tr("Telefono"), systemImage: "iphone") }.tag("phone")
             MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }.tag("mac")
             KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
@@ -47,6 +48,7 @@ struct RemoteSettingsView: View {
                 EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
                 ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
                 SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
+            VaultPane().tabItem { Label(tr("Vault"), systemImage: "lock.shield") }.tag("vault")
                 KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
                 DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
             }

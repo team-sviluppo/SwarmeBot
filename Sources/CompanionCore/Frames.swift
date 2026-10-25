@@ -66,6 +66,8 @@ public enum Frame: Sendable {
     case mcpConnectors
     /// The skills, or the folder they live in, changed: refetch the list.
     case skills
+    /// A vault secret or a bot's grants changed: refetch the vault.
+    case vault
     /// An instance's session window moved (after a turn on that account).
     case usageLimit(instanceId: String, limit: UsageLimit)
     case unknown(kind: String)
@@ -151,6 +153,8 @@ extension Frame: Decodable {
             self = .mcpConnectors
         case "skills":
             self = .skills
+        case "vault":
+            self = .vault
         case "usage-limit":
             if let id = try? container.decode(String.self, forKey: .instanceId),
                let limit = try? container.decode(UsageLimit.self, forKey: .usageLimit) {

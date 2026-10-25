@@ -344,6 +344,11 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
             mcpServers["agents"] = agents.json
             allowed.append("mcp__agents")
         }
+        // the vault's commands run without asking: the user gave this bot those secrets
+        if let secrets = turn.secrets {
+            mcpServers[VaultTool.serverName] = secrets.json
+            allowed.append("mcp__\(VaultTool.serverName)")
+        }
         // connectors run without asking: the user chose them for this bot (plan D7)
         for connector in turn.connectors {
             mcpServers[connector.name] = connector.server.json
@@ -381,7 +386,10 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
             args += ["--mcp-config", file.path, "--allowedTools", allowed.joined(separator: ",")]
         }
 
-        let env = Self.environment(model: turn.model, source: environment)
+        var env = Self.environment(model: turn.model, source: environment)
+        for (key, value) in turn.secretEnvironment { env[key] = value }
+        // a download or a build through the vault may take long: Claude's default would cut it
+        if turn.secrets != nil { env["MCP_TOOL_TIMEOUT"] = String(VaultTool.maxSeconds * 1000 + 60_000) }
         let process: CLIProcess
         do {
             process = try CLIProcess(cli: config.cli, args: args, cwd: turn.cwd ?? NSHomeDirectory(), environment: env)

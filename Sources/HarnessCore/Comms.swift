@@ -370,6 +370,7 @@ extension Harness {
         let body = (try? request.json()) ?? JSONObject()
         if request.path == "/api/internal/computer-control" { return computerControlRoute(request, body: body) }
         if request.path.hasPrefix("/api/internal/mcp-connectors/") { return await connectorInternalRoute(request, body: body) }
+        if request.path.hasPrefix("/api/internal/secrets/") { return await secretsInternalRoute(request, body: body) }
         switch (request.method, request.path) {
         case ("GET", "/api/internal/agents"):
             let me = request.query["self"]

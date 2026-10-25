@@ -125,6 +125,7 @@ struct BotDetails: View {
             behaviour
             BotConnectorsCard(bot: bot)
             BotSkillsCard(bot: bot)
+            BotSecretsCard(bot: bot)
             workspace
             if let tasks = bot.tasks, tasks.count > 1 { taskList(tasks) }
             if let allowed = bot.alwaysAllow, !allowed.isEmpty { permissions(allowed) }

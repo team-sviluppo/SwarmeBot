@@ -140,3 +140,38 @@ public enum CredentialStore {
     }
 
 }
+
+/// The key that seals this Mac's vault at rest (docs/plans/2026-10-25-vault.md
+/// V6): 32 random bytes in their own Keychain item, handed to the engine at
+/// launch in SWARMEBOT_VAULT_KEY. Created only when there is none: a Keychain
+/// that refuses to answer must not get a new key, or the sealed file could
+/// never be opened again — the engine then shows the vault as locked.
+public enum VaultKey {
+    static let account = "vault-key"
+    public static let environmentName = "SWARMEBOT_VAULT_KEY"
+
+    public static func loadOrCreate() -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: CredentialStore.service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecSuccess, let data = item as? Data, data.count == 32 { return data }
+        guard status == errSecItemNotFound else { return nil }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { return nil }
+        let key = Data(bytes)
+        let add: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: CredentialStore.service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: key,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess ? key : nil
+    }
+}

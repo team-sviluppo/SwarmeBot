@@ -248,6 +248,24 @@ skill bundle di Node.
 `PATCH /api/bots/:id` con `skills: [{id, defaultOn}]`; sulla chat: `PATCH /api/bots/:id/tasks/:tid` con
 `skills: {name: bool}` (solo le differenze dal default del bot). Ogni modifica manda il frame `skills`.
 
+**Solo Swift (2026-10-25): vault dei secret** (`docs/plans/2026-10-25-vault.md`). Nessuna risposta
+contiene mai un valore. Su un motore remoto (richiesta con device token) le scritture rispondono 403
+`the vault of a remote engine is changed from the Mac that administers it`: lì il vault si scrive via ssh
+con `swarme-harness vault set|unset|grant|list` (dati in JSON su stdin).
+
+| Metodo | Path | Request | Risposta |
+|---|---|---|---|
+| GET | `/api/vault` | — | `{locked, encrypted, secrets: [VaultSecret], grants: {botId: {secrets: [{name, mode}], note}}, support: {safe: [driverKind], env: [driverKind]}}` |
+| POST | `/api/vault/secrets` | `{name, preset?, description?, hint?, value}` | 201 `{secret}`; 400 nome non valido o riservato; 409 se esiste o se il vault è bloccato |
+| PATCH | `/api/vault/secrets/:name` | `{preset?, description?, hint?, value?}` | `{secret}`; 404 |
+| DELETE | `/api/vault/secrets/:name` | — | `{ok: true}`; toglie anche le concessioni che lo nominano |
+| PUT | `/api/vault/grants/:botId` | `{secrets: [{name, mode: "safe"\|"env"}], note?}` | `{grants}`; 404 bot sconosciuto |
+| POST | `/api/internal/secrets/run` | header `x-secrets-grant`; `{command, secrets: [name], timeout_sec?}` | `{exitCode, stdout, stderr, timedOut, truncated}` con i valori mascherati; 403 grant o secret non concesso. Solo loopback + boot token (helper `mcp-secrets`) |
+
+`VaultSecret` = `{name, preset: "generic"|"github"|"huggingface"|"npm", description, hint, createdAt, updatedAt, set}`.
+Ogni modifica manda il frame `vault`. I valori noti del vault sono mascherati (`«secret NAME»`) nei messaggi
+salvati, nei frame `runtime` e nel log eventi.
+
 ### 2.11 Computer: Local VM, Box, VPS, controllo
 
 | Metodo | Path | Request | Risposta | React | CC |
@@ -358,6 +376,7 @@ CompanionCore copre **25** route dell'harness (+ `POST /api/pair` del sidecar).
 | `webhook.deleted` | `webhookId` | WebhookManager | ❌ |
 | `webhook.attempt` | `attempt: WebhookAttempt` | WebhookManager | ❌ |
 | `skills` | — | **solo Swift** (2026-10-21): repository delle skill o sua cartella cambiati; il client rilegge `/api/skills` | ✅ |
+| `vault` | — | **solo Swift** (2026-10-25): un secret del vault o le concessioni di un bot cambiati; il client rilegge `/api/vault` | ✅ |
 | `usage-limit` | `instanceId`, `usageLimit:{window:"five_hour", utilization (0–1, oltre 1 se sopra il tetto), resetsAt? (epoch s)}` | **solo Swift** (2026-10-20): `rate_limit_event` di Claude, solo quando il valore cambia; mai come `runtime` | ✅ |
 
 ### 3.4 Eventi runtime rilanciati (`kind:"runtime"`)

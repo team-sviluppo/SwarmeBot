@@ -22,8 +22,15 @@ public final class Harness {
     public let bus: EventBus
     public let registry: Registry
     public let hub = SSEHub()
-    private var environment: [String: String]
+    /// The engine's environment, never with the vault key in it.
+    private(set) var environment: [String: String]
     private let drivers: [ProviderDriver]
+    /// Secrets bots use in shell commands (Vault.swift, VaultTurns.swift).
+    public let vault: Vault
+    /// Turn grant token → what its `mcp-secrets` helper may run with.
+    var secretsGrants: [String: SecretsGrant] = [:]
+    /// The commands a grant is running, to stop them with the turn.
+    var secretsRuns: [String: [CLIProcess]] = [:]
 
     // fold bookkeeping, keyed "threadId:itemId" / "threadId:requestId"
     private var toolMessageByItem: [String: String] = [:]
@@ -132,14 +139,23 @@ public final class Harness {
 
     public init(paths: DataPaths, environment: [String: String], drivers: [ProviderDriver]) throws {
         self.paths = paths
+        // the key opens the vault and goes no further: not to the drivers, not to any child
+        let vaultKey = Vault.key(from: environment)
+        var environment = environment
+        environment[Vault.keyEnv] = nil
+        unsetenv(Vault.keyEnv)
         self.environment = environment
         self.drivers = drivers
         paths.ensure()
+        vault = Vault(paths: paths, key: vaultKey)
         NativeLog.directory = paths.native
         config = AppConfig(paths: paths, environment: environment)
         store = try Store(paths: paths)
         bus = EventBus(eventsDir: paths.events)
         registry = Registry(drivers: drivers)
+        // a value that slipped into a bot's output stays out of the chats, the stream and the logs
+        store.maskSecrets = { [vault] in vault.mask($0) }
+        bus.maskSecrets = { [vault] in vault.mask($0) }
     }
 
     /// Load the fleet, wire the store to the stream, start folding.
@@ -162,6 +178,7 @@ public final class Harness {
             case .turnCompleted:
                 self.watchdog.settle(event.threadId)
                 self.revokeConnectorGrants(threadId: event.threadId)
+                self.revokeSecretsGrants(threadId: event.threadId)
                 self.localVM.lease.release(threadId: event.threadId)
                 if self.localVM.activeThread == event.threadId { self.localVM.activeThread = nil }
             default:
@@ -361,7 +378,7 @@ public final class Harness {
             wire["resumeCursor"] = nil
             wire["sessionId"] = .null
         }
-        hub.broadcast(["kind": "runtime", "event": wire])
+        hub.broadcast(["kind": "runtime", "event": vault.mask(wire)])
         routines?.handleRuntimeEvent(event)
 
         let threadId = event.threadId
@@ -713,8 +730,9 @@ public final class Harness {
                 let connectors = self.mountConnectors(bot: bot, task: self.store.taskByThread(botId, threadId), threadId: threadId,
                                                       mount: instance.adapter.capabilities.connectors)
                 let webhook = options.automationSource == "webhook" ? Self.webhookBoundary : ""
+                let secrets = self.turnSecrets(botId: botId, threadId: threadId, instance: instance, cwd: cwd, computerKind: computer.kind)
                 // the library goes before the per-turn tags, so the text a server caches stays put
-                let system = (persona + computer.prompt + (coordination.isEmpty ? "" : " \(coordination)") + (library.isEmpty ? "" : "\n\n\(library)\n\n") + (skills.isEmpty ? "" : "\n\n\(skills)\n\n") + webhook + tags).trimmingCharacters(in: .whitespacesAndNewlines)
+                let system = (persona + computer.prompt + (coordination.isEmpty ? "" : " \(coordination)") + (library.isEmpty ? "" : "\n\n\(library)\n\n") + (skills.isEmpty ? "" : "\n\n\(skills)\n\n") + (secrets.prompt.isEmpty ? "" : "\n\n\(secrets.prompt)\n\n") + webhook + tags).trimmingCharacters(in: .whitespacesAndNewlines)
                 var input = SendTurnInput(
                     threadId: threadId, text: invocation + turnText, model: model, effort: selection.effort,
                     resumeCursor: resume ? cursors[instanceId] : nil, transcript: transcript,
@@ -726,6 +744,8 @@ public final class Harness {
                 input.connectors = connectors
                 input.connectorGateway = self.connectorGateway(bot: bot, task: self.store.taskByThread(botId, threadId),
                                                                instance: instance, model: model)
+                input.secrets = secrets.server
+                input.secretEnvironment = secrets.environment
                 self.watchdog.watch(threadId, botId: botId)
                 _ = try await instance.adapter.sendTurn(input)
                 if rewound { self.store.patchBot(botId, ["rewound": false, "resumeCursors": [:]]) }
