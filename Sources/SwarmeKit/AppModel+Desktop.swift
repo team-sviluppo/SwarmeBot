@@ -13,6 +13,7 @@ extension AppModel {
             config = try await client.config()
             loadError = nil
         } catch {
+            if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled { return }
             loadError = tr("Non riesco a leggere la configurazione di %@: %@", engineName, error.localizedDescription)
         }
     }

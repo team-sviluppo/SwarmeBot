@@ -258,6 +258,8 @@ public final class AppModel {
             instances = try await client.instances()
             loadError = nil
         } catch {
+            // leaving the pane cancels its .task: not a failure to report
+            if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled { return }
             loadError = tr("Non riesco a leggere i motori di %@: %@", engineName, error.localizedDescription)
         }
     }

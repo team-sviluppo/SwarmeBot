@@ -171,6 +171,7 @@ private struct EnginesPane: View {
 
     var body: some View {
         HSplitView {
+            VStack(spacing: 0) {
             List(model.instances, selection: $selected) { instance in
                 HStack(spacing: 8) {
                     Circle()
@@ -184,6 +185,13 @@ private struct EnginesPane: View {
                 }
                 .tag(instance.instanceId)
             }
+            Divider()
+            HStack {
+                Spacer()
+                Button(tr("Ricontrolla")) { Task { await model.refreshInstances() } }
+            }
+            .padding(8)
+            }
             .frame(minWidth: 260, maxWidth: 320)
             Group {
                 if let id = selected, let instance = model.instance(id) {
@@ -194,7 +202,6 @@ private struct EnginesPane: View {
             }
         }
         .task { await model.refreshInstances() }
-        .toolbar { Button(tr("Ricontrolla")) { Task { await model.refreshInstances() } } }
     }
 }
 
