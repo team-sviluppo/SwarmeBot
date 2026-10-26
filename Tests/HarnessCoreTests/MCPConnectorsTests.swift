@@ -466,6 +466,16 @@ final class MCPConnectorsTests: XCTestCase {
         XCTAssertNoThrow(try registry.update("web", edit))
     }
 
+    /// A remote engine's login comes back to its public URL, not to the loopback port its proxies use.
+    @MainActor
+    func testOAuthRedirectOfARemoteEngineIsItsPublicURL() throws {
+        let harness = try Harness(paths: try temporaryPaths(), environment: ProcessInfo.processInfo.environment, drivers: [])
+        harness.harnessURL = "http://127.0.0.1:45939"
+        XCTAssertEqual(harness.mcpOAuth.redirectUri, "http://localhost:45939/oauth/mcp/callback")
+        harness.publicURL = "https://bot.example.it/srv/"
+        XCTAssertEqual(harness.mcpOAuth.redirectUri, "https://bot.example.it/srv/oauth/mcp/callback")
+    }
+
     // MARK: Tool details in the transcript
 
     func testToolTextKeepsWhatAPersonReads() {

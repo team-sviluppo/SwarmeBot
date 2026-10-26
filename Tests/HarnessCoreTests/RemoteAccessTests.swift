@@ -131,6 +131,11 @@ final class RemoteGateTests: XCTestCase {
         XCTAssertEqual(refusal(access.gate(&pairing)), 401)
         var claimByGet = remoteRequest("GET", "/api/devices/claim")
         XCTAssertEqual(refusal(access.gate(&claimByGet)), 401)
+        // the browser coming back from a connector's OAuth login has no token: its state is the credential
+        var callback = remoteRequest("/oauth/mcp/callback")
+        XCTAssertNil(access.gate(&callback))
+        var callbackByPost = remoteRequest("POST", "/oauth/mcp/callback")
+        XCTAssertEqual(refusal(access.gate(&callbackByPost)), 401)
     }
 
     func testInternalRoutesDoNotExistHereEvenWithAToken() throws {

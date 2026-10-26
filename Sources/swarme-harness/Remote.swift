@@ -161,6 +161,7 @@ func bootRemote(_ options: RemoteOptions, paths: DataPaths, environment: [String
         }
         let internalPort = try proxies.startLoopback(port: 0)
         harness.harnessURL = "http://127.0.0.1:\(internalPort)"
+        harness.publicURL = options.publicURL
 
         let server = HTTPServer(gate: { request in remote.gate(&request) }) { request in
             if let answer = remote.route(request) { return answer }

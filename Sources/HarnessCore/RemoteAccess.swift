@@ -223,8 +223,12 @@ public final class RemoteAccess {
         return value.dropFirst(7).trimmingCharacters(in: .whitespaces)
     }
 
+    /// The OAuth callback of a connector's login is the user's browser coming
+    /// back from the provider: it has no device token, the `state` it carries
+    /// (random, single use, ten minutes) is its credential.
     static func isPublic(_ request: HTTPRequest) -> Bool {
-        (request.method == "GET" && request.path == "/api/health") || (request.method == "POST" && request.path == "/api/devices/claim")
+        (request.method == "GET" && (request.path == "/api/health" || request.path == MCPOAuth.callbackPath))
+            || (request.method == "POST" && request.path == "/api/devices/claim")
     }
 
     public func gate(_ request: inout HTTPRequest) -> RouteResult? {

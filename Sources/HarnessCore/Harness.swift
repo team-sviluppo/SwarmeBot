@@ -67,7 +67,7 @@ public final class Harness {
         pool.tokenProvider = { [weak self] spec, force in try await self?.mcpOAuth.token(spec, force: force) }
         return pool
     }()
-    public private(set) lazy var mcpOAuth = MCPOAuth(registry: mcpConnectors) { [weak self] in self?.harnessURL ?? "http://127.0.0.1:8799" }
+    public private(set) lazy var mcpOAuth = MCPOAuth(registry: mcpConnectors) { [weak self] in self?.oauthBaseURL ?? "http://127.0.0.1:8799" }
     /// Turn grant token → what its connector proxies may reach (ConnectorTurns.swift).
     var connectorGrants: [String: ConnectorGrant] = [:]
     public private(set) lazy var box = BoxComputer(environment: environment) { [weak self] in self?.config.secret("box", "token") }
@@ -93,6 +93,14 @@ public final class Harness {
     var usageLimits: [InstanceID: JSON] = [:]
     /// Base URL of this engine, for the MCP helpers that call back into it.
     public var harnessURL = "http://127.0.0.1:8799"
+    /// Where a browser reaches this engine, when it is not on this machine
+    /// (a remote engine's `--public-url`): the OAuth login of a connector
+    /// comes back there, not to the loopback port only the proxies use.
+    public var publicURL: String?
+    var oauthBaseURL: String {
+        guard let publicURL, !publicURL.isEmpty else { return harnessURL }
+        return publicURL.hasSuffix("/") ? String(publicURL.dropLast()) : publicURL
+    }
     /// Guards /api/internal/*; regenerated every boot, handed to the proxies.
     public let commsToken: String = (0..<24).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
     public private(set) lazy var peerApprovals = PeerApprovals(store: store)
