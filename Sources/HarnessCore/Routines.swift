@@ -89,7 +89,7 @@ public final class RoutineManager {
             return .object(daily)
         case "interval":
             let unit = schedule?["unit"]?.string ?? "minutes"
-            guard unit == "minutes" || unit == "hours" else { throw InputError(message: "Interval unit must be minutes or hours") }
+            guard ["minutes", "hours", "days"].contains(unit) else { throw InputError(message: "Interval unit must be minutes, hours or days") }
             guard let every = schedule?["every"]?.double, every.isFinite, every.rounded() == every, every >= 1,
                   let minutes = intervalMinutes(every: Int(every), unit: unit),
                   (minIntervalMinutes...maxIntervalMinutes).contains(minutes) else {
@@ -106,6 +106,7 @@ public final class RoutineManager {
         switch unit {
         case "minutes": return every
         case "hours": return every.multipliedReportingOverflow(by: 60).overflow ? nil : every * 60
+        case "days": return every.multipliedReportingOverflow(by: 24 * 60).overflow ? nil : every * 24 * 60
         default: return nil
         }
     }

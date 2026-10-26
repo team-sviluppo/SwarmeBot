@@ -106,7 +106,11 @@ private struct RoutineRow: View {
             return tr("Una volta, %@", Date(timeIntervalSince1970: at / 1000).appFormatted(date: .abbreviated, time: .shortened))
         }
         if schedule.type == "interval", let every = schedule.every {
-            return schedule.unit == "hours" ? tr("ogni %@ h", String(every)) : tr("ogni %@ min", String(every))
+            switch schedule.unit {
+            case "days": return tr("ogni %@ g", String(every))
+            case "hours": return tr("ogni %@ h", String(every))
+            default: return tr("ogni %@ min", String(every))
+            }
         }
         let days = schedule.weekdays ?? []
         let names = tr("dom lun mar mer gio ven sab").split(separator: " ").map(String.init)
@@ -180,12 +184,13 @@ struct RoutineDraft: Identifiable {
     var time = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
     var weekdays: Set<Int> = [1, 2, 3, 4, 5]
     var every = 30
-    var hours = false
+    /// interval: "minutes", "hours" or "days"
+    var unit = "minutes"
     var duration = 30
 
     /// What the engine accepts for an interval: 5 minutes to 7 days.
     var intervalIsValid: Bool {
-        let minutes = hours ? every * 60 : every
+        let minutes = every * (unit == "days" ? 24 * 60 : unit == "hours" ? 60 : 1)
         return every >= 1 && (5...7 * 24 * 60).contains(minutes)
     }
 
@@ -207,7 +212,7 @@ struct RoutineDraft: Identifiable {
         default: kind = .daily
         }
         every = routine.schedule.every ?? every
-        hours = routine.schedule.unit == "hours"
+        unit = routine.schedule.unit ?? "minutes"
         if let at = routine.schedule.at { self.at = Date(timeIntervalSince1970: at / 1000) }
         if let hm = routine.schedule.time?.split(separator: ":"), hm.count == 2, let h = Int(hm[0]), let m = Int(hm[1]) {
             time = Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) ?? time
@@ -229,7 +234,7 @@ struct RoutineDraft: Identifiable {
         let schedule: RoutineSchedule
         switch kind {
         case .once: schedule = .once(at)
-        case .interval: schedule = .interval(every: every, unit: hours ? "hours" : "minutes")
+        case .interval: schedule = .interval(every: every, unit: unit)
         case .daily: schedule = .daily(String(format: "%02d:%02d", parts.hour ?? 9, parts.minute ?? 0), weekdays: weekdays.sorted())
         }
         return RoutineInput(name: name, prompt: prompt, botId: botId, enabled: enabled, schedule: schedule, durationMinutes: duration)
@@ -265,9 +270,10 @@ private struct RoutineEditor: View {
             case .interval:
                 HStack {
                     Stepper(tr("Ogni %@", String(draft.every)), value: $draft.every, in: 1...999)
-                    Picker(tr("Unità"), selection: $draft.hours) {
-                        Text(tr("minuti")).tag(false)
-                        Text(tr("ore")).tag(true)
+                    Picker(tr("Unità"), selection: $draft.unit) {
+                        Text(tr("minuti")).tag("minutes")
+                        Text(tr("ore")).tag("hours")
+                        Text(tr("giorni")).tag("days")
                     }
                     .labelsHidden()
                     .fixedSize()

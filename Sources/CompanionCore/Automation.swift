@@ -19,7 +19,7 @@ public struct RoutineSchedule: Codable, Hashable, Sendable {
     public var weekdays: [Int]?
     /// interval: how many `unit`s between runs.
     public var every: Int?
-    /// interval: "minutes" or "hours".
+    /// interval: "minutes", "hours" or "days".
     public var unit: String?
 
     public init(type: String, at: Double? = nil, time: String? = nil, weekdays: [Int]? = nil, every: Int? = nil, unit: String? = nil) {

@@ -36,7 +36,10 @@ final class RoutineScheduleTests: XCTestCase {
         XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 169, "unit": "hours"]))
         XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 1.5, "unit": "hours"]))
         XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 0, "unit": "hours"]))
-        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 10, "unit": "days"]))
+        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 8, "unit": "days"]), "7 days at most")
+        XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval", "every": 1, "unit": "weeks"]))
+        XCTAssertEqual(try RoutineManager.cleanSchedule(["type": "interval", "every": 7, "unit": "days"])["unit"]?.string, "days")
+        XCTAssertEqual(RoutineManager.nextOccurrence(["type": "interval", "every": 2, "unit": "days"], after: 0), 2 * 86_400_000)
         XCTAssertThrowsError(try RoutineManager.cleanSchedule(["type": "interval"]))
         XCTAssertNoThrow(try RoutineManager.cleanSchedule(["type": "interval", "every": 168, "unit": "hours"]))
     }
