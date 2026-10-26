@@ -51,7 +51,12 @@ public struct StreamingBytes: AsyncSequence, Sendable {
     }
 }
 
-final class StreamingReceiver: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+/// One receiver per request, all served by one session that is never torn
+/// down. A session of its own per request, invalidated from inside its own
+/// delegate callback, deallocated its curl multi handle while that was still
+/// referenced ("_MultiHandle deallocated with non-zero retain count") and the
+/// engine died a moment later, on an HTTPS MCP server that streams.
+final class StreamingReceiver: @unchecked Sendable {
     let continuation: AsyncThrowingStream<UInt8, Error>.Continuation
     private let lock = NSLock()
     private var response: CheckedContinuation<URLResponse, Error>?
@@ -61,47 +66,78 @@ final class StreamingReceiver: NSObject, URLSessionDataDelegate, @unchecked Send
         self.response = response
     }
 
-    private func answer(_ result: Result<URLResponse, Error>) {
+    func answer(_ result: Result<URLResponse, Error>) {
         lock.lock()
         let waiting = response
         response = nil
         lock.unlock()
         waiting?.resume(with: result)
     }
+}
+
+final class StreamingSession: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    static let shared = StreamingSession()
+
+    private let lock = NSLock()
+    private var receivers: [Int: StreamingReceiver] = [:]
+    private var session: URLSession!
+
+    override init() {
+        super.init()
+        session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+    }
+
+    /// Start `request`; the receiver is registered before the task runs.
+    func start(_ request: URLRequest, _ receiver: StreamingReceiver) -> URLSessionDataTask {
+        let task = session.dataTask(with: request)
+        lock.lock()
+        receivers[task.taskIdentifier] = receiver
+        lock.unlock()
+        task.resume()
+        return task
+    }
+
+    private func receiver(_ task: URLSessionTask) -> StreamingReceiver? {
+        lock.lock()
+        defer { lock.unlock() }
+        return receivers[task.taskIdentifier]
+    }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        answer(.success(response))
+        receiver(dataTask)?.answer(.success(response))
         completionHandler(.allow)
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        for byte in data { continuation.yield(byte) }
+        guard let receiver = receiver(dataTask) else { return }
+        for byte in data { receiver.continuation.yield(byte) }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        lock.lock()
+        let receiver = receivers.removeValue(forKey: task.taskIdentifier)
+        lock.unlock()
+        guard let receiver else { return }
         if let error {
-            answer(.failure(error))
-            continuation.finish(throwing: error)
+            receiver.answer(.failure(error))
+            receiver.continuation.finish(throwing: error)
         } else {
-            if let response = task.response { answer(.success(response)) }
-            continuation.finish()
+            if let response = task.response { receiver.answer(.success(response)) }
+            receiver.continuation.finish()
         }
-        session.finishTasksAndInvalidate()
     }
 }
 
 extension URLSession {
-    /// A session of its own per request (the delegate is per session), with this one's configuration.
+    /// Streams through a shared session of the default configuration: the
+    /// request's own `timeoutInterval` and headers are what set it apart.
     public func streamingBytes(for request: URLRequest) async throws -> (StreamingBytes, URLResponse) {
         let (stream, continuation) = AsyncThrowingStream<UInt8, Error>.makeStream()
-        let configuration = self.configuration
         let response: URLResponse = try await withCheckedThrowingContinuation { waiting in
             let receiver = StreamingReceiver(continuation: continuation, response: waiting)
-            let session = URLSession(configuration: configuration, delegate: receiver, delegateQueue: nil)
-            let task = session.dataTask(with: request)
+            let task = StreamingSession.shared.start(request, receiver)
             continuation.onTermination = { _ in task.cancel() }
-            task.resume()
         }
         return (StreamingBytes(stream: stream), response)
     }
