@@ -4,6 +4,9 @@
 //
 // https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv4-create-signed-request.html
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 #if canImport(CryptoKit)
 import CryptoKit
 #else
