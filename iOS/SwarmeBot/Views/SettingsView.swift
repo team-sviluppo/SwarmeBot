@@ -69,7 +69,6 @@ private struct NotificationsSection: View {
                 Button(tr("Attiva le notifiche")) {
                     Task {
                         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-                        PushManager.shared.requestPermission()
                         await refresh()
                     }
                 }

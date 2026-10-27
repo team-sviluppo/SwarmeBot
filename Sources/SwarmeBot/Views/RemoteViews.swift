@@ -474,14 +474,16 @@ struct ClaudeTokenSheet: View {
 
 /// The iOS app's push relay on this server (docs/push-relay.md): the same
 /// binary as the engine, its own service, `<prefix>/push` in Caddy. Meant for
-/// the one server that serves the app's build: the OneSignal key can push to
+/// the one server that serves the app's build: the AWS key can push to
 /// every phone with the app, so it stays on that server only.
 struct PushRelaySheet: View {
     let engine: RemoteEngine
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var appId = ""
-    @State private var apiKey = ""
+    @State private var appArn = ""
+    @State private var sandboxAppArn = ""
+    @State private var accessKeyId = ""
+    @State private var secretAccessKey = ""
     @State private var sudoPassword = ""
     @State private var error: String?
     @State private var working = false
@@ -490,7 +492,7 @@ struct PushRelaySheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(tr("Relay delle notifiche push su %@", engine.name)).font(.title3.weight(.semibold))
-            Text(tr("Il relay manda le push dell'app iOS tramite OneSignal. Gira con lo stesso programma del motore, che lo aggiorna insieme a sé, e risponde in HTTPS su %@/push. Va installato su un solo server: la chiave REST di OneSignal può mandare push a tutti i telefoni con l'app, quindi resta solo lì, in un file leggibile dal suo utente.", engine.chatURL))
+            Text(tr("Il relay manda le push dell'app iOS tramite Amazon SNS. Gira con lo stesso programma del motore, che lo aggiorna insieme a sé, e risponde in HTTPS su %@/push. Va installato su un solo server: la chiave AWS può mandare push a tutti i telefoni con l'app, quindi resta solo lì, in un file leggibile dal suo utente. La chiave APNs di Apple resta su AWS.", engine.chatURL))
                 .font(.callout).foregroundStyle(.secondary)
             if let relay {
                 Label(tr("Relay attivo"), systemImage: "checkmark.circle.fill").foregroundStyle(Theme.success)
@@ -498,8 +500,10 @@ struct PushRelaySheet: View {
                 Text(verbatim: "SWARMEBOT_PUSH_RELAY = " + relay.replacingOccurrences(of: "://", with: ":/$()/"))
                     .font(.system(.body, design: .monospaced)).textSelection(.enabled)
             } else {
-                TextField(tr("OneSignal App ID"), text: $appId)
-                SecureField(tr("OneSignal REST API key"), text: $apiKey)
+                TextField(tr("ARN dell'app SNS di produzione (…:app/APNS/…)"), text: $appArn)
+                TextField(tr("ARN dell'app SNS sandbox (…:app/APNS_SANDBOX/…, facoltativo)"), text: $sandboxAppArn)
+                TextField(tr("AWS access key ID"), text: $accessKeyId)
+                SecureField(tr("AWS secret access key"), text: $secretAccessKey)
                 SecureField(tr("Password di sudo di %@ (se il server la chiede)", model.identity(for: engine)?.user ?? "?"), text: $sudoPassword)
             }
             if let error { Text(error).foregroundStyle(Theme.danger) }
@@ -518,7 +522,8 @@ struct PushRelaySheet: View {
                         error = nil
                         Task {
                             do {
-                                relay = try await model.installPushRelay(on: engine, appId: appId, apiKey: apiKey,
+                                relay = try await model.installPushRelay(on: engine, accessKeyId: accessKeyId, secretAccessKey: secretAccessKey,
+                                                                         appArn: appArn, sandboxAppArn: sandboxAppArn,
                                                                          sudoPassword: sudoPassword.isEmpty ? nil : sudoPassword)
                             } catch {
                                 self.error = error.localizedDescription
@@ -527,7 +532,8 @@ struct PushRelaySheet: View {
                         }
                     }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(working || appId.trimmingCharacters(in: .whitespaces).isEmpty || apiKey.isEmpty)
+                    .disabled(working || accessKeyId.trimmingCharacters(in: .whitespaces).isEmpty || secretAccessKey.isEmpty
+                              || (appArn.trimmingCharacters(in: .whitespaces).isEmpty && sandboxAppArn.trimmingCharacters(in: .whitespaces).isEmpty))
                 }
             }
         }

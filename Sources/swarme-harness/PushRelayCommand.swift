@@ -2,7 +2,7 @@
 // binary as the remote engine so a server that hosts it installs and updates
 // one file (docs/push-relay.md).
 //
-//   push-relay configure                       {appId, apiKey} on stdin → <data>/push-relay.json (0600)
+//   push-relay configure                       {accessKeyId, secretAccessKey, appArn, sandboxAppArn} on stdin → <data>/push-relay.json (0600)
 //   push-relay serve [--port 8920 | --socket <path>]
 //
 // The keys never go through the engine's secrets: those reach the agents.

@@ -71,7 +71,7 @@ OMB_PORT=38899 OMB_DATA_DIR=/tmp/swarme swift run swarme-harness   # engine alon
 The iOS app talks to remote engines only; try it against a throwaway `serve --remote` engine behind Caddy
 (debug launch arguments `-pairLink swarmebot://pair?…` and `-openFirstChat YES` skip the camera and the
 taps). MLX (Gemma) does not run on the simulator. Building the iOS project makes Xcode write its own pins
-(MLX, OneSignal…) into the root `Package.resolved`: don't commit those, the root file pins the package's
+(MLX…) into the root `Package.resolved`: don't commit those, the root file pins the package's
 dependencies only. The push relay (`swarme-push-relay`) is documented in `docs/push-relay.md`.
 
 **Running the app touches real data.** By default it opens `~/.swarmebot` and the login Keychain.

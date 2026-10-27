@@ -377,7 +377,7 @@ public enum RemoteScripts {
 
     // MARK: Push relay — docs/push-relay.md
 
-    /// The relay's OneSignal app and key (stdin, JSON) into ~/.swarmebot/push-relay.json, 0600.
+    /// The relay's AWS keys and SNS applications (stdin, JSON) into ~/.swarmebot/push-relay.json, 0600.
     /// The relay's own secret is made there and never leaves the server.
     public static let configurePushRelay = #"""
     set -eu

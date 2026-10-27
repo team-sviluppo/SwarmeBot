@@ -2,24 +2,27 @@
 // (docs/plans/2026-10-22-app-ios.md §6).
 //
 // The engine never holds a push provider's key. A phone registers with a
-// push relay (swarme-push-relay, OneSignal behind it), gets a `pushToken`
-// bound to its subscription, and hands that token to the engine; the engine
-// can then push to that phone, and only to it, through the relay:
+// push relay (swarme-push-relay, Amazon SNS behind it), gets a `pushToken`
+// bound to its device, and hands that token to the engine; the engine can
+// then push to that phone, and only to it, through the relay:
 //
-//   phone → relay  POST /v1/register {subscriptionId}  → {pushToken}
+//   phone → relay  POST /v1/register {deviceToken, …}  → {pushToken}
 //   phone → engine POST /api/push/subscriptions {pushToken, relayUrl, kinds?}
 //   engine → relay POST /v1/notify {pushToken, …}
 //
 // Subscriptions live in `push.json` (0600), one list per device; revoking a
-// device drops them. A push says which bot and what happened, never the chat
+// device drops them, and so does a relay that no longer knows the token (401
+// or 410: the phone registers again when the app opens). A push says which bot and what happened, never the chat
 // text: the relay and the push provider see no conversation (§6.3).
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 
-public final class PushRegistry {
+public final class PushRegistry: @unchecked Sendable {
     public let file: URL
+    /// Sends finish on their own tasks: the read-modify-write of `push.json` is one at a time.
+    private let lock = NSLock()
     public static let kinds: [String] = ["approval", "question", "done", "takeover", "routine-failed"]
 
     public init(paths: DataPaths) {
@@ -60,6 +63,8 @@ public final class PushRegistry {
         if let asked = body["kinds"]?.array {
             kinds = asked.compactMap(\.string).filter(Self.kinds.contains)
         }
+        lock.lock()
+        defer { lock.unlock() }
         var subscriptions = list().filter { !($0["deviceId"]?.string == deviceId && $0["pushToken"]?.string == token) }
         let subscription = JSONObject([
             ("id", .string("push_" + String(newId().replacingOccurrences(of: "-", with: "").prefix(16)))),
@@ -72,6 +77,8 @@ public final class PushRegistry {
     }
 
     public func remove(_ id: String, deviceId: String) throws -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         let subscriptions = list()
         let kept = subscriptions.filter { !($0["id"]?.string == id && $0["deviceId"]?.string == deviceId) }
         guard kept.count != subscriptions.count else { return false }
@@ -80,8 +87,19 @@ public final class PushRegistry {
     }
 
     public func remove(deviceId: String) {
+        lock.lock()
+        defer { lock.unlock() }
         let subscriptions = list()
         let kept = subscriptions.filter { $0["deviceId"]?.string != deviceId }
+        if kept.count != subscriptions.count { try? save(kept) }
+    }
+
+    /// A subscription the relay does not know any more, whoever's it is.
+    func remove(subscriptionId: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        let subscriptions = list()
+        let kept = subscriptions.filter { $0["id"]?.string != subscriptionId }
         if kept.count != subscriptions.count { try? save(kept) }
     }
 
@@ -124,11 +142,13 @@ public final class PushRegistry {
             request.timeoutInterval = 15
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = body.data
-            Task.detached {
+            let id = subscription["id"]?.string
+            Task.detached { [self] in
                 guard let (_, response) = try? await session.data(for: request) else { return }
-                if let status = (response as? HTTPURLResponse)?.statusCode, !(200...299).contains(status) {
-                    FileHandle.standardError.write(Data("push relay answered HTTP \(status)\n".utf8))
-                }
+                guard let status = (response as? HTTPURLResponse)?.statusCode, !(200...299).contains(status) else { return }
+                FileHandle.standardError.write(Data("push relay answered HTTP \(status)\n".utf8))
+                // 401: not a token of this relay (its secret changed, or it is an old one); 410: the phone's endpoint is gone
+                if let id, status == 401 || status == 410 { remove(subscriptionId: id) }
             }
         }
     }

@@ -524,7 +524,7 @@ The iPhone app (iOS 26+) lives in `iOS/` and has two kinds of bots, in separate 
   Phone**) with a QR code on the same network or an encrypted `.swarmeconfig` file. Chats are never
   copied; OAuth connectors need a new login on the phone.
 - **Push notifications** ("a bot finished", "a bot asks for approval") for server bots, through a
-  relay that holds the OneSignal key (see [`docs/push-relay.md`](docs/push-relay.md)).
+  relay that holds the AWS credentials and sends through Amazon SNS (see [`docs/push-relay.md`](docs/push-relay.md)).
 
 Private bots of the Mac and of the phone are never synced. To see the same chats on both, put the bot
 on a server.
@@ -544,7 +544,7 @@ xcodebuild -project iOS/SwarmeBot-iOS.xcodeproj -scheme SwarmeBot-iOS \
 ```
 
 - The project uses the package's `AgentCore`, `CompanionCore` and `SwarmeL10n`. MLX, the Hugging Face
-  libraries and the OneSignal SDK are added to the Xcode project only, never to `Package.swift`.
+  libraries are added to the Xcode project only, never to `Package.swift`.
   Building it makes Xcode write their pins into the root `Package.resolved`: don't commit those.
 - The **SwarmeBot-iOS Release** scheme runs an optimized build without the debugger, much faster on a
   device (MLX above all).
@@ -559,40 +559,37 @@ xcodebuild -project iOS/SwarmeBot-iOS.xcodeproj -scheme SwarmeBot-iOS \
 
 ### Your own build (bundle ID, signing, pushes)
 
-Apple ties push notifications to the app's bundle ID and APNs key, and the OneSignal REST key must stay
-on the relay. So a build under another bundle ID needs its own Apple setup, its own OneSignal app
-and its own relay. Values come from `iOS/Shared.xcconfig` (the official build) and are overridden in
+Apple ties push notifications to the app's bundle ID and APNs key, and the AWS credentials must stay
+on the relay. So a build under another bundle ID needs its own Apple setup, its own Amazon SNS
+applications and its own relay. Values come from `iOS/Shared.xcconfig` (the official build) and are overridden in
 `iOS/Local.xcconfig`:
 
 ```
 DEVELOPMENT_TEAM = <your Apple team ID>
 SWARMEBOT_BUNDLE_ID = com.example.swarmebot
-SWARMEBOT_PUSH_APP_ID = <your OneSignal App ID>
 SWARMEBOT_PUSH_RELAY = https:/$()/bot.example.com/srv1/deploy/push
 ```
 
 In an xcconfig file `//` starts a comment: `$()` keeps the URL whole. Then run `xcodegen` again.
 
-1. **Apple Developer account.** Register two App IDs: `<bundle>` for the app and
-   `<bundle>.OneSignalNotificationServiceExtension` for the notification extension, with these
-   capabilities:
-   - app: **Push Notifications**, **App Groups** (`group.<bundle>.onesignal`), **Increased Memory
-     Limit** (Gemma);
-   - extension: **App Groups** (the same group).
+1. **Apple Developer account.** Register the App ID `<bundle>` with these capabilities: **Push
+   Notifications** and **Increased Memory Limit** (Gemma).
 
    With *Automatically manage signing* and your team in `DEVELOPMENT_TEAM`, Xcode creates the
    provisioning profiles; otherwise create a development or App Store profile for each App ID.
 2. **APNs key.** In Certificates, Identifiers & Profiles › Keys, create a key with Apple Push
    Notifications service and download the `.p8` (keep its Key ID and your Team ID).
-3. **OneSignal.** Create an app, Apple iOS platform, upload the `.p8` with Key ID, Team ID and your
-   bundle ID. Note the **App ID** (goes in `SWARMEBOT_PUSH_APP_ID`, not a secret) and the **REST API
-   key** (goes on the relay only).
+3. **Amazon SNS.** Create two platform applications with token authentication and the `.p8` (Key ID,
+   Team ID, your bundle ID): *Apple iOS* for production (TestFlight, App Store) and *Apple iOS Sandbox*
+   for builds run from Xcode. Then an IAM user for the relay that may only create endpoints and publish
+   to them. The steps and the policy are in [`docs/push-relay.md`](docs/push-relay.md).
 4. **Relay.** The easiest way is next to one of your remote engines, from the Mac that administers
-   it: **Settings › Remote servers › Actions › Host the Push Notification Relay…** with the OneSignal App ID and
-   REST API key. It answers on `<chat URL>/push`: that is `SWARMEBOT_PUSH_RELAY`. Install it on one
-   server only. A manual install is described in [`docs/push-relay.md`](docs/push-relay.md).
-5. **Build** with the values above. Without `SWARMEBOT_PUSH_APP_ID` and `SWARMEBOT_PUSH_RELAY` the
-   app registers nowhere and pushes stay off; everything else works.
+   it: **Settings › Remote servers › Actions › Host the Push Notification Relay…** with the two
+   application ARNs and the IAM user's access key. It answers on `<chat URL>/push`: that is
+   `SWARMEBOT_PUSH_RELAY`. Install it on one server only. A manual install is described in
+   [`docs/push-relay.md`](docs/push-relay.md).
+5. **Build** with the values above. Without `SWARMEBOT_PUSH_RELAY` the app registers nowhere and pushes
+   stay off; everything else works.
 
 Other identifiers, which may stay as they are or be renamed together:
 
@@ -665,8 +662,8 @@ x86_64 on Apple silicon runs under emulation: enable Rosetta in Docker Desktop, 
 | `Sources/HarnessCore` | the engine: JSON with stable key order, store and SQLite, turns, routes, HTTP server and SSE hub, channels, bot-to-bot comms, routines, webhooks, library, team packages, computers, MCP connectors and OAuth, permission broker, remote access |
 | `Sources/HarnessDrivers` | one driver per agent; `ACP/` (protocol runtime + agents), `DeepSeek/` |
 | `Sources/swarme-harness` | the engine executable and its subcommands |
-| `Sources/swarme-push-relay` | the push notification relay (OneSignal) for the iOS app |
-| `iOS/` | the iOS app: `project.yml` (XcodeGen), `SwarmeBot/`, the notification extension, tests |
+| `Sources/swarme-push-relay` | the push notification relay (Amazon SNS) for the iOS app |
+| `iOS/` | the iOS app: `project.yml` (XcodeGen), `SwarmeBot/`, tests |
 | `Tests/` | `HarnessCoreTests`, `CompanionCoreTests`, `SwarmeKitTests` |
 | `parity/` | fake agents and services, scenario runner, trace comparison |
 | `scripts/` | bundling, release, Linux engine build, integration tests |

@@ -2,14 +2,11 @@
 // Local.xcconfig, next to this file and git-ignored:
 //   DEVELOPMENT_TEAM = ABCDE12345
 //   SWARMEBOT_BUNDLE_ID = <own bundle id, only for a build with its own push relay>
-//   SWARMEBOT_PUSH_APP_ID = <OneSignal app id>
 //   SWARMEBOT_PUSH_RELAY = https:/$()/push.example.com
 // (`//` starts a comment in an xcconfig: `$()` keeps the URL whole.)
-// Without an app id there are no pushes; without a relay the phone is known to OneSignal
-// (test pushes from its dashboard work) but no engine can push to it.
+// Without a relay there are no pushes. The AWS credentials are on the relay, the APNs key on AWS:
+// nothing secret is in the app or in this file.
 SWARMEBOT_BUNDLE_ID = it.hextra.swarmebot
-// the official build's OneSignal app (an identifier, not a secret; the REST key lives on the relay only)
-SWARMEBOT_PUSH_APP_ID = aa91ee8d-57d6-445d-a90d-465e0ae5a012
 // the official build's relay, hosted next to a remote engine (docs/push-relay.md); a URL, not a secret
 SWARMEBOT_PUSH_RELAY = https:/$()/swarmebot.hextra.it/swarmebot/cristiano/push
 #include? "Local.xcconfig"

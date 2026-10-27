@@ -212,13 +212,14 @@ public struct RemoteAdmin: Sendable {
 
     /// The iOS app's push relay next to the engine: the same binary
     /// (`swarme-harness push-relay`), its own service, `<prefix>/push` in
-    /// Caddy. The OneSignal key goes on stdin into a 0600 file the engine
-    /// does not read; the relay's secret is made on the server. Returns the
-    /// relay's URL, for the app's build (`SWARMEBOT_PUSH_RELAY`).
-    public func installPushRelay(appId: String, apiKey: String, caddy: CaddySettings, chatURL: String, probe: RemoteProbe,
-                                 sudoPassword: String?) async throws -> String {
-        let keys = try JSONSerialization.data(withJSONObject: ["appId": appId.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                               "apiKey": apiKey.trimmingCharacters(in: .whitespacesAndNewlines)])
+    /// Caddy. The AWS keys and the SNS applications' ARNs go on stdin into a
+    /// 0600 file the engine does not read; the relay's secret is made on the
+    /// server. Returns the relay's URL, for the app's build (`SWARMEBOT_PUSH_RELAY`).
+    public func installPushRelay(accessKeyId: String, secretAccessKey: String, appArn: String, sandboxAppArn: String, caddy: CaddySettings,
+                                 chatURL: String, probe: RemoteProbe, sudoPassword: String?) async throws -> String {
+        func trimmed(_ text: String) -> String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let keys = try JSONSerialization.data(withJSONObject: ["accessKeyId": trimmed(accessKeyId), "secretAccessKey": trimmed(secretAccessKey),
+                                                               "appArn": trimmed(appArn), "sandboxAppArn": trimmed(sandboxAppArn)])
         try await ssh.run(RemoteScripts.command(RemoteScripts.configurePushRelay), stdin: keys, timeout: 60)
         if probe.isMac {
             _ = try await runAsRoot(RemoteScripts.rootMacPush, [identity.user, caddy.prefix], probe: probe, sudoPassword: sudoPassword,

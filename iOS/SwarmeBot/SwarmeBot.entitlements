@@ -6,9 +6,5 @@
 	<string>development</string>
 	<key>com.apple.developer.kernel.increased-memory-limit</key>
 	<true/>
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.$(SWARMEBOT_BUNDLE_ID).onesignal</string>
-	</array>
 </dict>
 </plist>

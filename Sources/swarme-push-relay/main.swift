@@ -1,7 +1,8 @@
 // swarme-push-relay [--port 8920 | --socket <path>]
 //
-// Environment: ONESIGNAL_APP_ID, ONESIGNAL_API_KEY, RELAY_SECRET (≥ 32 bytes),
-// optional ONESIGNAL_API, RELAY_HOURLY_LIMIT. Listens on loopback or a unix
+// Environment: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SNS_APNS_APP_ARN and/or
+// SNS_APNS_SANDBOX_APP_ARN, RELAY_SECRET (≥ 32 bytes), optional SNS_ENDPOINT,
+// RELAY_HOURLY_LIMIT, RELAY_REGISTER_LIMIT. Listens on loopback or a unix
 // socket only: put an HTTPS proxy (Caddy) in front, like the remote engine.
 // The same relay runs as `swarme-harness push-relay` (HarnessCore/PushRelay.swift).
 import Foundation

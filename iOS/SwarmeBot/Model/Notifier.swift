@@ -45,7 +45,6 @@ final class Notifier: NSObject {
             let center = UNUserNotificationCenter.current()
             guard await center.notificationSettings().authorizationStatus == .notDetermined else { return }
             _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
-            PushManager.shared.requestPermission()
         }
     }
 
@@ -154,8 +153,8 @@ final class Notifier: NSObject {
 }
 
 extension Notifier: UNUserNotificationCenterDelegate {
-    /// A tap on one of ours opens its chat; Consenti/Nega on a push answer
-    /// the approval (a plain tap on a push is OneSignal's click).
+    /// A tap on one of ours opens its chat; a tap on a push, or Consenti/Nega on
+    /// one, is the PushManager's.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let userInfo = response.notification.request.content.userInfo
         if userInfo["swarme"] as? String == "local" {

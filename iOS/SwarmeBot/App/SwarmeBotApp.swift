@@ -6,6 +6,7 @@ struct SwarmeBotApp: App {
     @State private var model = AppModel()
     @State private var localizer = Localizer.shared
     @Environment(\.scenePhase) private var scenePhase
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup {
@@ -17,11 +18,14 @@ struct SwarmeBotApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.ink)
         }
+        // a push is worded in the language the relay was told
+        .onChange(of: localizer.language) {
+            Task { await PushManager.shared.registerEverywhere() }
+        }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
             case .active:
                 PushManager.shared.start(model)
-                // after OneSignal, which wraps the delegate it is given
                 Notifier.shared.start(model)
                 model.becameActive()
             case .background: model.wentToBackground()
