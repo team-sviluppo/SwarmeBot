@@ -278,14 +278,16 @@ extension AppModel {
     /// Claude Code and omp on a server this Mac administers, as its setup does (ServerAgents).
     /// Host the iOS app's push relay on a server this Mac administers
     /// (docs/push-relay.md). Returns the relay's URL.
-    public func installPushRelay(on engine: RemoteEngine, appId: String, apiKey: String, sudoPassword: String?) async throws -> String {
+    public func installPushRelay(on engine: RemoteEngine, accessKeyId: String, secretAccessKey: String, appArn: String, sandboxAppArn: String,
+                                 sudoPassword: String?) async throws -> String {
         guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
         guard let site = engine.site, let prefix = engine.prefix else {
             throw ProcessRunner.Failure(message: tr("Di %@ non conosco il sito Caddy: rifai la configurazione del server da questo Mac", engine.name))
         }
         let admin = RemoteAdmin(identity: identity, store: identityStore)
         let caddy = CaddySettings(site: site, prefix: prefix, tls: engine.tls.flatMap(CaddySettings.TLS.init(rawValue:)) ?? .public)
-        let relay = try await admin.installPushRelay(appId: appId, apiKey: apiKey, caddy: caddy, chatURL: engine.chatURL,
+        let relay = try await admin.installPushRelay(accessKeyId: accessKeyId, secretAccessKey: secretAccessKey, appArn: appArn,
+                                                     sandboxAppArn: sandboxAppArn, caddy: caddy, chatURL: engine.chatURL,
                                                      probe: try await admin.probe(), sudoPassword: sudoPassword)
         var updated = engine
         updated.pushRelayURL = relay

@@ -27,16 +27,11 @@ packages:
   swift-transformers:
     url: https://github.com/huggingface/swift-transformers
     exactVersion: 1.3.5
-  # pushes (plan §6): the SDK only, the key stays on the relay
-  OneSignal:
-    url: https://github.com/OneSignal/OneSignal-XCFramework
-    # OneSignal's own "stable" channel (onesignal.github.io/sdk-releases)
-    exactVersion: 5.5.1
 settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "3"
+    CURRENT_PROJECT_VERSION: "4"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 targets:
   SwarmeBot-iOS:
@@ -64,18 +59,13 @@ targets:
         product: MLXHuggingFace
       - package: swift-transformers
         product: Tokenizers
-      - package: OneSignal
-        product: OneSignalFramework
-      - target: OneSignalNotificationServiceExtension
-        embed: true
     entitlements:
       path: SwarmeBot/SwarmeBot.entitlements
       properties:
         # Gemma's peak is about 5 GiB (plan §13, phase 0)
         com.apple.developer.kernel.increased-memory-limit: true
+        # development signing; a distribution build is signed with production (PushManager.environment)
         aps-environment: development
-        # shared with the notification extension, as OneSignal expects
-        com.apple.security.application-groups: [group.$(SWARMEBOT_BUNDLE_ID).onesignal]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(SWARMEBOT_BUNDLE_ID)
@@ -108,8 +98,7 @@ targets:
         # endpoints and test engines on the local network may be plain HTTP (plan §8)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # pushes are off unless the build names its OneSignal app and relay (iOS/Local.xcconfig)
-        SwarmeBotPushAppId: $(SWARMEBOT_PUSH_APP_ID)
+        # pushes are off unless the build names its relay (iOS/Local.xcconfig)
         SwarmeBotPushRelay: $(SWARMEBOT_PUSH_RELAY)
         # `fetch`: the app refresh that checks the servers' bots with the app closed (Notifier)
         UIBackgroundModes: [remote-notification, fetch]
@@ -128,35 +117,6 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: $(SWARMEBOT_BUNDLE_ID)
             CFBundleURLSchemes: [swarmebot]
-  # OneSignal's Notification Service Extension: confirmed delivery, badges, attachments
-  OneSignalNotificationServiceExtension:
-    type: app-extension
-    platform: iOS
-    sources:
-      - path: NotificationService
-    dependencies:
-      - package: OneSignal
-        product: OneSignalExtension
-    entitlements:
-      path: NotificationService/NotificationService.entitlements
-      properties:
-        com.apple.security.application-groups: [group.$(SWARMEBOT_BUNDLE_ID).onesignal]
-    info:
-      path: NotificationService/Info.plist
-      properties:
-        CFBundleDisplayName: OneSignalNotificationServiceExtension
-        # an extension's versions must match the app's
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.usernotifications.service
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(SWARMEBOT_BUNDLE_ID).OneSignalNotificationServiceExtension
-        GENERATE_INFOPLIST_FILE: YES
-        TARGETED_DEVICE_FAMILY: "1"
-        SKIP_INSTALL: YES
   SwarmeBot-iOSTests:
     type: bundle.unit-test
     platform: iOS

@@ -32,12 +32,24 @@ final class RemoteTests: XCTestCase {
 }
 
 final class PushDataTests: XCTestCase {
-    func testOneSignalDataIsReadFromCustomA() {
-        let userInfo: [AnyHashable: Any] = ["aps": ["category": "approval"],
-                                            "custom": ["i": "n1", "a": ["threadId": "t1", "requestId": "r1", "server": "https://x/"]]]
+    func testTheEnginesDataSitsBesideAps() {
+        let userInfo: [AnyHashable: Any] = ["aps": ["category": "approval"], "kind": "approval", "threadId": "t1", "requestId": "r1",
+                                            "server": "https://x/"]
         let data = PushManager.data(userInfo)
         XCTAssertEqual(data["threadId"] as? String, "t1")
         XCTAssertEqual(data["requestId"] as? String, "r1")
+        XCTAssertNil(data["aps"])
         XCTAssertTrue(PushManager.data([:]).isEmpty)
+    }
+
+    func testTheApnsEnvironmentComesFromTheProvisioningProfile() {
+        func profile(_ aps: String) -> Data {
+            // a profile is a signed blob with the plist inside it
+            Data("\u{1}\u{2}garbage<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>Entitlements</key><dict><key>aps-environment</key><string>\(aps)</string></dict></dict></plist>\u{3}tail".utf8)
+        }
+        XCTAssertEqual(PushManager.environment(provisioningProfile: profile("development")), "sandbox")
+        XCTAssertEqual(PushManager.environment(provisioningProfile: profile("production")), "production")
+        XCTAssertEqual(PushManager.environment(provisioningProfile: nil), "production", "no profile: the App Store or TestFlight")
+        XCTAssertEqual(PushManager.environment(provisioningProfile: Data("nothing here".utf8)), "production")
     }
 }
