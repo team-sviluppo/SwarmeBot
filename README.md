@@ -111,6 +111,34 @@ servers and also has private bots of its own.
   explicit *untrusted content* block.
 - Automation turns run unattended and produce tasks you can read later.
 
+### Shared bots and connector catalogs
+
+In **Settings → Sharing**, choose **Shared bots** or **MCP connectors** and select a folder
+on a shared drive or a checked-out repository. Each catalog has its own folder setting.
+Use **Share from this Mac…** to save an existing bot or connector there, or place the JSON files
+below in the folder. Select the entries you want and click **Import bots** / **Import connectors**.
+The shared MCP catalog is also accessible from the folder button in **Settings → Connectors**.
+
+- **Bots run locally.** Only name, role and instructions are shared. Avatar, model, working folder,
+  permissions, tasks and chats stay local. Editing an imported bot's profile writes its shared fields
+  back to the selected repository. The avatar remains independent on each Mac.
+- **Connector configuration is shared; authentication is local.** Import the connectors you need,
+  complete their login or secrets in **Settings → Connectors**, and assign them to bots as usual.
+  Enable/disable switches stay local. After editing a connector, use **Share from this Mac…** to
+  publish its configuration changes. Secret placeholders travel, secret values and OAuth tokens do not.
+- Imported definitions refresh when SwarmeBot starts, including when it attaches to an already
+  running local engine. **Refresh from repository** also applies updates without restarting.
+  Missing or invalid catalogs keep the last local copies. New catalog entries are never imported
+  automatically; existing local connector IDs are never overwritten by an unrelated shared entry.
+- **Disconnect** stops updates and keeps local copies. Changing folders does not relink copies to
+  unrelated definitions with the same ID. Re-select the original folder to edit a shared bot's profile.
+
+The bot folder contains `bots.json`, a JSON array with stable `id`, `name`, `title` (optional) and
+`description` (instructions). The connector folder contains `mcp-connectors.json`, a JSON array of MCP
+definitions (`id`, `name`, `transport` and the usual command/args or URL fields). The settings are saved
+locally in `config.json` under `sharedRepositories.bots` and `sharedRepositories.connectors`.
+SwarmeBot reads these folders directly; sync or Git operations are handled by your chosen drive or repository.
+
 ### MCP connectors
 - Add **MCP servers** once and hand them to any bot, whatever its agent: they are mounted on
   Claude, Codex and ACP agents, and run in the engine's own loop for API-based engines.
