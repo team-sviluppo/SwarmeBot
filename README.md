@@ -617,9 +617,10 @@ from the Organizer.
 ## Packaging and releases
 
 ```sh
-scripts/bundle-app.sh --arch arm64 --dmg        # build/SwarmeBot.app and build/SwarmeBot.dmg (ad-hoc signed)
-scripts/bundle-app.sh --arch x86_64 --dmg       # Intel build: build/SwarmeBot-intel.dmg
+scripts/bundle-app.sh --dmg                     # Apple silicon: build/SwarmeBot.app and build/SwarmeBot.dmg (ad-hoc signed)
 ```
+
+The macOS app is built for Apple silicon (arm64). Intel and universal macOS builds are no longer supported.
 
 Signed and notarized builds:
 
@@ -629,7 +630,7 @@ SPARKLE_PUBLIC_KEY=<EdDSA public key> \
   scripts/bundle-app.sh --arch arm64 --dmg --notarize
 ```
 
-`scripts/release-mac.sh --version X.Y.Z` builds, signs and notarizes both architectures, builds the
+`scripts/release-mac.sh --version X.Y.Z` builds, signs and notarizes the arm64 macOS app, builds the
 Linux engines (`scripts/linux-engines-manifest.sh`), tags `vX.Y.Z` and publishes DMGs, zips, Linux
 engines and `appcast.xml` as a GitHub release (`--no-publish` to skip). Credentials are read from
 `.env.mac-release.local` (git-ignored; start from `.env.mac-release.example`): `MAC_SIGN_IDENTITY`,
