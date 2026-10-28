@@ -423,6 +423,28 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
 
 ## 14. Avanzamento
 
+### Codex nella gestione dei server (2026-10-28)
+
+- La procedura guidata e «Configura Claude Code, Codex e omp» installano anche Codex; il controllo
+  del server ne mostra la versione. I server esistenti hanno «Codex sul server…» per installazione
+  e login separati, senza dover ripetere la configurazione di Claude e omp.
+- Build native ufficiali `rust-v0.165.0`, Linux musl e macOS, arm64 e x86_64; SHA-256 fissati dai
+  digest degli asset GitHub. Download ed estrazione temporanei, verifica prima della sostituzione,
+  nessuna dipendenza da npm. Una CLI Codex già funzionante viene mantenuta.
+- Copia solo `auth.json` da `CODEX_HOME` o `~/.codex`, validato sul Mac, via stdin SSH, file 0600 e
+  cartella 0700, backup privato del login precedente. Non copia `config.toml`, MCP, progetti o sessioni.
+  Se manca il file (per esempio login nel Portachiavi), il foglio permette `codex login --device-auth`
+  direttamente nel terminale del server. Non serve riavviare il motore per il login di Codex.
+- Verifica: `swift build` riuscita (warning solo in file preesistenti non modificati); `swift test`,
+  392 test, zero errori, 12 saltati perché richiedono ambienti esterni. Cinque nuovi test coprono le
+  quattro build, validazione dei login, permessi e backup, checksum errato prima della sostituzione,
+  ripetibilità e sintassi shell. Archivio ufficiale macOS arm64 scaricato: nome del binario e SHA-256
+  corrispondono ai valori fissati. Pannello Server remoti visto tramite snapshot su dati e motore
+  isolati; interazione con il nuovo foglio non verificata (controllo UI non disponibile).
+- Non verificati: installazione e login via SSH su server Linux/macOS reali, login con codice
+  dispositivo e un turno Codex remoto. Nessuna credenziale reale trasferita o chiamata a pagamento.
+  Nessun cambiamento al motore o al contratto HTTP/SSE; parity non eseguita.
+
 ### Fase 1 — fatta (2026-10-18)
 
 - `HTTPTransport.swift` (nuovo): `HTTPConnection` con due implementazioni, Network.framework (motore locale,

@@ -18,6 +18,7 @@ struct RemoteServersPane: View {
     @State private var qrFor: RemoteEngine?
     @State private var forgetting: RemoteEngine?
     @State private var claudeLoginFor: RemoteEngine?
+    @State private var codexFor: RemoteEngine?
     @State private var piCopyFor: RemoteEngine?
     @State private var pushRelayFor: RemoteEngine?
     @State private var configuring: String?
@@ -46,7 +47,7 @@ struct RemoteServersPane: View {
                                 if configuring == engine.id {
                                     HStack(spacing: 6) {
                                         ProgressView().controlSize(.small)
-                                        Text(tr("Installo Claude Code e omp sul server…")).font(.system(size: 11)).foregroundStyle(.secondary)
+                                        Text(tr("Installo Claude Code, Codex e omp sul server…")).font(.system(size: 11)).foregroundStyle(.secondary)
                                     }
                                 }
                             }
@@ -60,9 +61,11 @@ struct RemoteServersPane: View {
                             Button(tr("Dispositivi abbinati…")) { devicesFor = engine }
                             if let identity = model.identity(for: engine) {
                                 Divider()
-                                Button(tr("Configura Claude Code e omp")) { configureAgents(engine) }
+                                Button(tr("Configura Claude Code, Codex e omp")) { configureAgents(engine) }
                                     .disabled(configuring != nil)
                                 Button(tr("Login di Claude sul server…")) { claudeLoginFor = engine }
+                                Button(tr("Codex sul server…")) { codexFor = engine }
+                                    .disabled(configuring != nil)
                                 Button(tr("Copia la configurazione di pi…")) { piCopyFor = engine }
                                 Button(tr("Ospita il relay delle notifiche push…")) { pushRelayFor = engine }
                                 Button(tr("Apri un terminale sul server")) { try? model.openTerminal(identity) }
@@ -89,6 +92,7 @@ struct RemoteServersPane: View {
         .sheet(item: $devicesFor) { DevicesSheet(engine: $0) }
         .sheet(item: $qrFor) { PairingQRSheet(engine: $0) }
         .sheet(item: $claudeLoginFor) { ClaudeTokenSheet(engine: $0) }
+        .sheet(item: $codexFor) { CodexServerSheet(engine: $0) }
         .sheet(item: $pushRelayFor) { PushRelaySheet(engine: $0) }
         .confirmationDialog(tr("Copiare la configurazione di pi su %@?", piCopyFor?.name ?? ""),
                             isPresented: Binding(get: { piCopyFor != nil }, set: { if !$0 { piCopyFor = nil } })) {
@@ -238,7 +242,7 @@ private struct SetupBody: View {
                         }
                     }
                     if let probe = flow.probe {
-                        Text(tr("%@ %@ · %@ · Claude: %@ · pi: %@", probe.os, probe.version, probe.arch, probe.claude ?? tr("non installato"), probe.pi ?? tr("non installato")))
+                        Text(tr("%@ %@ · %@ · Claude: %@ · Codex: %@ · pi: %@", probe.os, probe.version, probe.arch, probe.claude ?? tr("non installato"), probe.codex ?? tr("non installato"), probe.pi ?? tr("non installato")))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     ForEach(flow.agentsReport, id: \.self) { line in
@@ -427,6 +431,63 @@ struct DevicesSheet: View {
 
     private func load() async {
         do { list = try await model.remoteClient(engine).devices() } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// Install Codex or copy only its login. Device auth also works without a local auth.json.
+struct CodexServerSheet: View {
+    let engine: RemoteEngine
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var working = false
+    @State private var report: String?
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(tr("Codex su %@", engine.name)).font(.title3.weight(.semibold))
+            Text(tr("Installa la CLI sul server e copia il login di questo Mac, oppure accedi dal terminale con un codice dispositivo."))
+                .font(.callout).foregroundStyle(.secondary)
+            Text(tr("Si copia solo auth.json dalla cartella di Codex di questo Mac (CODEX_HOME oppure ~/.codex). Contiene le credenziali: sul server è leggibile solo dal suo utente e il login precedente resta come backup."))
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button(tr("Installa Codex")) {
+                    run { tr("Codex installato: %@", try await model.installCodex(on: engine)) }
+                }
+                Button(tr("Copia il login dal Mac")) {
+                    run {
+                        try await model.copyCodexLogin(to: engine)
+                        return tr("Login di Codex copiato sul server")
+                    }
+                }
+            }
+            .disabled(working)
+            Button(tr("Login nel terminale del server…")) {
+                run {
+                    _ = try await model.installCodex(on: engine)
+                    guard let identity = model.identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
+                    try model.openTerminal(identity, command: ServerTerminal.codexLogin)
+                    return tr("Completa il login nel terminale, poi aggiorna i motori del server.")
+                }
+            }
+            .disabled(working)
+            if working { ProgressView().controlSize(.small) }
+            if let report { Text(report).font(.callout).textSelection(.enabled) }
+            if let error { Text(error).foregroundStyle(Theme.danger).textSelection(.enabled) }
+            HStack { Spacer(); Button(tr("Chiudi")) { dismiss() }.keyboardShortcut(.cancelAction).disabled(working) }
+        }
+        .padding(20)
+        .frame(width: 520)
+    }
+
+    private func run(_ action: @escaping @MainActor () async throws -> String) {
+        working = true
+        error = nil
+        report = nil
+        Task {
+            do { report = try await action() } catch { self.error = error.localizedDescription }
+            working = false
+        }
     }
 }
 

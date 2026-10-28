@@ -26,6 +26,7 @@ public struct RemoteProbe: Equatable, Sendable {
     public var sudo: String { values["sudo"] ?? "none" }
     public var engineHash: String? { values["engineHash"] }
     public var claude: String? { values["claude"] }
+    public var codex: String? { values["codex"] }
     public var pi: String? { values["pi"] }
     public var caddy: String? { values["caddy"] }
     public var serviceActive: Bool { values["service"] == "active" }
@@ -288,6 +289,22 @@ public struct RemoteAdmin: Sendable {
     public func installClaude() async throws -> String {
         let result = try await ssh.run(RemoteScripts.command(RemoteScripts.installClaude), timeout: 300)
         return RemoteScripts.values(result.text)["claude"] ?? ""
+    }
+
+    /// Native Codex release; no npm or system-wide installation required.
+    public func installCodex(probe: RemoteProbe) async throws -> String {
+        guard let release = CodexConfig.release(for: probe) else {
+            throw ProcessRunner.Failure(message: tr("Codex non ha una build per %@ %@", probe.os, probe.arch))
+        }
+        let result = try await ssh.run(RemoteScripts.command(RemoteScripts.installCodex,
+            [CodexConfig.version, release.asset, release.sha256]), timeout: 600)
+        return RemoteScripts.values(result.text)["codex"] ?? ""
+    }
+
+    /// Credentials travel only on stdin; no local config, sessions or projects are copied.
+    public func copyCodexLogin(from directory: URL = CodexConfig.localDirectory) async throws {
+        let data = try CodexConfig.login(from: directory)
+        try await ssh.run(RemoteScripts.command(RemoteScripts.installCodexLogin), stdin: data, timeout: 60)
     }
 
     /// omp `version` on the server, the release build for its system.

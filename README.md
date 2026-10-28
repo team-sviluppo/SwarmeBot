@@ -284,8 +284,8 @@ running as a service on a server you control. The Mac app and the iOS app are ju
   the server and every client sees the same chats.
 - Routines and webhooks of a remote bot run on the server, even with every client disconnected.
 - Supported servers: **Ubuntu 24.04 / 26.04** (x86_64, aarch64) and **macOS 14+**.
-- Agents on the server: the setup installs **Claude Code** and **pi** and can log them in from the
-  Mac; other CLIs can be installed from a terminal on the server. The **OpenAI-compatible server**
+- Agents on the server: the setup installs **Claude Code**, **Codex**, and **omp** (for pi bots) and can
+  copy their logins from the Mac; other CLIs can be installed from a terminal on the server. The **OpenAI-compatible server**
   (LiteLLM, vLLM, Hermes…) needs only a URL and a key, set in the [server's settings](#server-settings).
 - One engine per unix user: several people can share a server, each with their own engine, data
   and agent logins.
@@ -297,7 +297,7 @@ running as a service on a server you control. The Mac app and the iOS app are ju
  Mac app ───────┐
                 ├──► [optional proxy in a DMZ] ──► Caddy on the server ──► unix socket ──► swarme-harness
  other device ──┘                                    (TLS, path prefix)                     (runs as your user;
-                                                                                             claude / pi as children)
+                                                                                             claude / codex / omp as children)
  Mac app ──ssh──► server        administration only: install, update, log in, first token
 ```
 
@@ -346,11 +346,12 @@ On the **Mac**: SwarmeBot, and for the Claude login, Claude Code installed and l
    |---|---|
    | Server fingerprint | `ssh-keyscan`; you compare the SHA256 fingerprint with the server console and approve it |
    | Dedicated key | an ed25519 key for this (host, port, user) is created and added to `authorized_keys`, using your password once |
-   | Server check | OS, version, architecture, installed `claude` / `pi`, Caddy, service state |
+   | Server check | OS, version, architecture, installed `claude` / `codex` / `pi`, Caddy, service state |
    | Root steps | Caddy installed and running, socket folder, start at boot (linger or LaunchDaemon). Uses `sudo`, with your password if needed; never stored |
    | SwarmeBot engine | the engine for the server's OS and architecture is uploaded to `~/.swarmebot/bin` and its SHA-256 checked. Linux engines are downloaded from the release, pinned by digest; a Mac server gets the app's own engine |
    | Service and HTTPS routes | the service is installed and started; Caddy routes for `<prefix>/*` and `<prefix>/hooks/*` are written, validated with `caddy validate` and rolled back if invalid |
    | Token for this Mac | `swarme-harness device add` creates this Mac's device token; it goes to the Keychain |
+   | Claude Code, Codex and omp | Installs the CLIs and copies available logins from this Mac. Codex uses a native release with a pinned SHA-256 digest, without requiring npm; an existing working Codex is kept |
 
 4. **Show the server's bots**. The sidebar lists this Mac's sections and, below them, one section per
    server with all its bots. Opening a chat of a server switches the window to that engine: chat,
@@ -366,10 +367,16 @@ login the usual way. From the server's card in **Settings › Remote servers**:
 - **Claude login on the server…** — run `claude setup-token` on your Mac, paste the long-lived
   token; it is stored on the server in `secrets.json` (0600) as `CLAUDE_CODE_OAUTH_TOKEN` and the
   engine restarts to pick it up.
+- **Codex on the server…** — install Codex, copy this Mac's login, or open the server terminal for
+  `codex login --device-auth`. The copy sends only `auth.json` from `CODEX_HOME` (or `~/.codex`) over
+  SSH, stores it with mode 0600, and keeps the previous login as a private backup. Local settings,
+  projects and sessions stay on the Mac. If credentials are in the Mac's Keychain, use the server
+  terminal or log in locally with file credential storage first. See [OpenAI's authentication guide](https://learn.chatgpt.com/docs/auth).
+- **Set up Claude Code, Codex and omp** — repeat the agent setup on an existing server.
 - **Copy pi's configuration…** — copies `auth.json`, `models.json` and `settings.json` from
   `~/.pi/agent` (0600; files already on the server are kept as backups) and restarts the engine.
 - **Open a terminal on the server** — a Terminal window already connected with the dedicated key,
-  e.g. to install `pi` (`npm i -g …`) or Claude Code.
+  for the agents' own commands and logins.
 
 ### Server settings
 
