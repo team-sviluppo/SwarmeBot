@@ -3,6 +3,24 @@ import CompanionCore
 import Foundation
 
 extension AppModel {
+    public func gitBranches(threadId: String) async throws -> [GitBranch] {
+        guard let client else { throw URLError(.notConnectedToInternet) }
+        return try await client.gitBranches(threadId: threadId)
+    }
+
+    public func checkoutBranch(threadId: String, ref: String) async throws {
+        guard let client else { throw URLError(.notConnectedToInternet) }
+        let state = try await client.checkoutBranch(threadId: threadId, ref: ref)
+        gitStates[threadId] = state
+    }
+
+    /// Resolve the engine's actual folder, including a task's override and default workspace.
+    public func codeModeFolder(threadId: String) async throws -> String {
+        guard let client else { throw URLError(.notConnectedToInternet) }
+        let state = try await client.threadGit(threadId: threadId)
+        guard let folder = state.folder else { throw ProcessRunner.Failure(message: tr("Cartella di lavoro non disponibile")) }
+        return folder
+    }
     /// What the agent is told when "Commit & push" is clicked. Engine-side
     /// text, so English like the rest of what the agent reads.
     static let commitAndPushPrompt = """

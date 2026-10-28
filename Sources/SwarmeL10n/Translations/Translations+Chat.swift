@@ -1,6 +1,13 @@
 // English for the chat window: sidebar, header, transcript, composer, inspector, palette, menus, notifications.
 extension Translations {
     static let chat: [String: String] = [
+        "Apri terminale": "Open terminal",
+        "Cambia branch": "Switch branch",
+        "Cerca branch": "Search branches",
+        "Nessun branch disponibile": "No branches available",
+        "Attendi la fine del turno per cambiare branch": "Wait for the turn to finish before switching branches",
+        "Cartella di lavoro non disponibile": "Working folder unavailable",
+        "Configura una connessione SSH per aprire il terminale sul server": "Configure an SSH connection to open the server terminal",
         "server": "server",
         "Canale misto di %@: si scrive da lì. Qui ci sono le risposte e le richieste di permesso dei bot di questo server.": "Mixed channel of %@: written from there. Here are the replies and permission requests of this server's bots.",
         "un altro dispositivo": "another device",

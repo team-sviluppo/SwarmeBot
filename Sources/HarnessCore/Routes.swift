@@ -552,6 +552,28 @@ public final class Routes {
             guard let roots = ThreadFiles.roots(store, harness.paths, threadId: threadId) else { return fail(404, "no such thread") }
             return ok(await ThreadGit.wire(folder: roots.first))
         }
+        if let threadId = match(#"^/api/threads/([\w-]+)/git/(?:branches|checkout)$"#, path)?.first {
+            guard let folder = ThreadFiles.roots(store, harness.paths, threadId: threadId)?.first else { return fail(404, "no such thread") }
+            if method == "GET", path.hasSuffix("/branches") {
+                return ok(["branches": .array(try await ThreadGit.branches(folder: folder))])
+            }
+            if method == "POST", path.hasSuffix("/checkout") {
+                guard let repo = await ThreadGit.inspect(folder: folder) else { return fail(400, "not a git repository") }
+                let busyInRepo = store.bots.contains { bot in
+                    guard Store.isBusy(bot), let tid = bot["threadId"]?.string,
+                          let cwd = ThreadFiles.roots(store, harness.paths, threadId: tid)?.first else { return false }
+                    let resolved = URL(fileURLWithPath: cwd).standardizedFileURL.resolvingSymlinksInPath().path
+                    return resolved == repo.root || resolved.hasPrefix(repo.root + "/")
+                }
+                guard !busyInRepo, harness.routines?.isActiveThread(threadId) != true else {
+                    return fail(409, "a bot is working — let it finish before switching branches")
+                }
+                let body = try r.json()
+                guard let ref = body["ref"]?.string else { return fail(400, "ref is required") }
+                try await ThreadGit.checkout(folder: folder, ref: ref)
+                return ok(await ThreadGit.wire(folder: folder))
+            }
+        }
         if method == "GET", path == "/api/decisions" {
             return ok(["decisions": .array(DecisionLog.read(harness.paths, limit: Int(r.query["limit"] ?? "") ?? 200))])
         }
