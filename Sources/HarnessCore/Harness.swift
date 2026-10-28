@@ -62,6 +62,7 @@ public final class Harness {
     }()
     // connectors: MCP servers the user hands to bots (MCPConnectors.swift)
     public private(set) lazy var mcpConnectors = MCPConnectors(paths: paths)
+    public private(set) lazy var sharedRepositories = SharedRepositories(harness: self)
     public private(set) lazy var mcpPool: MCPConnectorPool = {
         let pool = MCPConnectorPool(paths: paths, environment: environment)
         pool.tokenProvider = { [weak self] spec, force in try await self?.mcpOAuth.token(spec, force: force) }
@@ -169,11 +170,13 @@ public final class Harness {
     /// Load the fleet, wire the store to the stream, start folding.
     public func boot() async {
         await registry.load(config.instanceConfigs(), baseEnvironment: environment)
-        startAutomations()
         for instance in registry.instances() { bus.attach(instance) }
         let selection = await registry.defaultSelection()
         store.defaultSelection = { selection }
         store.onChange { [weak self] change in self?.broadcast(change) }
+        // Shared definitions are refreshed before unattended work can start.
+        _ = sharedRepositories.sync()
+        startAutomations()
         store.seedIfEmpty()
         library.resume(store.bots.compactMap { $0["id"]?.string })
         // registration order is the Node engine's: watchdog, fold, repeats,

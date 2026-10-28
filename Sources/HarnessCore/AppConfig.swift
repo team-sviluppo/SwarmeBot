@@ -228,6 +228,15 @@ public final class AppConfig {
         json = disk
     }
 
+    public func setSharedFolder(_ kind: String, _ path: String?) throws {
+        var disk = FileIO.readJSON(paths.config)?.object ?? JSONObject()
+        var section = disk["sharedRepositories"]?.object ?? JSONObject()
+        section[kind] = path.map(JSON.string) ?? Optional<JSON>.none
+        disk["sharedRepositories"] = .object(section)
+        try FileIO.writeAtomic(Data(JSON.object(disk).pretty().utf8), to: paths.config)
+        json = disk
+    }
+
     /// Set (or clear) one instance's picker visibility. False for unknown ids.
     public func setPickerVisibility(_ instanceId: InstanceID, _ visible: Bool?) throws -> Bool {
         guard instanceConfigs().contains(where: { $0.0 == instanceId }) else { return false }

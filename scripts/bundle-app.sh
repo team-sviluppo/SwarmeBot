@@ -5,9 +5,8 @@
 #
 #   --with-harness     also copy skills/ from the SwarmeBot checkout into
 #                      the app. The engine itself is swarme-harness, always.
-#   --arch arm64|x86_64|universal   (default universal) — a single-arch build
-#                      halves the embedded node (~110 MB instead of ~220 MB)
-#   --dmg              also produce build/SwarmeBot[-intel].dmg
+#   --arch arm64       Apple silicon only (default arm64)
+#   --dmg              also produce build/SwarmeBot.dmg
 #   --notarize         submit to Apple and staple (needs SIGN_IDENTITY and
 #                      NOTARY_PROFILE, see below)
 #
@@ -20,14 +19,13 @@
 #   SPARKLE_FEED_URL=…  default: the appcast on team-sviluppo/SwarmeBot
 #   VERSION=0.1.0 BUILD_NUMBER=1
 #   SWARMEBOT_REPO      the SwarmeBot checkout (default ../SwarmeBot)
-#   NODE_MAJOR=24 / NODE_VERSION=v24.x.y
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="${SWARMEBOT_REPO:-$ROOT/../SwarmeBot}"
 OUT="$ROOT/build"
 WITH_HARNESS=0
-ARCH=universal
+ARCH=arm64
 DMG=0
 NOTARIZE=0
 while [[ $# -gt 0 ]]; do
@@ -45,12 +43,8 @@ if [[ $NOTARIZE == 1 && ( "$IDENTITY" == "-" || -z "${NOTARY_PROFILE:-}" ) ]]; t
   echo "--notarize needs SIGN_IDENTITY (Developer ID) and NOTARY_PROFILE"; exit 2
 fi
 
-case "$ARCH" in
-  universal) SWIFT_ARCHS=(--arch arm64 --arch x86_64); NODE_ARCHS=(arm64 x64); SUFFIX="" ;;
-  arm64) SWIFT_ARCHS=(--arch arm64); NODE_ARCHS=(arm64); SUFFIX="" ;;
-  x86_64) SWIFT_ARCHS=(--arch x86_64); NODE_ARCHS=(x64); SUFFIX="-intel" ;;
-  *) echo "--arch must be arm64, x86_64 or universal"; exit 2 ;;
-esac
+[[ "$ARCH" == arm64 ]] || { echo "--arch must be arm64: macOS Intel and universal builds are no longer supported" >&2; exit 2; }
+SWIFT_ARCHS=(--arch arm64)
 APP="$OUT/SwarmeBot.app"
 
 cd "$ROOT"
@@ -117,7 +111,7 @@ echo "✓ $APP"
 
 ARTIFACT="$APP"
 if [[ $DMG == 1 ]]; then
-  DMG_PATH="$OUT/SwarmeBot$SUFFIX.dmg"
+  DMG_PATH="$OUT/SwarmeBot.dmg"
   rm -f "$DMG_PATH"
   STAGE="$OUT/dmg-stage"; rm -rf "$STAGE"; mkdir -p "$STAGE"
   cp -R "$APP" "$STAGE/"

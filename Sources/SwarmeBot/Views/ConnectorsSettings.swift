@@ -10,6 +10,7 @@ struct ConnectorsPane: View {
     @State private var selected: String?
     @State private var importing = false
     @State private var copyingToServer = false
+    @State private var sharedRepository = false
     private static let newId = "__new__"
 
     var body: some View {
@@ -28,6 +29,10 @@ struct ConnectorsPane: View {
                     Button { selected = Self.newId } label: { Image(systemName: "plus") }
                         .help(tr("Aggiungi un connettore"))
                     Button(tr("Importa JSON…")) { importing = true }
+                    if !model.isRemote {
+                        Button { sharedRepository = true } label: { Image(systemName: "folder.badge.person.crop") }
+                            .help(tr("Cartella condivisa MCP"))
+                    }
                     Spacer()
                     // this Mac's connectors and skills, many at once, to a server
                     if !model.isRemote, !model.remoteEngines.isEmpty {
@@ -58,6 +63,12 @@ struct ConnectorsPane: View {
         .task { await model.refreshMCPConnectors() }
         .sheet(isPresented: $copyingToServer) { ServerCopySheet() }
         .sheet(isPresented: $importing) { ConnectorImportSheet() }
+        .sheet(isPresented: $sharedRepository) {
+            VStack {
+                SharedRepositoryBrowser(kind: .connectors)
+                Button(tr("Chiudi")) { sharedRepository = false }.padding(.bottom, 12)
+            }.frame(width: 700, height: 530)
+        }
     }
 }
 

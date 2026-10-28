@@ -198,6 +198,7 @@ public struct BotConnector: Codable, Hashable, Sendable {
 }
 
 public struct Bot: Codable, Hashable, Identifiable, Sendable {
+    public var sharedSource: SharedSource?
     public var id: String
     public var threadId: String
     public var name: String

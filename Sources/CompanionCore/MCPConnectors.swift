@@ -5,6 +5,7 @@
 import Foundation
 
 public struct MCPConnector: Decodable, Hashable, Identifiable, Sendable {
+    public var sharedSource: SharedSource?
     public var id: String
     public var name: String
     /// "stdio" or "http".

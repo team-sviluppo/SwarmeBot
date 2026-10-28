@@ -169,6 +169,7 @@ public final class AppModel {
                     reconnectDelay = 0
                     if case let .hello(helloCursor, resumed) = frame.frame {
                         if !resumed {
+                            if !settingsOnly && !isRemote { await syncSharedRepositories() }
                             if !settingsOnly { try await hydrate() }
                             cursor = helloCursor
                         }
