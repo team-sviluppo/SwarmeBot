@@ -12,23 +12,118 @@ struct GitBranchChip: View {
     let bot: Bot
     @Environment(AppModel.self) private var model
 
+    @State private var choosing = false
+    @State private var branches: [GitBranch] = []
+    @State private var search = ""
+    @State private var loading = false
+    @State private var switching = false
+    @State private var error: String?
+
     var body: some View {
         Group {
             if let git = model.gitStates[bot.threadId], git.repo, let branch = git.branch, !branch.isEmpty {
-                HStack(spacing: 6) {
-                    Image(systemName: git.detached == true ? "smallcircle.filled.circle" : "arrow.triangle.branch").font(.system(size: 12))
-                    Text(verbatim: chipText(branch, 32)).font(.system(size: Theme.uiSize, weight: .medium))
+                Button { search = ""; choosing = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: git.detached == true ? "smallcircle.filled.circle" : "arrow.triangle.branch")
+                        Text(verbatim: chipText(branch, 32))
+                        Image(systemName: "chevron.down").font(.system(size: 9))
+                    }
+                    .font(.system(size: Theme.uiSize, weight: .medium))
+                    .foregroundStyle(Theme.secondary)
+                    .lineLimit(1).fixedSize()
                 }
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.vertical, 1)
-                .foregroundStyle(Theme.secondary)
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(Capsule().fill(Theme.raised.opacity(0.6)))
-                .overlay(Capsule().stroke(Theme.hairline.opacity(0.4), lineWidth: 1))
-                .help(git.detached == true ? tr("HEAD staccato su %@", branch) : tr("Branch git attivo: %@", branch))
+                .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
+                .help(tr("Cambia branch"))
+                .popover(isPresented: $choosing) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(tr("Cambia branch")).font(.headline)
+                        TextField(tr("Cerca branch"), text: $search)
+                        if loading || switching { ProgressView().controlSize(.small) }
+                        if let error { Text(verbatim: error).foregroundStyle(Theme.danger).textSelection(.enabled) }
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 2) {
+                                ForEach(branches.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { item in
+                                    Button {
+                                        Task { await checkout(item) }
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: item.remote ? "network" : "arrow.triangle.branch")
+                                            Text(verbatim: item.name).lineLimit(1).truncationMode(.middle)
+                                            Spacer()
+                                            if !item.remote && git.detached != true && item.name == branch {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                        .padding(6).contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(switching || model.isBusy(bot))
+                                }
+                            }
+                        }.frame(maxHeight: 280)
+                        if !loading && branches.isEmpty && error == nil { Text(tr("Nessun branch disponibile")) }
+                        if model.isBusy(bot) { Text(tr("Attendi la fine del turno per cambiare branch")) }
+                    }
+                    .padding(16).frame(width: 360)
+                    .task {
+                        loading = true
+                        error = nil
+                        branches = []
+                        defer { loading = false }
+                        do { branches = try await model.gitBranches(threadId: bot.threadId) }
+                        catch { self.error = error.localizedDescription }
+                    }
+                }
             }
         }
+    }
+
+    private func checkout(_ branch: GitBranch) async {
+        switching = true
+        error = nil
+        defer { switching = false }
+        do {
+            try await model.checkoutBranch(threadId: bot.threadId, ref: branch.ref)
+            choosing = false
+        } catch { self.error = error.localizedDescription }
+    }
+}
+
+struct CodeModeTerminalButton: View {
+    let bot: Bot
+    @Environment(AppModel.self) private var model
+    @State private var opening = false
+    @State private var error: String?
+
+    var body: some View {
+        Button {
+            Task {
+                opening = true
+                defer { opening = false }
+                do {
+                    let remote = model.isRemote
+                    let identity = model.activeRemoteEngine.flatMap { model.identity(for: $0) }
+                    let folder = try await model.codeModeFolder(threadId: bot.threadId)
+                    let command = "cd -- " + RemoteScripts.quote(folder) + " && exec \"${SHELL:-/bin/sh}\" -l"
+                    if remote {
+                        guard let identity else {
+                            error = tr("Configura una connessione SSH per aprire il terminale sul server")
+                            return
+                        }
+                        try model.openTerminal(identity, command: command)
+                    } else {
+                        TerminalLauncher.run(command)
+                    }
+                } catch { self.error = error.localizedDescription }
+            }
+        } label: {
+            Label(tr("Apri terminale"), systemImage: "terminal").fixedSize()
+        }
+        .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
+        .disabled(opening)
+        .alert(tr("Errore"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button(tr("Chiudi")) { error = nil }
+        } message: { Text(verbatim: error ?? "") }
     }
 }
 

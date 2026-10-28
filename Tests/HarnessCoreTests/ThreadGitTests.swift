@@ -96,6 +96,60 @@ final class ThreadGitTests: XCTestCase {
         XCTAssertFalse((answer?["branch"]?.string ?? "").isEmpty)
     }
 
+    private func request(_ method: String, _ suffix: String, body: JSON = [:]) async throws -> HTTPResponse {
+        let request = HTTPRequest(method: method, path: "/api/threads/\(threadId)/git/\(suffix)", query: [:],
+                                  headers: ["content-type": "application/json"], body: body.data)
+        guard case let .response(response) = await routes.handle(request) else { throw HTTPError(500, "no response") }
+        return response
+    }
+
+    func testListsAndChecksOutLocalAndRemoteBranches() async throws {
+        try prepare()
+        try git("init", "-q", "-b", "main")
+        try Data("one".utf8).write(to: folder.appendingPathComponent("a.txt"))
+        try git("add", ".")
+        try git("commit", "-qm", "first")
+        try git("branch", "feature/local")
+        try git("config", "remote.origin.url", "https://example.invalid/repo.git")
+        try git("config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+        try git("update-ref", "refs/remotes/origin/remote-feature", "HEAD")
+        try git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/remote-feature")
+        let listed = try await request("GET", "branches")
+        let branches = try JSON.parse(listed.body)["branches"]?.array ?? []
+        XCTAssertEqual(branches.compactMap { $0["name"]?.string }.sorted(), ["feature/local", "main", "origin/remote-feature"])
+        for ref in ["refs/heads/feature/local", "refs/remotes/origin/remote-feature", "refs/heads/main", "refs/remotes/origin/remote-feature"] {
+            let response = try await request("POST", "checkout", body: ["ref": .string(ref)])
+            XCTAssertEqual(response.status, 200, String(decoding: response.body, as: UTF8.self))
+            let state = try JSON.parse(response.body)
+            XCTAssertEqual(state["detached"], false)
+            XCTAssertEqual(state["folder"]?.string, folder.path)
+        }
+        let invalid = try await request("POST", "checkout", body: ["ref": "--force"])
+        XCTAssertEqual(invalid.status, 400)
+    }
+
+    func testCheckoutPreservesConflictingEditsAndRejectsBusyBot() async throws {
+        try prepare()
+        try git("init", "-q", "-b", "main")
+        let file = folder.appendingPathComponent("a.txt")
+        try Data("one".utf8).write(to: file)
+        try git("add", ".")
+        try git("commit", "-qm", "first")
+        try git("checkout", "-qb", "other")
+        try Data("other".utf8).write(to: file)
+        try git("commit", "-qam", "second")
+        try git("checkout", "-q", "main")
+        try Data("local edit".utf8).write(to: file)
+        let conflict = try await request("POST", "checkout", body: ["ref": "refs/heads/other"])
+        XCTAssertEqual(conflict.status, 409)
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "local edit")
+        let current = await state()
+        XCTAssertEqual(current?["branch"], "main")
+        harness.store.patchBot(botId, ["busy": true])
+        let busy = try await request("POST", "checkout", body: ["ref": "refs/heads/other"])
+        XCTAssertEqual(busy.status, 409)
+    }
+
     func testCodeModeIsAPatchableFlag() async throws {
         try prepare()
         var request = HTTPRequest(method: "PATCH", path: "/api/bots/\(botId)", query: [:],

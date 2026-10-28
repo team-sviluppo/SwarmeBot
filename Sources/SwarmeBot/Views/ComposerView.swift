@@ -129,7 +129,10 @@ struct ComposerView: View {
                             Task { await model.setWorkingFolder(path) }
                         }
                     }
-                    if bot.codeMode == true { GitBranchChip(bot: bot) }
+                    if bot.codeMode == true {
+                        GitBranchChip(bot: bot)
+                        CodeModeTerminalButton(bot: bot)
+                    }
                     LibraryChip(bot: bot)
                     ConnectorsChip(bot: bot)
                     SkillsChip(bot: bot)
