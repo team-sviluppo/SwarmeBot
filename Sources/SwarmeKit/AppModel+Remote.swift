@@ -258,8 +258,8 @@ extension AppModel {
         return CompanionClient(connection: connection, token: token)
     }
 
-    public func openTerminal(_ identity: SSHIdentity) throws {
-        try ServerTerminal.open(identity, store: identityStore)
+    public func openTerminal(_ identity: SSHIdentity, command: String? = nil) throws {
+        try ServerTerminal.open(identity, store: identityStore, command: command)
     }
 }
 
@@ -275,7 +275,6 @@ extension AppModel {
         if engineChoice == .remote(engine.id) { await refreshInstances() }
     }
 
-    /// Claude Code and omp on a server this Mac administers, as its setup does (ServerAgents).
     /// Host the iOS app's push relay on a server this Mac administers
     /// (docs/push-relay.md). Returns the relay's URL.
     public func installPushRelay(on engine: RemoteEngine, accessKeyId: String, secretAccessKey: String, appArn: String, sandboxAppArn: String,
@@ -296,12 +295,31 @@ extension AppModel {
         return relay
     }
 
+    /// Claude Code, Codex and omp, as in the server setup.
     public func configureAgents(on engine: RemoteEngine) async throws -> [String] {
         guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
         let admin = RemoteAdmin(identity: identity, store: identityStore)
         let report = try await ServerAgents.configure(admin: admin, client: try remoteClient(engine), probe: try await admin.probe())
         if engineChoice == .remote(engine.id) { await refreshInstances() }
         return report
+    }
+
+    public func installCodex(on engine: RemoteEngine) async throws -> String {
+        guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
+        let admin = RemoteAdmin(identity: identity, store: identityStore)
+        let version = try await admin.installCodex(probe: try await admin.probe())
+        if engineChoice == .remote(engine.id) { await refreshInstances() }
+        return version
+    }
+
+    public func copyCodexLogin(to engine: RemoteEngine) async throws {
+        guard let identity = identity(for: engine) else { throw EngineUpdateError.notAdministered(engine.name) }
+        let admin = RemoteAdmin(identity: identity, store: identityStore)
+        // Validate locally before installing or changing anything on the server.
+        _ = try CodexConfig.login(from: CodexConfig.localDirectory)
+        _ = try await admin.installCodex(probe: try await admin.probe())
+        try await admin.copyCodexLogin()
+        if engineChoice == .remote(engine.id) { await refreshInstances() }
     }
 }
 

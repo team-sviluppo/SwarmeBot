@@ -22,7 +22,7 @@ public final class ServerSetupFlow {
             case .engine: return tr("Motore SwarmeBot")
             case .service: return tr("Servizio e rotte HTTPS")
             case .device: return tr("Token di questo Mac")
-            case .agents: return tr("Claude Code e omp")
+            case .agents: return tr("Claude Code, Codex e omp")
             case .done: return tr("Pronto")
             }
         }
@@ -224,7 +224,7 @@ public final class ServerSetupFlow {
         case .agents:
             guard let identity, let probe, let engine, let connection = engine.connection,
                   let token = RemoteEngineStore.token(engineId: engine.id) else { return false }
-            activity = tr("Installo Claude Code e omp sul server…")
+            activity = tr("Installo Claude Code, Codex e omp sul server…")
             defer { activity = nil }
             agentsReport = try await ServerAgents.configure(admin: RemoteAdmin(identity: identity, store: identities),
                                                             client: CompanionClient(connection: connection, token: token),
@@ -293,7 +293,7 @@ extension ServerSetupFlow {
 }
 
 /// A Terminal window logged in on the server with SwarmeBot's key, for what
-/// only a person can do there: the CLIs' own logins (`claude`, `pi`).
+/// only a person can do there: the CLIs' own logins (`claude`, `codex`, `pi`).
 public enum ServerTerminal {
     public static func open(_ identity: SSHIdentity, store: SSHIdentityStore, command: String? = nil) throws {
         let ssh = SSHCommand(identity: identity, store: store)
@@ -310,5 +310,9 @@ public enum ServerTerminal {
     /// What to type there, shown next to the button.
     public static let claudeInstall = "curl -fsSL https://claude.ai/install.sh | bash"
     public static let claudeLogin = "claude"
+    public static let codexLogin = RemoteScripts.command(#"""
+    export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+    exec codex login --device-auth
+    """#)
     public static let piInstall = "npm install -g @earendil-works/pi-coding-agent"
 }

@@ -52,6 +52,7 @@ public enum RemoteScripts {
     fi
     # a command that answers no version is not the CLI we mean (macOS has a `pi` of its own on some setups)
     v="$(claude --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "claude=$v"
+    v="$(codex --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "codex=$v"
     v="$(pi --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "pi=$v"
     command -v node >/dev/null 2>&1 && echo "node=$(node --version 2>/dev/null)"
     command -v caddy >/dev/null 2>&1 && echo "caddy=$(caddy version 2>/dev/null | cut -d' ' -f1)"
@@ -542,6 +543,51 @@ public enum RemoteScripts {
     """#
 
     // MARK: Coding agents (as the user)
+
+    /// Native Codex $1, release asset $2, pinned archive SHA-256 $3.
+    /// Keep an existing working CLI. Downloads and verification finish before replacing anything.
+    public static let installCodex = #"""
+    set -eu
+    version="$1"; asset="$2"; want="$3"
+    case "$version" in *[!0-9.]*|"") echo "not a Codex version" >&2; exit 2 ;; esac
+    case "$asset" in codex-aarch64-apple-darwin|codex-x86_64-apple-darwin|codex-aarch64-unknown-linux-musl|codex-x86_64-unknown-linux-musl) ;; *) echo "not a Codex build" >&2; exit 2 ;; esac
+    case "$want" in *[!0-9a-f]*|"") echo "not a SHA-256 digest" >&2; exit 2 ;; esac
+    [ "${#want}" = 64 ] || { echo "not a SHA-256 digest" >&2; exit 2; }
+    export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+    if v="$(codex --version 2>/dev/null)" && [ -n "$v" ]; then echo "codex=$v"; exit 0; fi
+    bin="$HOME/.local/bin"
+    mkdir -p "$bin"
+    tmp="$(mktemp -d "$bin/.codex.XXXXXX")"
+    trap 'rm -rf "$tmp"' EXIT
+    curl -fsSL -o "$tmp/codex.tar.gz" "https://github.com/openai/codex/releases/download/rust-v$version/$asset.tar.gz"
+    if command -v sha256sum >/dev/null 2>&1; then got="$(sha256sum "$tmp/codex.tar.gz" | cut -d' ' -f1)"; else got="$(shasum -a 256 "$tmp/codex.tar.gz" | cut -d' ' -f1)"; fi
+    [ "$want" = "$got" ] || { echo "Codex: the download does not match SHA-256" >&2; exit 4; }
+    tar -xzf "$tmp/codex.tar.gz" -C "$tmp" "$asset"
+    chmod 755 "$tmp/$asset"
+    "$tmp/$asset" --version >/dev/null
+    mv -f "$tmp/$asset" "$bin/codex"
+    echo "codex=$("$bin/codex" --version)"
+    """#
+
+    /// auth.json only, private and atomic, with the previous login kept as a private backup.
+    public static let installCodexLogin = #"""
+    set -eu
+    umask 077
+    dir="$HOME/.codex"
+    mkdir -p "$dir"
+    chmod 700 "$dir"
+    tmp="$(mktemp "$dir/.auth.XXXXXX")"
+    trap 'rm -f "$tmp"' EXIT
+    cat > "$tmp"
+    [ -s "$tmp" ] || { echo "empty Codex login" >&2; exit 2; }
+    if [ -f "$dir/auth.json" ]; then
+      cp -p "$dir/auth.json" "$dir/auth.json.swarmebot-backup"
+      chmod 600 "$dir/auth.json.swarmebot-backup"
+    fi
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$dir/auth.json"
+    echo "copied=auth.json"
+    """#
 
     /// Claude Code in ~/.local/bin, from its own installer, unless it is there already.
     public static let installClaude = #"""

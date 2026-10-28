@@ -22,12 +22,12 @@ extension Translations {
         "Nessun server. Un bot su un server continua a lavorare anche a Mac spento, e lo ritrovi qui o sul telefono.":
             "No servers. A bot on a server keeps working even with your Mac off, and you'll find it here or on your phone.",
         "Amministrato da questo Mac come %@": "Administered from this Mac as %@",
-        "Installo Claude Code e omp sul server…": "Installing Claude Code and omp on the server…",
+        "Installo Claude Code, Codex e omp sul server…": "Installing Claude Code, Codex and omp on the server…",
         "Azioni": "Actions",
         "Mostra i suoi bot": "Show its bots",
         "Abbina un telefono o un altro Mac…": "Pair a phone or another Mac…",
         "Dispositivi abbinati…": "Paired devices…",
-        "Configura Claude Code e omp": "Set up Claude Code and omp",
+        "Configura Claude Code, Codex e omp": "Set up Claude Code, Codex and omp",
         "Login di Claude sul server…": "Claude login on the server…",
         "Copia la configurazione di pi…": "Copy pi configuration…",
         "Apri un terminale sul server": "Open a terminal on the server",
@@ -75,7 +75,7 @@ extension Translations {
         "Password di sudo": "sudo password",
         "Per i passi di root qui sotto. Non viene salvata.": "For the root steps below. It is not saved.",
         "Comandi eseguiti come root": "Commands run as root",
-        "%@ %@ · %@ · Claude: %@ · pi: %@": "%@ %@ · %@ · Claude: %@ · pi: %@",
+        "%@ %@ · %@ · Claude: %@ · Codex: %@ · pi: %@": "%@ %@ · %@ · Claude: %@ · Codex: %@ · pi: %@",
         "non installato": "not installed",
         "Avanzamento": "Progress",
         "Mostra i bot del server": "Show the server's bots",
@@ -90,7 +90,7 @@ extension Translations {
         "Motore SwarmeBot": "SwarmeBot engine",
         "Servizio e rotte HTTPS": "Service and HTTPS routes",
         "Token di questo Mac": "This Mac's token",
-        "Claude Code e omp": "Claude Code and omp",
+        "Claude Code, Codex e omp": "Claude Code, Codex and omp",
         "Pronto": "Ready",
         "Indica server e utente": "Enter the server and user",
         "Indica il dominio (o :porta) su cui Caddy risponde": "Enter the domain (or :port) Caddy answers on",
@@ -183,6 +183,23 @@ extension Translations {
             "%@: this Mac's configuration copied (%@), used by bots with pi",
         "omp: c'è la configurazione ma non il programma su questo Mac, quindi non so quale versione installare":
             "omp: the configuration is on this Mac but the program is not, so I don't know which version to install",
+
+        // Codex on remote servers
+        "Codex sul server…": "Codex on the server…",
+        "Codex su %@": "Codex on %@",
+        "Installa la CLI sul server e copia il login di questo Mac, oppure accedi dal terminale con un codice dispositivo.": "Install the CLI on the server and copy this Mac’s login, or sign in from the terminal with a device code.",
+        "Si copia solo auth.json dalla cartella di Codex di questo Mac (CODEX_HOME oppure ~/.codex). Contiene le credenziali: sul server è leggibile solo dal suo utente e il login precedente resta come backup.": "Only auth.json from this Mac’s Codex directory (CODEX_HOME or ~/.codex) is copied. It contains credentials: on the server only its user can read it, and the previous login is kept as a backup.",
+        "Installa Codex": "Install Codex",
+        "Codex installato: %@": "Codex installed: %@",
+        "Copia il login dal Mac": "Copy login from Mac",
+        "Login di Codex copiato sul server": "Codex login copied to the server",
+        "Login nel terminale del server…": "Sign in from the server terminal…",
+        "Completa il login nel terminale, poi aggiorna i motori del server.": "Complete sign-in in the terminal, then refresh the server’s engines.",
+        "Su questo Mac manca auth.json di Codex (%@). Esegui codex login con credenziali su file, oppure accedi dal terminale del server.": "Codex auth.json is missing on this Mac (%@). Run codex login with file credential storage, or sign in from the server terminal.",
+        "Il file auth.json di Codex non contiene un login valido": "Codex auth.json does not contain a valid login",
+        "Codex %@: login di questo Mac copiato": "Codex %@: this Mac’s login copied",
+        "Codex %@: manca il login (menu del server › Codex sul server…)": "Codex %@: not logged in (server menu › Codex on the server…)",
+        "Codex non ha una build per %@ %@": "Codex has no build for %@ %@",
 
         // RemoteAdmin
         "Indirizzo del sito Caddy non valido: un dominio (bot.example.it) o :porta":
