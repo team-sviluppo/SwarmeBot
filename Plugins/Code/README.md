@@ -168,3 +168,20 @@ checks run, 2 min otherwise, and whenever a turn ends.
 
 Not done: the comments of a conversation are as GitHub's GraphQL gives them (first 100 threads, 20 comments each); a
 status from an external CI with no log gives its link only.
+
+### Ahead, behind, fetch, pull and push (engine plugin 1.6.0)
+
+`GET /api/threads/:tid/git` also answers `upstream`, `ahead` and `behind` for a branch that follows another: the commits a push would
+send and a pull would bring, **as of the last fetch** (git is not asked to go to the network for a state that is read often). A branch
+that follows none, a detached HEAD, or an older engine has none of the three.
+
+| Method | Path | Request | Answer |
+|---|---|---|---|
+| POST | `/api/threads/:tid/git/fetch` | `{}` | the git state, after `git fetch --prune`. It moves only the remote-tracking refs, so it is allowed while a bot works. 400 not a repo, 409 no remote or git's own refusal, 504 after 120 s |
+| POST | `/api/threads/:tid/git/pull` | `{}` | the git state, after `git pull --ff-only`: fast-forward only, never a merge or a rebase (that is for a terminal). 409 while a bot works, or with git's text when it would need a merge or local edits are in the way; 400 for a detached HEAD or a branch that follows nothing |
+| POST | `/api/threads/:tid/git/push` | `{}` | the git state, after `git push` (`-u <remote> <branch>` for a branch with no upstream yet). Allowed while a bot works: what goes is what is committed. 409 with git's text when the remote refuses |
+
+In the app, a chip after the branch shows `↑n ↓m` (a check when in step) and opens *Check*, *Pull*, *Push* and *Sync* (check the remote,
+pull when behind, push when ahead; the first step that fails stops the rest, with git's message under the buttons). The app's
+requests to a route that waits on git (these, and a commit that pushes or opens a pull request) allow four minutes instead of twenty seconds.
+

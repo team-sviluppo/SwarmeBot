@@ -45,12 +45,18 @@ extension CompanionClient {
 
     /// A call to a route a plugin adds to the engine, which the core's client
     /// knows nothing about. The plugin owns the path and the shape of the answer.
+    /// `timeout` is for a route that waits on something slow (a push, a pull); the usual twenty seconds are for the rest.
     public func pluginRequest<T: Decodable>(_ method: String, _ path: String, query: [URLQueryItem] = [],
-                                            body: [String: Any]? = nil, as type: T.Type) async throws -> T {
-        try await send(try makeRequest(method, path, query: query, body: body), as: type)
+                                            body: [String: Any]? = nil, timeout: TimeInterval? = nil, as type: T.Type) async throws -> T {
+        var request = try makeRequest(method, path, query: query, body: body)
+        if let timeout { request.timeoutInterval = timeout }
+        return try await send(request, as: type)
     }
 
-    public func pluginRequest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil) async throws {
-        try await send(try makeRequest(method, path, query: query, body: body))
+    public func pluginRequest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil,
+                              timeout: TimeInterval? = nil) async throws {
+        var request = try makeRequest(method, path, query: query, body: body)
+        if let timeout { request.timeoutInterval = timeout }
+        try await send(request)
     }
 }

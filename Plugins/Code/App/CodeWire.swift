@@ -31,6 +31,11 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
     public var additions: Int?
     public var deletions: Int?
     public var summaryPartial: Bool?
+    /// The branch the current one follows, and the commits ahead of it (a push would send) and behind it (a pull would
+    /// bring), as of the last fetch. Absent when it follows none, or from an engine before 1.6.0.
+    public var upstream: String?
+    public var ahead: Int?
+    public var behind: Int?
 
     public init(repo: Bool, root: String? = nil, branch: String? = nil, detached: Bool? = nil, changes: [Change] = []) {
         self.repo = repo
@@ -40,7 +45,7 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
         self.changes = changes
     }
 
-    private enum CodingKeys: String, CodingKey { case repo, folder, root, branch, detached, changes, additions, deletions, summaryPartial }
+    private enum CodingKeys: String, CodingKey { case repo, folder, root, branch, detached, changes, additions, deletions, summaryPartial, upstream, ahead, behind }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -53,6 +58,9 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
         additions = try container.decodeIfPresent(Int.self, forKey: .additions)
         deletions = try container.decodeIfPresent(Int.self, forKey: .deletions)
         summaryPartial = try container.decodeIfPresent(Bool.self, forKey: .summaryPartial)
+        upstream = try container.decodeIfPresent(String.self, forKey: .upstream)
+        ahead = try container.decodeIfPresent(Int.self, forKey: .ahead)
+        behind = try container.decodeIfPresent(Int.self, forKey: .behind)
     }
 }
 
@@ -94,6 +102,11 @@ extension CompanionClient {
 
     func resumeCommand(threadId: String) async throws -> ResumeCommand {
         try await pluginRequest("GET", "/api/threads/\(threadId)/resume-command", as: ResumeCommand.self)
+    }
+
+    /// `action`: `fetch` (look at the remote), `pull` (fast-forward only) or `push`.
+    func gitSync(threadId: String, action: String) async throws -> ThreadGitState {
+        try await pluginRequest("POST", "/api/threads/\(threadId)/git/\(action)", body: [:], timeout: 240, as: ThreadGitState.self)
     }
 
     func checkoutBranch(threadId: String, ref: String) async throws -> ThreadGitState {
@@ -162,7 +175,8 @@ extension CompanionClient {
         var body: [String: Any] = ["message": message, "mode": mode.rawValue]
         if let files { body["files"] = files }
         if let branch, mode == .newBranch { body["branch"] = branch }
-        return try await pluginRequest("POST", "/api/threads/\(threadId)/git/commit", body: body, as: CommitResult.self)
+        // a push or a pull request can take minutes: the engine lets git run for up to three
+        return try await pluginRequest("POST", "/api/threads/\(threadId)/git/commit", body: body, timeout: 240, as: CommitResult.self)
     }
 
     func codeSettings() async throws -> CodeSettingsWire {

@@ -108,7 +108,7 @@ enum CodeCommit {
     }
 
     /// `git push`, with `-u origin <branch>` for a branch that has no upstream yet.
-    private static func push(root: String, branch: String) async throws {
+    static func push(root: String, branch: String) async throws {
         let hasUpstream = (await GitRun.git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], in: root))?.ok == true
         var args = ["push"]
         if !hasUpstream {

@@ -16,7 +16,7 @@ public final class CodeEnginePlugin: EnginePlugin {
 
     public nonisolated var id: String { "code" }
     public nonisolated var name: String { "Code" }
-    public nonisolated var version: String { "1.5.0" }
+    public nonisolated var version: String { "1.6.0" }
     public nonisolated var botFlags: [String] { ["codeMode"] }
     /// Code mode for a whole channel: one folder for every member, one of them working at a time.
     public nonisolated var groupFlags: [String] { ["codeMode"] }
@@ -233,6 +233,51 @@ public final class CodeEnginePlugin: EnginePlugin {
             }
             guard let name = try request.http.json()["name"]?.string else { return .response(.error(400, "name is required")) }
             try await ThreadGit.createBranch(folder: folder, name: name)
+            return .response(.json(200, await ThreadGit.wire(folder: folder)))
+        }
+        router.post("/api/threads/:tid/git/fetch") { request in
+            let harness = request.harness
+            guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else {
+                return .response(.error(404, "no such thread"))
+            }
+            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard (await GitRun.text(["remote"], in: repo.root)).map({ !$0.isEmpty }) == true else { return .response(.error(409, "this repository has no remote")) }
+            // only the remote-tracking refs move: the working tree and the branch are not touched, so a bot may be working
+            guard let output = await GitRun.git(["fetch", "--prune"], in: repo.root, timeout: 120) else { return .response(.error(504, "git fetch did not complete")) }
+            guard output.ok else { return .response(.error(409, GitRun.said(output))) }
+            self.pullRequests.forget(root: repo.root)
+            return .response(.json(200, await ThreadGit.wire(folder: folder)))
+        }
+        router.post("/api/threads/:tid/git/pull") { request in
+            let harness = request.harness
+            let threadId = request.params["tid"] ?? ""
+            guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: threadId)?.first else {
+                return .response(.error(404, "no such thread"))
+            }
+            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard !repo.detached else { return .response(.error(400, "a detached HEAD has nothing to pull")) }
+            guard !ThreadGit.botWorking(in: repo.root, harness: harness, threadId: threadId) else {
+                return .response(.error(409, "a bot is working — let it finish before pulling"))
+            }
+            guard (await GitRun.git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], in: repo.root))?.ok == true else {
+                return .response(.error(400, "this branch follows no remote branch: push it first"))
+            }
+            // fast-forward only: a pull that would merge or rebase is the person's to decide, in a terminal
+            guard let output = await GitRun.git(["pull", "--ff-only"], in: repo.root, timeout: 180) else { return .response(.error(504, "git pull did not complete")) }
+            guard output.ok else { return .response(.error(409, GitRun.said(output))) }
+            self.pullRequests.forget(root: repo.root)
+            return .response(.json(200, await ThreadGit.wire(folder: folder)))
+        }
+        router.post("/api/threads/:tid/git/push") { request in
+            let harness = request.harness
+            guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else {
+                return .response(.error(404, "no such thread"))
+            }
+            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard !repo.detached else { return .response(.error(400, "a detached HEAD cannot be pushed")) }
+            // the working tree is not touched, so a bot may be working; what is pushed is what is committed
+            try await CodeCommit.push(root: repo.root, branch: repo.branch)
+            self.pullRequests.forget(root: repo.root)
             return .response(.json(200, await ThreadGit.wire(folder: folder)))
         }
         router.get("/api/threads/:tid/git/diff") { request in

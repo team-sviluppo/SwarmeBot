@@ -191,6 +191,15 @@ enum ThreadGit {
         }
         var answer: JSON = ["repo": true, "folder": .string(folder), "root": .string(state.root), "branch": .string(state.branch), "detached": .bool(state.detached),
                 "changes": .array(changes)]
+        // against the branch it follows, as of the last fetch: what a push would send and what a pull would bring
+        if !state.detached, let counts = await GitRun.text(["rev-list", "--left-right", "--count", "@{u}...HEAD"], in: state.root) {
+            let parts = counts.split(whereSeparator: \.isWhitespace).compactMap { Int($0) }
+            if parts.count == 2 {
+                answer["behind"] = .number(Double(parts[0]))
+                answer["ahead"] = .number(Double(parts[1]))
+                if let upstream = await GitRun.text(["rev-parse", "--abbrev-ref", "@{u}"], in: state.root) { answer["upstream"] = .string(upstream) }
+            }
+        }
         let stats = state.changes.isEmpty ? "" : await GitRun.text(["diff", "--numstat", "HEAD", "--", "."], in: folder)
         if let stats {
             let counts = lineCounts(stats)

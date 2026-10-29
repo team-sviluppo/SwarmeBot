@@ -112,4 +112,33 @@ final class CodePhaseFourTests: XCTestCase {
         XCTAssertTrue(CodeState.version("1.10.0", atLeast: "1.5.0"))
         XCTAssertFalse(CodeState.version("1.4.0", atLeast: "1.5.0"))
     }
+
+    // MARK: ahead, behind and syncing
+
+    func testTheStateReadsWhatItFollowsAndHowFarApart() throws {
+        let following = try JSONDecoder().decode(ThreadGitState.self, from: Data(#"{"repo":true,"root":"/p","branch":"main","detached":false,"changes":[],"upstream":"origin/main","ahead":2,"behind":1}"#.utf8))
+        XCTAssertEqual(following.upstream, "origin/main")
+        XCTAssertEqual(following.ahead, 2)
+        XCTAssertEqual(following.behind, 1)
+        let alone = try JSONDecoder().decode(ThreadGitState.self, from: Data(#"{"repo":true,"root":"/p","branch":"feature","detached":false,"changes":[]}"#.utf8))
+        XCTAssertNil(alone.upstream, "a branch that follows nothing, or an engine before 1.6.0")
+        XCTAssertNil(alone.ahead)
+        XCTAssertNil(alone.behind)
+    }
+
+    func testSyncBringsBeforeItSendsAndDoesNothingWhenInStep() {
+        XCTAssertEqual(GitSyncPlan.steps(ahead: 0, behind: 0), [])
+        XCTAssertEqual(GitSyncPlan.steps(ahead: 3, behind: 0), [.push])
+        XCTAssertEqual(GitSyncPlan.steps(ahead: 0, behind: 2), [.pull])
+        XCTAssertEqual(GitSyncPlan.steps(ahead: 1, behind: 1), [.pull, .push], "a push of a branch that is behind would be refused")
+        XCTAssertEqual(GitSyncPlan.Step.pull.rawValue, "pull", "the engine's route")
+        XCTAssertEqual(GitSyncPlan.Step.push.rawValue, "push")
+    }
+
+    func testTheEngineVersionWithGitSyncIsOneDotSixAndLater() {
+        XCTAssertTrue(CodeState.version("1.6.0", atLeast: "1.6.0"))
+        XCTAssertTrue(CodeState.version("1.10.0", atLeast: "1.6.0"))
+        XCTAssertFalse(CodeState.version("1.5.0", atLeast: "1.6.0"))
+    }
 }
+

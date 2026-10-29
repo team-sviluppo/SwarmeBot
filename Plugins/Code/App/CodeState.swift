@@ -88,6 +88,9 @@ public final class CodeState {
     /// The pull request of each chat's branch, by thread.
     var pullRequests: [String: CodePullRequestStatus] = [:]
     var reviewErrors: [String: String] = [:]
+    /// Threads with a fetch, pull or push running, and what the last one said.
+    var syncing: Set<String> = []
+    var syncErrors: [String: String] = [:]
 
     func engineHasPhase3(_ model: AppModel) -> Bool {
         guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
@@ -98,6 +101,12 @@ public final class CodeState {
     func engineHasPhase4(_ model: AppModel) -> Bool {
         guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
         return Self.version(version, atLeast: "1.5.0")
+    }
+
+    /// Whether the engine's plugin knows ahead/behind, fetch, pull and push.
+    func engineHasGitSync(_ model: AppModel) -> Bool {
+        guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
+        return Self.version(version, atLeast: "1.6.0")
     }
 
     /// What the agent is told when "Commit & push" is clicked. Engine-side
@@ -384,3 +393,50 @@ extension CodeState {
         return pr.checks.state == "pending" ? .seconds(30) : .seconds(120)
     }
 }
+
+// MARK: - Fetch, pull and push
+
+/// What "Sincronizza" does: look at the remote, bring what it has, then send what is here.
+enum GitSyncPlan {
+    enum Step: String { case pull, push }
+
+    /// After a fetch. A pull goes first because a push of a branch that is behind is refused; both when both.
+    static func steps(ahead: Int, behind: Int) -> [Step] {
+        (behind > 0 ? [.pull] : []) + (ahead > 0 ? [.push] : [])
+    }
+}
+
+extension CodeState {
+    /// One call to the engine for the thread's repository; its refusal (a pull that would need a merge, a push the
+    /// remote rejects) is kept to be said as git said it.
+    private func gitCall(model: AppModel, threadId: String, _ actions: [String]) async {
+        guard let client = model.client, !syncing.contains(threadId) else { return }
+        syncing.insert(threadId)
+        syncErrors[threadId] = nil
+        defer { syncing.remove(threadId) }
+        do {
+            for action in actions { gitStates[threadId] = try await client.gitSync(threadId: threadId, action: action) }
+        } catch { syncErrors[threadId] = error.localizedDescription }
+    }
+
+    func fetchRemote(model: AppModel, threadId: String) async { await gitCall(model: model, threadId: threadId, ["fetch"]) }
+    func pull(model: AppModel, threadId: String) async { await gitCall(model: model, threadId: threadId, ["pull"]) }
+    func push(model: AppModel, threadId: String) async { await gitCall(model: model, threadId: threadId, ["push"]) }
+
+    /// Fetch, then what that says is missing on either side; the first step that fails stops the rest.
+    func sync(model: AppModel, threadId: String) async {
+        guard let client = model.client, !syncing.contains(threadId) else { return }
+        syncing.insert(threadId)
+        syncErrors[threadId] = nil
+        defer { syncing.remove(threadId) }
+        do {
+            var git = try await client.gitSync(threadId: threadId, action: "fetch")
+            gitStates[threadId] = git
+            for step in GitSyncPlan.steps(ahead: git.ahead ?? 0, behind: git.behind ?? 0) {
+                git = try await client.gitSync(threadId: threadId, action: step.rawValue)
+                gitStates[threadId] = git
+            }
+        } catch { syncErrors[threadId] = error.localizedDescription }
+    }
+}
+
