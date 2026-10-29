@@ -145,6 +145,9 @@ public struct RuntimeEvent: Sendable {
     public var toolOutput: String?
     /// Internal provenance for a token-price estimate; not a provider invoice.
     public var costEstimated = false
+    /// Internal lifecycle data; persisted through existing activity messages.
+    /// The runtime wire envelope remains unchanged.
+    public var subagent: SubagentState?
 
     public init(
         provider: String, providerInstanceId: InstanceID? = nil, threadId: ThreadID, turnId: String? = nil,

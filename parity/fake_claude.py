@@ -113,7 +113,34 @@ def peer_id(name):
     return "missing"
 
 
-if "CONNETTORE " in prompt:
+if "SUBAGENTS" in prompt:
+    import select
+    out({"type": "system", "subtype": "session_state_changed", "state": "running"})
+    if "LATE" in prompt:
+        finish("Parent is waiting", tool=False)
+        time.sleep(0.1)
+    out({"type": "system", "subtype": "task_started", "task_id": "child-1", "tool_use_id": "agent-tool",
+         "description": "Review the code", "task_type": "local_agent"})
+    if "STOP" in prompt:
+        time.sleep(30)
+        sys.exit(0)
+    if "EARLY" in prompt:
+        out({"type": "system", "subtype": "task_updated", "task_id": "child-1", "patch": {"status": "completed"}})
+    if "LATE" not in prompt:
+        finish("Parent is waiting", tool=False)
+    time.sleep(0.2)
+    # stdin must still be open after the intermediate result.
+    if select.select([sys.stdin], [], [], 0)[0]:
+        assert sys.stdin.readline() != "", "parent input closed before subagent completion"
+    out({"type": "assistant", "parent_tool_use_id": "agent-tool", "message": {"content": [
+        {"type": "text", "text": "Child result"}, {"type": "tool_use", "id": "nested", "name": "Bash"}]}})
+    out({"type": "system", "subtype": "task_progress", "task_id": "child-1", "summary": "Review in progress"})
+    out({"type": "system", "subtype": "task_updated", "task_id": "child-1", "patch": {"status": "completed"}})
+    out({"type": "system", "subtype": "task_notification", "task_id": "child-1", "status": "completed",
+         "summary": "Child result", "output_file": "/tmp/child-result.txt"})
+    finish("Parent used Child result", tool=False)
+    out({"type": "system", "subtype": "session_state_changed", "state": "idle"})
+elif "CONNETTORE " in prompt:
     name, _, text = prompt.split("CONNETTORE ", 1)[1].strip().partition(" ")
     config = after("--mcp-config")
     servers = sorted(json.load(open(config))["mcpServers"]) if config else []

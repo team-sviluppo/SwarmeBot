@@ -34,6 +34,7 @@ public final class Harness {
 
     // fold bookkeeping, keyed "threadId:itemId" / "threadId:requestId"
     private var toolMessageByItem: [String: String] = [:]
+    private var subagentMessageByItem: [String: String] = [:]
     private var askMessageByRequest: [String: String] = [:]
     private var streamedReply: [String: String] = [:]
     private var lastReply: [String: String] = [:]
@@ -62,6 +63,7 @@ public final class Harness {
     }()
     // connectors: MCP servers the user hands to bots (MCPConnectors.swift)
     public private(set) lazy var mcpConnectors = MCPConnectors(paths: paths)
+    public private(set) lazy var sharedRepositories = SharedRepositories(harness: self)
     public private(set) lazy var mcpPool: MCPConnectorPool = {
         let pool = MCPConnectorPool(paths: paths, environment: environment)
         pool.tokenProvider = { [weak self] spec, force in try await self?.mcpOAuth.token(spec, force: force) }
@@ -169,11 +171,13 @@ public final class Harness {
     /// Load the fleet, wire the store to the stream, start folding.
     public func boot() async {
         await registry.load(config.instanceConfigs(), baseEnvironment: environment)
-        startAutomations()
         for instance in registry.instances() { bus.attach(instance) }
         let selection = await registry.defaultSelection()
         store.defaultSelection = { selection }
         store.onChange { [weak self] change in self?.broadcast(change) }
+        // Shared definitions are refreshed before unattended work can start.
+        _ = sharedRepositories.sync()
+        startAutomations()
         store.seedIfEmpty()
         library.resume(store.bots.compactMap { $0["id"]?.string })
         // registration order is the Node engine's: watchdog, fold, repeats,
@@ -403,6 +407,27 @@ public final class Harness {
         }
         let key = { (id: String?) in "\(threadId):\(id ?? "")" }
 
+        if let task = event.subagent {
+            // Keep a single row per task, including progress and late summaries.
+            // The ordinary tool detail popover works on every existing client.
+            let taskKey = key(event.itemId)
+            let snapshot = Redact.json(task.json)
+            var tool: JSONObject = ["name": .string(Redact.text("Subagent: \(task.title)")), "subagent": snapshot,
+                                    "output": .string(snapshot.serialized())]
+            if !task.isRunning { tool["ok"] = .bool(task.status == "completed") }
+            if let input = Self.toolDetail(event.toolInput, limit: 4_000) { tool["input"] = .string(input) }
+            if let messageId = subagentMessageByItem[taskKey] {
+                if let input = store.messages(threadId).first(where: { $0["id"]?.string == messageId })?["tool"]?["input"] {
+                    tool["input"] = input
+                }
+                store.patchMessage(threadId, messageId, ["tool": .object(tool)])
+            } else {
+                let message = push(["role": "bot", "kind": "activity", "tool": .object(tool)])
+                subagentMessageByItem[taskKey] = message["id"]?.string
+            }
+            return
+        }
+
         switch event.body {
         case let .contentDelta(streamKind, delta):
             if streamKind == "assistant_text", !delta.isEmpty {
@@ -477,6 +502,7 @@ public final class Harness {
             turnUsage[threadId] = .init(input: input, output: output)
 
         case let .turnCompleted(ok, _, cost, _, usage):
+            subagentMessageByItem = subagentMessageByItem.filter { !$0.key.hasPrefix(threadId + ":") }
             let partial = streamedReply.removeValue(forKey: threadId) ?? ""
             if !partial.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, lastReply[threadId] == nil {
                 _ = push(["role": "bot", "kind": "text", "text": .string(partial), "interrupted": true])

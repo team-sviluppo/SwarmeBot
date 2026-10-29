@@ -31,6 +31,9 @@ os.makedirs(state_dir, exist_ok=True)
 lock = threading.Lock()
 waiting = {}
 record = {"argv": argv}
+subagent_reads = 0
+subagent_stop = False
+subagent_broken = False
 
 
 def out(message):
@@ -91,6 +94,7 @@ def mcp_echo(server, text):
 
 
 def run_turn(params):
+    global subagent_stop, subagent_broken
     text = params["input"][0]["text"]
     record["turn"] = {k: v for k, v in params.items() if k != "input"}
     record["prompt"] = text[-40:]
@@ -103,6 +107,21 @@ def run_turn(params):
         note("account/rateLimits/updated", {"rateLimits": {"limitId": "codex", "primary": {
             "usedPercent": 42, "windowDurationMins": 300, "resetsAt": 4102444800}}})
         message("Codex usage test", [])
+    elif text.startswith("SwarmeBot: the background subagents"):
+        assert "Child result" in text or "Could not retrieve" in text
+        message("Parent reported missing child result" if "Could not retrieve" in text else "Parent used Child result", [])
+    elif "SUBAGENTS" in text:
+        subagent_stop = "STOP" in text
+        subagent_broken = "BROKEN" in text
+        item = {"type": "collabAgentToolCall", "id": "spawn", "tool": "spawnAgent", "status": "completed",
+                "senderThreadId": params["threadId"], "receiverThreadIds": ["child-1", "child-2"],
+                "prompt": "Review the code", "agentsStates": {"child-1": {"status": "running"}, "child-2": {"status": "running"}}}
+        note("item/started", {"threadId": params["threadId"], "item": {**item, "status": "inProgress"}})
+        note("item/completed", {"threadId": params["threadId"], "item": item})
+        # A child completion must neither end the root turn nor leak narration.
+        note("item/completed", {"threadId": "child-1", "item": {"type": "agentMessage", "text": "First child result"}})
+        note("turn/completed", {"threadId": "child-1", "turn": {"status": "completed"}})
+        message("Parent is waiting", [])
     elif "CONNETTORE " in text:
         name, _, said = text.split("CONNETTORE ", 1)[1].strip().partition(" ")
         servers = mcp_servers()
@@ -139,6 +158,7 @@ def run_turn(params):
 
 
 def handle(msg):
+    global subagent_reads
     method = msg.get("method")
     msg_id = msg.get("id")
     if method is None:
@@ -177,6 +197,14 @@ def handle(msg):
         out({"jsonrpc": "2.0", "id": msg_id, "result": {"turn": {"id": "t1"}}})
         threading.Thread(target=run_turn, args=(msg["params"],), daemon=True).start()
         return
+    elif method == "thread/read":
+        if subagent_broken:
+            out({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32600, "message": "no such thread"}})
+            return
+        subagent_reads += 1
+        status = "inProgress" if subagent_stop or subagent_reads < 2 else "completed"
+        result = {"thread": {"id": msg["params"]["threadId"], "turns": [{"id": "child-turn", "status": status,
+                  "items": [{"type": "agentMessage", "text": "Child result"}] if status == "completed" else []}]}}
     out({"jsonrpc": "2.0", "id": msg_id, "result": result})
 
 

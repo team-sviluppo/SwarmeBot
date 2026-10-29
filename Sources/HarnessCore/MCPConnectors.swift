@@ -214,6 +214,12 @@ public final class MCPConnectors {
 
     // MARK: OAuth state (MCPOAuth.swift)
 
+    func setSharedSource(_ id: String, _ source: JSON) throws {
+        guard let index = connectors.firstIndex(where: { $0["id"]?.string == id }) else { return }
+        connectors[index]["sharedSource"] = source
+        try save()
+    }
+
     func oauthSecrets(_ id: String) -> JSONObject { secrets[id]?["oauth"]?.object ?? JSONObject() }
 
     func setOAuthSecrets(_ id: String, _ values: JSONObject) {

@@ -137,6 +137,10 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
   da un turno; la finestra primaria non è necessariamente di cinque ore. Il costo del task è
   una stima API Standard dai token, marcata come tale e distinta dall'addebito dell'abbonamento.
   Vedere [Costo e utilizzo Codex](2026-10-29-utilizzo-codex.md).
+- Sottagenti nativi (2026-10-29): il risultato del padre non implica che i figli siano terminati.
+  La gestione precedente chiudeva il processo e poteva perderne l'output; divergenza voluta dal
+  Node: registro dei task, attività persistenti e continuazione prima della chiusura. Dettagli e
+  verifica in [Gestione dei sottagenti](2026-10-29-sottoagenti.md).
 
 - `generateText` esiste sui driver Node (titoli e nomi) ma il harness non lo chiama da nessuna parte. Non è stato portato: non c'è un chiamante da far coincidere.
 - Nel Node le validazioni delle routine lanciano `Error` senza status: le route rispondono **500**, non 400. Lo si

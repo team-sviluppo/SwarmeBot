@@ -3,7 +3,7 @@
 # distribution — the native app's version of SwarmeBot/scripts/package-mac-dmg.sh,
 # with the same Developer ID and notarization credentials.
 #
-#   scripts/release-mac.sh [--version 0.3.0] [--arch arm64|x64|arm64,x64]
+#   scripts/release-mac.sh [--version 0.3.0] [--arch arm64]
 #                          [--skip-notarize] [--no-publish]
 #
 # Credentials, read from .env.mac-release.local in this repo or, failing
@@ -19,11 +19,11 @@
 #
 # Other environment: VERSION, BUILD_NUMBER (default: the git commit count),
 # SKIP_LINUX_ENGINES=1 (reuse build/linux, see scripts/linux-engines-manifest.sh),
-# MAC_ARCHES (default arm64,x64), SWARMEBOT_REPO (default ../SwarmeBot),
+# MAC_ARCHES (arm64 only), SWARMEBOT_REPO (default ../SwarmeBot),
 # RELEASES_REPO (default team-sviluppo/SwarmeBot).
 #
-# Output: release/SwarmeBot-<version>-arm64.dmg and -x64.dmg, plus the stable
-# names release/SwarmeBot.dmg (Apple silicon) and release/SwarmeBot-intel.dmg.
+# Output: release/SwarmeBot-<version>-arm64.dmg, plus the stable
+# name release/SwarmeBot.dmg (Apple silicon).
 # Unless --no-publish, also a git tag vX.Y.Z pushed to origin, then a zip per
 # arch and appcast.xml uploaded as the GitHub release for that tag.
 set -euo pipefail
@@ -70,6 +70,9 @@ load_env() {
 if [[ -f "$ROOT/.env.mac-release.local" ]]; then load_env "$ROOT/.env.mac-release.local"
 elif [[ -f "$REPO/.env.mac-release.local" ]]; then load_env "$REPO/.env.mac-release.local"
 fi
+
+# Reject obsolete architecture overrides before signing, Docker or publication.
+[[ "${MAC_ARCHES:-arm64}" == arm64 ]] || die "macOS releases support arm64 only; remove Intel/universal values from --arch or MAC_ARCHES"
 
 # --- signing identity ---
 if [[ -z "${MAC_SIGN_IDENTITY:-}" ]]; then
@@ -140,15 +143,14 @@ fi
 LINUX_ASSETS=("$ROOT"/build/linux/release/swarme-harness-linux-*)
 
 mkdir -p "$OUT"
-IFS=',' read -r -a ARCHES <<<"${MAC_ARCHES:-arm64,x64}"
+ARCHES=(arm64)
 BUILT=()
 ZIPS=()
 for arch in "${ARCHES[@]}"; do
   arch="$(echo "$arch" | tr -d '[:space:]')"
   case "$arch" in
     arm64) swift_arch=arm64; made="$ROOT/build/SwarmeBot.dmg" ;;
-    x64|x86_64) arch=x64; swift_arch=x86_64; made="$ROOT/build/SwarmeBot-intel.dmg" ;;
-    *) die "unknown arch '$arch' (use arm64, x64 or arm64,x64)" ;;
+    *) die "unknown arch '$arch' (use arm64)" ;;
   esac
   echo
   echo "=== $arch ==="
@@ -177,10 +179,7 @@ for arch in "${ARCHES[@]}"; do
     spctl -a -t open --context context:primary-signature -v "$dmg"
   fi
   BUILT+=("$dmg")
-  case "$arch" in
-    arm64) cp -f "$dmg" "$OUT/SwarmeBot.dmg" ;;
-    x64) cp -f "$dmg" "$OUT/SwarmeBot-intel.dmg" ;;
-  esac
+  cp -f "$dmg" "$OUT/SwarmeBot.dmg"
 
   # Sparkle replaces the .app from a zip. The DMG stays the first-install download.
   if [[ $PUBLISH == 1 ]]; then
@@ -216,7 +215,6 @@ if [[ $PUBLISH == 1 ]]; then
     base="$(basename "$zip")"
     case "$base" in
       *-arm64.zip) sparkle_arch=arm64 ;;
-      *-x64.zip) sparkle_arch=x86_64 ;;
       *) die "cannot tell the architecture of $base" ;;
     esac
     echo "→ signing $base"
@@ -281,7 +279,7 @@ EOF
   else
     gh release create "$tag" --repo "$RELEASES_REPO" --target "$sha" \
       --title "SwarmeBot ${VERSION}" \
-      --notes "SwarmeBot ${VERSION} (${BUILD_NUMBER}) per macOS. Apple silicon: SwarmeBot-${VERSION}-arm64.dmg. Intel: SwarmeBot-${VERSION}-x64.dmg." \
+      --notes "SwarmeBot ${VERSION} (${BUILD_NUMBER}) per macOS. Apple silicon: SwarmeBot-${VERSION}-arm64.dmg." \
       "${BUILT[@]}" "${ZIPS[@]}" "${LINUX_ASSETS[@]}" "$appcast"
   fi
 fi
@@ -290,5 +288,5 @@ echo
 echo "Done:"
 ls -lh "${BUILT[@]}" ${ZIPS[@]+"${ZIPS[@]}"}
 [[ $SKIP_NOTARIZE == 1 ]] && echo "Not notarized: other Macs will block these DMGs."
-echo "Apple silicon → release/SwarmeBot.dmg · Intel → release/SwarmeBot-intel.dmg"
+echo "Apple silicon → release/SwarmeBot.dmg"
 [[ $PUBLISH == 1 ]] && echo "Appcast → https://github.com/${RELEASES_REPO}/releases/latest/download/appcast.xml"
