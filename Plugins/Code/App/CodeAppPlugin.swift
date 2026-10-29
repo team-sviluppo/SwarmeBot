@@ -62,9 +62,9 @@ public final class CodeAppPlugin: AppPlugin {
 
     public func settingsSections(_ scope: SettingsScope) -> [PluginView] {
         switch scope {
-        case let .bot(bot): return [PluginView(CodeBotSettings(bot: bot))]
-        case .global: return [PluginView(CodeGlobalSettings(state: state))]
-        case .room: return []
+        case let .bot(bot): return [PluginView(CodeBotSettings(bot: bot, state: state))]
+        case .global: return [PluginView(CodeProjectsSettings(state: state)), PluginView(CodeGlobalSettings(state: state))]
+        case let .room(room): return [PluginView(CodeRoomSettings(room: room, state: state))]
         }
     }
 
@@ -77,6 +77,7 @@ public final class CodeAppPlugin: AppPlugin {
 /// The bot's switch for the plugin: the same `codeMode` flag every client reads.
 private struct CodeBotSettings: View {
     let bot: Bot
+    let state: CodeState
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -89,6 +90,27 @@ private struct CodeBotSettings: View {
                     .labelsHidden()
                     .tint(Theme.accent)
             }
+            if state.engineHasProjects(model) {
+                CardDivider(leading: 48)
+                CodeProjectRows(owner: .bot(bot), state: state)
+            }
+        }
+        .task { await state.refreshProjects(model: model) }
+    }
+}
+
+/// A channel's own: the project it belongs to, which counts over its members'.
+private struct CodeRoomSettings: View {
+    let room: Room
+    let state: CodeState
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if state.engineHasProjects(model) {
+            SettingsCard(tr("Code")) {
+                CodeProjectRows(owner: .room(room), state: state)
+            }
+            .task { await state.refreshProjects(model: model) }
         }
     }
 }

@@ -36,6 +36,8 @@ public final class CodeState {
     var comments: [String: [DiffComment]] = [:]
     /// The model that writes commit messages on the engine this window shows (nil: the bot's own).
     var commitModel: CodeSettingsWire.Pick?
+    /// The projects of the engine this window shows (Projects.swift on the engine).
+    public internal(set) var projects: [Project] = []
 
     /// What the agent is told when "Commit & push" is clicked. Engine-side
     /// text, so English like the rest of what the agent reads.
@@ -60,6 +62,45 @@ public final class CodeState {
             if a != b { return a > b }
         }
         return true
+    }
+
+    /// Whether the engine's plugin knows projects.
+    func engineHasProjects(_ model: AppModel) -> Bool {
+        guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
+        return Self.version(version, atLeast: "1.2.0")
+    }
+
+    // MARK: projects
+
+    func refreshProjects(model: AppModel) async {
+        guard let client = model.client, engineHasProjects(model) else { projects = []; return }
+        if let list = try? await client.projects() { projects = list }
+    }
+
+    /// Creates or changes a project; the engine's refusal (a folder that is not there…) comes back as the error.
+    func saveProject(model: AppModel, id: String?, name: String, clickupListId: String?, repos: [ProjectRepo]) async throws {
+        guard let client = model.client else { throw URLError(.notConnectedToInternet) }
+        if let id { _ = try await client.updateProject(id, name: name, clickupListId: clickupListId, repos: repos) }
+        else { _ = try await client.createProject(name: name, clickupListId: clickupListId, repos: repos) }
+        await refreshProjects(model: model)
+    }
+
+    func deleteProject(model: AppModel, _ id: String) async throws {
+        guard let client = model.client else { throw URLError(.notConnectedToInternet) }
+        try await client.deleteProject(id)
+        await refreshProjects(model: model)
+    }
+
+    func folders(model: AppModel, path: String?, hidden: Bool) async throws -> FolderListing {
+        guard let client = model.client else { throw URLError(.notConnectedToInternet) }
+        return try await client.folders(path: path, hidden: hidden)
+    }
+
+    /// The project a bot or channel belongs to, and the folder it works on, as the engine keeps them.
+    func assignment(_ plugins: [String: JSONValue]?) -> (project: Project?, role: String?) {
+        let data = (plugins ?? [:]).pluginData("code")
+        let project = data["projectId"]?.string.flatMap { id in projects.first { $0.id == id } }
+        return (project, data["role"]?.string)
     }
 
     // MARK: file references

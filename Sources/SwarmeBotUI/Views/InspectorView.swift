@@ -186,6 +186,11 @@ private struct RoomDetails: View {
                         host.hostName ?? tr("un altro dispositivo")))
                     .font(.system(size: 11)).foregroundStyle(Theme.secondary)
             }
+            // what a plugin adds to a channel's settings (a mirror of a channel hosted elsewhere is read there)
+            if room.guest == nil {
+                ForEach(Array(PluginHost.shared.settingsSections(.room(room), on: model).enumerated()), id: \.offset) { $0.element }
+                    .padding(.top, 8)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

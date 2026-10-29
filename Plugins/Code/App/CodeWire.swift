@@ -2,6 +2,7 @@
 // calls to them. Only this plugin knows these shapes: the core's client just
 // offers `pluginRequest`.
 import CompanionCore
+import SwarmeKit
 import Foundation
 
 /// The git state of a chat's folder (`GET /api/threads/:tid/git`), as
@@ -165,5 +166,92 @@ extension CompanionClient {
     func setCommitModel(_ pick: CodeSettingsWire.Pick?) async throws -> CodeSettingsWire {
         let value: Any = pick.map { ["instanceId": $0.instanceId, "model": $0.model] } ?? NSNull()
         return try await pluginRequest("PUT", "/api/code/settings", body: ["commitModel": value], as: CodeSettingsWire.self)
+    }
+}
+
+// MARK: - Projects
+
+public struct ProjectScript: Codable, Hashable, Sendable {
+    public var name: String
+    public var command: String
+}
+
+public struct ProjectRepo: Codable, Hashable, Sendable {
+    public var role: String
+    /// A path on the machine the engine runs on.
+    public var path: String
+    public var scripts: [ProjectScript]?
+}
+
+public struct Project: Codable, Hashable, Identifiable, Sendable {
+    public var id: String
+    public var name: String
+    public var clickupListId: String?
+    public var repos: [ProjectRepo]
+
+    public func repo(_ role: String) -> ProjectRepo? { repos.first { $0.role == role } }
+}
+
+/// The folders a project can name, and what they are called.
+enum ProjectRoles {
+    static let all = ["backend", "backoffice", "app", "bruno"]
+
+    static func title(_ role: String) -> String {
+        switch role {
+        case "backend": return tr("Backend")
+        case "backoffice": return tr("Backoffice")
+        case "app": return tr("App")
+        case "bruno": return tr("Collection Bruno")
+        default: return role
+        }
+    }
+}
+
+/// One folder of the engine's machine and what is in it (`GET /api/fs/dirs`).
+struct FolderListing: Decodable, Equatable {
+    var path: String
+    var parent: String?
+    var home: String
+    var dirs: [String]
+    var truncated: Bool?
+}
+
+extension CompanionClient {
+    func projects() async throws -> [Project] {
+        struct Answer: Decodable { var projects: [Project] }
+        return try await pluginRequest("GET", "/api/projects", as: Answer.self).projects
+    }
+
+    private func projectBody(name: String, clickupListId: String?, repos: [ProjectRepo]) -> [String: Any] {
+        [
+            "name": name,
+            "clickupListId": (clickupListId?.isEmpty == false ? clickupListId! : NSNull()) as Any,
+            "repos": repos.map { repo -> [String: Any] in
+                var out: [String: Any] = ["role": repo.role, "path": repo.path]
+                if let scripts = repo.scripts { out["scripts"] = scripts.map { ["name": $0.name, "command": $0.command] } }
+                return out
+            },
+        ]
+    }
+
+    func createProject(name: String, clickupListId: String?, repos: [ProjectRepo]) async throws -> Project {
+        struct Answer: Decodable { var project: Project }
+        return try await pluginRequest("POST", "/api/projects", body: projectBody(name: name, clickupListId: clickupListId, repos: repos), as: Answer.self).project
+    }
+
+    func updateProject(_ id: String, name: String, clickupListId: String?, repos: [ProjectRepo]) async throws -> Project {
+        struct Answer: Decodable { var project: Project }
+        return try await pluginRequest("PATCH", "/api/projects/\(id)", body: projectBody(name: name, clickupListId: clickupListId, repos: repos), as: Answer.self).project
+    }
+
+    func deleteProject(_ id: String) async throws {
+        try await pluginRequest("DELETE", "/api/projects/\(id)")
+    }
+
+    func folders(path: String?, hidden: Bool) async throws -> FolderListing {
+        var query: [URLQueryItem] = []
+        if let path { query.append(URLQueryItem(name: "path", value: path)) }
+        if hidden { query.append(URLQueryItem(name: "hidden", value: "1")) }
+        return try await pluginRequest("GET", "/api/fs/dirs", query: query, as: FolderListing.self)
     }
 }

@@ -87,3 +87,13 @@ and a "Commit & push" that asks the agent to do it.
   chip above the field. It is a path, not an upload: the message carries `Files I am referring to…` and
   the agent reads the file itself, so it also works with an engine on a server. A file dragged in from
   Finder that lies inside the chat's folder becomes a reference too (this Mac only); images stay attachments.
+
+### Projects in the app (engine plugin 1.2.0 and later)
+
+- **Settings › Plugins › Projects**: the engine's projects, *New project…* / *Edit…*. A project has a name, a ClickUp
+  list id and up to four folders (Backend, Backoffice, App, Bruno collection). *Choose…* opens the Mac's open panel for a
+  local engine, and a browser of the **server's** folders for a remote one (`GET /api/fs/dirs`). The ClickUp list's name
+  is not shown next to the id: that needs ClickUp access the engine does not have yet.
+- **A bot's settings** (the Code card) and **a channel's settings**: *Project* and *Works on*. Choosing the folder also
+  makes it the chat's default folder; a chat can still change folder from the composer. In a channel, its project
+  counts, not its members'.

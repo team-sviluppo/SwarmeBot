@@ -255,6 +255,8 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     public var activity: String?
     public var pinnedMessageId: String?
     public var cwd: String?
+    /// What each plugin of the engine keeps on this bot (`plugins.<id>`); a plugin's own client reads its part.
+    public var plugins: [String: JSONValue]?
     /// Desktop appearance: body shape id (`SwarmeSilhouetteData`); unknown or
     /// absent renders the default.
     public var mascotSilhouette: String?
@@ -274,6 +276,21 @@ public struct GroupResponder: Codable, Hashable, Sendable {
     public var botId: String?
 }
 
+public extension Dictionary where Key == String, Value == JSONValue {
+    /// One plugin's part of `plugins`, for a plugin's own client to read.
+    func pluginData(_ id: String) -> [String: JSONValue] {
+        if case let .object(data)? = self[id] { return data }
+        return [:]
+    }
+}
+
+public extension JSONValue {
+    var string: String? {
+        if case let .string(value) = self { return value }
+        return nil
+    }
+}
+
 public struct Room: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var threadId: String
@@ -291,6 +308,10 @@ public struct Room: Codable, Hashable, Identifiable, Sendable {
     public var cwd: String?
     public var pinnedCwd: String?
     public var pinnedMessageId: String?
+    /// What each plugin of the engine keeps on this channel (`plugins.<id>`).
+    public var plugins: [String: JSONValue]?
+    /// Desktop: Code mode for the whole channel (the Code plugin's flag), as it is for a bot.
+    public var codeMode: Bool?
     /// Members from other engines (a mixed channel hosted here).
     public var guests: [RoomGuest]?
     /// Set on a mirror: a mixed channel hosted elsewhere, written only there.

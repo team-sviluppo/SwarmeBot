@@ -233,3 +233,53 @@ final class DroppedFilesTests: XCTestCase {
         XCTAssertTrue(DroppedFiles.claimable([folder.appendingPathComponent("src/a.swift")], folders: []).isEmpty)
     }
 }
+
+@MainActor
+final class CodeProjectsTests: XCTestCase {
+    private func project(_ json: String) throws -> Project {
+        try JSONDecoder().decode(Project.self, from: Data(json.utf8))
+    }
+
+    func testAProjectDecodesWithItsFoldersAndScripts() throws {
+        let p = try project(#"{"id":"p","name":"Rossi","clickupListId":"9015","repos":[{"role":"backend","path":"/a","scripts":[{"name":"Test","command":"swift test"}]},{"role":"app","path":"/b"}],"createdAt":1}"#)
+        XCTAssertEqual(p.name, "Rossi")
+        XCTAssertEqual(p.clickupListId, "9015")
+        XCTAssertEqual(p.repo("backend")?.scripts?.first?.command, "swift test")
+        XCTAssertNil(p.repo("app")?.scripts)
+        XCTAssertNil(p.repo("bruno"))
+        XCTAssertNil(try project(#"{"id":"p","name":"R","clickupListId":null,"repos":[]}"#).clickupListId)
+    }
+
+    func testTheAssignmentReadsTheEnginesData() throws {
+        let state = CodeState()
+        state.projects = [try project(#"{"id":"p1","name":"One","repos":[]}"#), try project(#"{"id":"p2","name":"Two","repos":[]}"#)]
+        let plugins: [String: JSONValue] = ["code": .object(["projectId": .string("p2"), "role": .string("backend")]), "other": .object([:])]
+        let found = state.assignment(plugins)
+        XCTAssertEqual(found.project?.name, "Two")
+        XCTAssertEqual(found.role, "backend")
+        XCTAssertNil(state.assignment(nil).project)
+        XCTAssertNil(state.assignment(["code": .object(["projectId": .string("gone")])]).project, "a project that is no longer there")
+    }
+
+    func testTheRolesAreTheFourTheEngineKnows() {
+        XCTAssertEqual(ProjectRoles.all, ["backend", "backoffice", "app", "bruno"])
+        XCTAssertEqual(ProjectRoles.title("bruno"), "Collection Bruno".replacingOccurrences(of: "Collection Bruno", with: "Bruno collection"))
+    }
+
+    func testProjectsNeedAnEngineOfVersion12() {
+        let model = AppModel()
+        let state = CodeState()
+        XCTAssertFalse(state.engineHasProjects(model))
+        model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.1.0", enabled: true)]
+        XCTAssertFalse(state.engineHasProjects(model))
+        model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.2.0", enabled: true)]
+        XCTAssertTrue(state.engineHasProjects(model))
+    }
+
+    func testTheSettingsHaveTheProjectsAndTheChannelsOwnCard() throws {
+        let plugin = CodeAppPlugin()
+        XCTAssertEqual(plugin.settingsSections(.global).count, 2, "the projects, and the commit model")
+        let room = try JSONDecoder().decode(Room.self, from: Data(#"{"id":"g","threadId":"t","name":"R","memberIds":[],"defaultResponder":{"kind":"everyone"},"bulletin":"","unread":false,"createdAt":1}"#.utf8))
+        XCTAssertEqual(plugin.settingsSections(.room(room)).count, 1)
+    }
+}

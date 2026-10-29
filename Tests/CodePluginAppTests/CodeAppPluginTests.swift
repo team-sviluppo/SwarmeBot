@@ -48,6 +48,6 @@ final class CodeAppPluginTests: XCTestCase {
     func testOnlyABotHasASwitchAndTheEngineHasTheCommitModel() throws {
         let plugin = CodeAppPlugin()
         XCTAssertEqual(plugin.settingsSections(.bot(try bot(codeMode: false))).count, 1)
-        XCTAssertEqual(plugin.settingsSections(.global).count, 1, "the model that writes commit messages")
+        XCTAssertEqual(plugin.settingsSections(.global).count, 2, "the projects, and the model that writes commit messages")
     }
 }
