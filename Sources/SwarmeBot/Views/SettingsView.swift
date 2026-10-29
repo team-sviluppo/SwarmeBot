@@ -21,6 +21,7 @@ struct SettingsView: View {
             EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
             RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }.tag("remote")
             ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
+            SharedRepositoriesPane().tabItem { Label(tr("Condivisione"), systemImage: "folder.badge.person.crop") }.tag("sharing")
             SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
             VaultPane().tabItem { Label(tr("Vault"), systemImage: "lock.shield") }.tag("vault")
             PhonePane().tabItem { Label(tr("Telefono"), systemImage: "iphone") }.tag("phone")

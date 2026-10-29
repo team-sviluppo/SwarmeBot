@@ -255,6 +255,8 @@ def main():
         os.makedirs(home)
         env.update(HOME=home, FAKE_CODEX_RECORD=claude_record, FAKE_CODEX_STATE=os.path.join(data_dir, "codex-state"),
                    OPENAI_API_KEY="sk-should-not-leak")
+        if os.environ.get("SCENARIO") == "usage":
+            env["FAKE_CODEX_USAGE"] = "1"
     elif DRIVER.startswith("acp:"):
         # a private HOME: the harnesses write their CLI's config there for local models
         home = os.path.join(data_dir, "home")
@@ -448,6 +450,55 @@ def main():
             time.sleep(1.5)
             assert request(port, "POST", f"/api/bots/{bot_id}/interrupt")[0] == 200
             settle(5)
+        if os.environ.get("SCENARIO") == "tool-visibility":
+            bot_id = bot["id"]
+            original = request(port, "GET", "/api/bots")[1]["bots"][0]["messages"]
+            assert any(m.get("tool") for m in original), "scenario needs tool activity"
+            for value in [False, True]:
+                assert request(port, "PATCH", f"/api/bots/{bot_id}", {"showToolCalls": value})[0] == 200
+                current = request(port, "GET", "/api/bots")[1]["bots"][0]
+                assert current["showToolCalls"] is value
+                assert current["messages"] == original, "visibility must not remove recorded tool results"
+        if os.environ.get("SCENARIO") == "usage":
+            assert DRIVER == "codex"
+            bot_id = bot["id"]
+            completed = sum(f.get("kind") == "runtime" and f["event"]["type"] == "turn.completed" for f in frames)
+            assert request(port, "PATCH", f"/api/bots/{bot_id}", {"modelSelection": {"instanceId": "codex", "model": "gpt-6.1-sol"}})[0] == 200
+            assert request(port, "POST", f"/api/bots/{bot_id}/messages", {"text": "USAGE"})[0] == 202
+            settle(completed + 1)
+            instance = next(i for i in request(port, "GET", "/api/instances")[1]["instances"] if i["instanceId"] == "codex")
+            assert instance["usageLimit"]["utilization"] == .42, instance
+            task = request(port, "GET", "/api/bots")[1]["bots"][0]["tasks"][0]
+            assert task["usage"]["costUsd"] > 0 and task["usage"]["costEstimated"], task
+        if os.environ.get("SCENARIO") == "subagents":
+            assert DRIVER in ("claude", "codex"), "subagents scenario requires DRIVER=claude|codex"
+            bot_id = bot["id"]
+            completed = sum(f.get("kind") == "runtime" and f["event"]["type"] == "turn.completed" for f in frames)
+            for text in (["SUBAGENTS", "SUBAGENTS EARLY"] if DRIVER == "claude" else ["SUBAGENTS"]):
+                assert request(port, "POST", f"/api/bots/{bot_id}/messages", {"text": text})[0] == 202
+                completed += 1
+                settle(completed)
+                current = request(port, "GET", "/api/bots")[1]["bots"][0]["messages"]
+                tasks = [m["tool"]["subagent"] for m in current if "subagent" in m.get("tool", {})]
+                assert tasks and all(t["status"] == "completed" for t in tasks), tasks
+                assert any(m.get("text") == "Parent used Child result" for m in current)
+                assert not any(m.get("text") in ("Child result", "First child result") for m in current)
+            start = len(frames)
+            assert request(port, "POST", f"/api/bots/{bot_id}/messages", {"text": "SUBAGENTS STOP"})[0] == 202
+            deadline = time.time() + 10
+            while time.time() < deadline:
+                if any(f.get("kind") == "message" and f["message"].get("tool", {}).get("subagent", {}).get("status") == "running" for f in frames[start:]):
+                    break
+                time.sleep(0.05)
+            else:
+                raise AssertionError("no running subagent activity on SSE")
+            assert request(port, "GET", "/api/bots")[1]["bots"][0]["busy"]
+            assert request(port, "POST", f"/api/bots/{bot_id}/interrupt")[0] == 200
+            settle(completed + 1)
+            current = request(port, "GET", "/api/bots")[1]["bots"][0]["messages"]
+            tasks = [m["tool"]["subagent"] for m in current if "subagent" in m.get("tool", {})]
+            assert any(t["status"] == "interrupted" for t in tasks)
+            assert not any(t["status"] == "running" for t in tasks)
         if os.environ.get("SCENARIO") == "automations":
             def quiet(min_completed):
                 deadline = time.time() + 40

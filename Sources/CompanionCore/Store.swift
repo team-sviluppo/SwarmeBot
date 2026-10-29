@@ -80,6 +80,21 @@ public struct CompanionState: Sendable {
         bots.first { $0.id == id }
     }
 
+    /// Presentation only: the stored transcript, exports and model context
+    /// retain all tool results. Signed room messages use their sending bot's
+    /// preference; messages from unknown senders keep the existing behavior.
+    public func chatMessages(_ messages: [Message], forThread threadId: String) -> [Message] {
+        if let bot = bot(forThread: threadId) {
+            return bot.showsToolCalls ? messages : messages.filter { !$0.isToolCall }
+        }
+        let hiddenBots = Set(bots.filter { !$0.showsToolCalls }.map(\.id))
+        guard !hiddenBots.isEmpty else { return messages }
+        return messages.filter { message in
+            guard message.isToolCall, let sender = message.from?.botId else { return true }
+            return !hiddenBots.contains(sender)
+        }
+    }
+
     public func bot(forThread threadId: String) -> Bot? {
         bots.first { $0.threadId == threadId }
     }

@@ -119,8 +119,9 @@ struct ChatHeader: View {
         var parts: [String] = []
         var notes: [String] = []
         if let cost = usage.costUsd, cost > 0 {
-            parts.append(String(format: "$%.2f", cost))
-            notes.append(tr("Costo del task"))
+            let amount = String(format: cost < 0.01 ? "$%.4f" : "$%.2f", cost)
+            parts.append((usage.costEstimated == true ? "≈" : "") + amount)
+            notes.append(usage.costEstimated == true ? tr("Costo stimato del task alle tariffe API standard; non è un addebito dell'abbonamento") : tr("Costo del task"))
         }
         if let rate = usage.tokensPerSecond {
             parts.append(Self.formatRate(rate))
@@ -583,7 +584,9 @@ private struct SessionLimitChip: View {
     }
 
     private func help(_ percent: Int) -> String {
-        var text = tr("Sessione di 5 ore dell'abbonamento: %@% usato", String(percent))
+        var text = limit.window == "five_hour"
+            ? tr("Sessione di 5 ore dell'abbonamento: %@% usato", String(percent))
+            : tr("Utilizzo corrente dell'abbonamento: %@% usato", String(percent))
         if let reset = limit.resetDate {
             text += tr(", si azzera alle %@", reset.appFormatted(date: .omitted, time: .shortened))
         }

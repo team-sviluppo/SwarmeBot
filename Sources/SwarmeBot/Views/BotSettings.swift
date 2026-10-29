@@ -155,6 +155,10 @@ struct BotDetails: View {
     private var profile: some View {
         SettingsCard(tr("Profilo")) {
             VStack(alignment: .leading, spacing: 12) {
+                if bot.sharedSource != nil {
+                    Label(tr("Nome e istruzioni condivisi; avatar e impostazioni locali."), systemImage: "folder.badge.person.crop")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 input(tr("Nome"), text: $name, field: .name, prompt: tr("Nome del bot"))
                 input(tr("Ruolo"), text: $title, field: .title, prompt: tr("Che cosa fa, in poche parole"))
                 VStack(alignment: .leading, spacing: 5) {
@@ -218,6 +222,10 @@ struct BotDetails: View {
             toggle("chevron.left.forwardslash.chevron.right", tint: Theme.accent, tr("Code mode"),
                    tr("Mostra il branch git accanto alla cartella e raccoglie i file modificati a fine turno in un badge."),
                    value: bot.codeMode ?? false) { BotPatch(codeMode: $0) }
+            CardDivider(leading: 48)
+            toggle("wrench.and.screwdriver", tint: Theme.accent, tr("Mostra gli strumenti in chat"),
+                   tr("Mostra le chiamate agli strumenti e i relativi risultati nella conversazione."),
+                   value: bot.showsToolCalls) { BotPatch(showToolCalls: $0) }
             CardDivider(leading: 48)
             toggle("bell", tint: Theme.warning, tr("Notifiche"),
                    tr("Avvisa quando finisce un turno o ti fa una domanda."), value: bot.notifications) { BotPatch(notifications: $0) }

@@ -45,7 +45,7 @@ struct TranscriptView: View {
     @State private var openToolGroups: Set<String> = []
 
     var body: some View {
-        let all = model.visibleTranscript(threadId)
+        let all = model.state.chatMessages(model.visibleTranscript(threadId), forThread: threadId)
         let messages = Array(all.suffix(window))
         let hiddenLocally = all.count - messages.count
         // Code mode: a badge, not a card per file, where a turn ends

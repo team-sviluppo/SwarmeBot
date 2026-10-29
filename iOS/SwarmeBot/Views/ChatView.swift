@@ -127,7 +127,7 @@ struct ChatView: View {
     // MARK: Transcript
 
     private func transcript(_ threadId: String) -> some View {
-        let messages = session.transcript(threadId)
+        let messages = session.state.chatMessages(session.transcript(threadId), forThread: threadId)
         let live = session.state.streaming[threadId]
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
