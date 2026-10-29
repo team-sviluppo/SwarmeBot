@@ -60,7 +60,7 @@ struct GitBranchChip: View {
                                     .disabled(switching || model.isBusy(bot))
                                 }
                             }
-                        }.frame(maxHeight: 280)
+                        }.frame(height: 280)
                         if !loading && branches.isEmpty && error == nil { Text(tr("Nessun branch disponibile")) }
                         if model.isBusy(bot) { Text(tr("Attendi la fine del turno per cambiare branch")) }
                     }
