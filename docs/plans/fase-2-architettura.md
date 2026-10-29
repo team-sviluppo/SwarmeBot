@@ -133,6 +133,11 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Contatore di lavoro (2026-10-29): mostra secondi sotto il minuto, minuti e secondi fino
+  all'ora, poi ore/minuti/secondi. Esempio: 560 secondi → `9 min 20 s`. Stringhe localizzate
+  in italiano e inglese; verifica visiva con valore di prova e build finale ripristinata sul
+  tempo reale. Nessuna modifica al ciclo di vita del turno.
+
 - `generateText` esiste sui driver Node (titoli e nomi) ma il harness non lo chiama da nessuna parte. Non è stato portato: non c'è un chiamante da far coincidere.
 - Nel Node le validazioni delle routine lanciano `Error` senza status: le route rispondono **500**, non 400. Lo si
   replica (lo scenario `automations` lo controlla); i webhook invece rispondono 400.
