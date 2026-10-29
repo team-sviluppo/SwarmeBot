@@ -344,7 +344,8 @@ public final class SkillSources {
                 guard let list = bots.array, list.allSatisfy({ $0.string != nil }) else { throw SkillSourceError("assign.botIds must be a list of bot ids") }
                 let ids = list.compactMap(\.string)
                 guard ids.allSatisfy(botExists) else { throw SkillSourceError("assign.botIds names a bot that does not exist") }
-                source.assignBots = Array(NSOrderedSet(array: ids)) as? [String] ?? ids
+                var seen = Set<String>()
+                source.assignBots = ids.filter { seen.insert($0).inserted }
             }
         }
         if let requires = body["requires"] {
