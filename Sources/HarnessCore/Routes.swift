@@ -400,6 +400,7 @@ public final class Routes {
             }
             if method == "PATCH" {
                 let body = try r.json()
+                try harness.plugins.validatePatch(body, for: .group(m[0]), existing: existing)
                 var patch = JSONObject()
                 for key in ["name", "bulletin", "unread"] { if let value = body[key] { patch[key] = value } }
                 for flag in harness.plugins.groupFlags {
@@ -624,6 +625,7 @@ public final class Routes {
 
     private func patchBot(_ bot: JSONObject, _ body: JSONObject) async throws -> RouteResult {
         let id = bot["id"]?.string ?? ""
+        try harness.plugins.validatePatch(body, for: .bot(id), existing: bot)
         if let selection = body["modelSelection"], let effort = selection["effort"]?.string {
             guard isEffortLevel(effort) else { return fail(400, "effort \"\(effort)\" is not recognized") }
             let current = ModelSelection(json: bot["modelSelection"])

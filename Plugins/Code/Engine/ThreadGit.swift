@@ -40,7 +40,14 @@ enum ThreadGit {
             let resolved = canonical(cwd)
             return resolved == root || resolved.hasPrefix(root + "/")
         }
-        return busyInRepo || harness.routines?.isActiveThread(threadId) == true
+        // a channel's turn is the speaking member's, but its folder is the channel's
+        let busyChannel = harness.store.groups.contains { group in
+            guard group["busyBotId"]?.string != nil, let tid = group["threadId"]?.string,
+                  let cwd = ThreadFiles.roots(harness.store, harness.paths, threadId: tid)?.first else { return false }
+            let resolved = canonical(cwd)
+            return resolved == root || resolved.hasPrefix(root + "/")
+        }
+        return busyInRepo || busyChannel || harness.routines?.isActiveThread(threadId) == true
     }
 
     /// The real path, as git reports a repository's root. Not `resolvingSymlinksInPath`, which

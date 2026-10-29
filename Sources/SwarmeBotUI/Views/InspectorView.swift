@@ -32,7 +32,7 @@ struct InspectorView: View {
     /// The plugins' tabs for the open chat.
     @MainActor
     static func pluginTabs(_ model: AppModel) -> [PluginTab] {
-        guard model.selectedBot != nil else { return [] }
+        guard model.selectedBot != nil || model.selectedRoom != nil else { return [] }
         return PluginHost.shared.inspectorTabs(ChatContext.current(model))
     }
 
@@ -106,7 +106,25 @@ struct InspectorView: View {
                 }
                 }
             } else if let room = model.selectedRoom {
-                RoomDetails(room: room)
+                // a channel: its details, and the tabs a plugin adds (the diff of a Code channel)
+                if !pluginTabs.isEmpty {
+                    SegmentedPicker(options: [(Choice.core(.details), tr("Canale"))] + pluginTabs.map { (Choice.plugin($0.id), $0.title) }, selection: Binding(
+                        get: { openPlugin.map { Choice.plugin($0.id) } ?? .core(.details) },
+                        set: {
+                            switch $0 {
+                            case .core: ui.pluginTab = nil
+                            case let .plugin(id): ui.pluginTab = id
+                            }
+                        }
+                    ))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+                }
+                if let openPlugin {
+                    openPlugin.content
+                } else {
+                    ScrollView { RoomDetails(room: room) }
+                }
             } else {
                 Spacer()
             }
@@ -116,8 +134,8 @@ struct InspectorView: View {
     }
 
     private var title: String {
-        if model.selectedRoom != nil { return tr("Canale") }
         if let openPlugin { return openPlugin.title }
+        if model.selectedRoom != nil { return tr("Canale") }
         switch ui.inspectorTab {
         case .details: return tr("Impostazioni bot")
         case .library: return tr("Libreria")
@@ -126,8 +144,8 @@ struct InspectorView: View {
     }
 
     private var icon: String {
-        if model.selectedRoom != nil { return "number" }
         if let openPlugin { return openPlugin.icon }
+        if model.selectedRoom != nil { return "number" }
         switch ui.inspectorTab {
         case .details: return "slider.horizontal.3"
         case .library: return "books.vertical"

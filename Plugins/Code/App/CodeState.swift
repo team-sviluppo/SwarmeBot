@@ -3,7 +3,46 @@
 import CompanionCore
 import Foundation
 import Observation
+import SwarmeBotUI
 import SwarmeKit
+
+/// The chat the plugin works in: a bot's, or a channel's. The views only need its thread and whether
+/// someone is working in it.
+struct CodeChat: Hashable {
+    enum Kind: Hashable { case bot, room }
+
+    let kind: Kind
+    let id: String
+    let threadId: String
+
+    init(bot: Bot) {
+        kind = .bot
+        id = bot.id
+        threadId = bot.threadId
+    }
+
+    init(room: Room) {
+        kind = .room
+        id = room.id
+        threadId = room.threadId
+    }
+
+    /// The chat a plugin hook was asked about.
+    init?(_ chat: ChatContext) {
+        if let bot = chat.bot { self.init(bot: bot) }
+        else if let room = chat.room { self.init(room: room) }
+        else { return nil }
+    }
+
+    /// Read from the model each time, so a view that asks is redrawn when the work starts or ends.
+    @MainActor
+    func isBusy(_ model: AppModel) -> Bool {
+        switch kind {
+        case .bot: return model.state.bot(id).map(model.isBusy) ?? false
+        case .room: return model.state.rooms.first { $0.id == id }?.busyBotId != nil
+        }
+    }
+}
 
 /// A file a message points the agent at.
 public struct FileReference: Hashable, Sendable, Identifiable {
@@ -68,6 +107,12 @@ public final class CodeState {
     func engineHasProjects(_ model: AppModel) -> Bool {
         guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
         return Self.version(version, atLeast: "1.2.0")
+    }
+
+    /// Whether the engine's plugin has Code mode for channels.
+    func engineHasChannels(_ model: AppModel) -> Bool {
+        guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
+        return Self.version(version, atLeast: "1.3.0")
     }
 
     // MARK: projects

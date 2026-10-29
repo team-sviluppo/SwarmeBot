@@ -13,8 +13,10 @@ public final class CodeEnginePlugin: EnginePlugin {
 
     public nonisolated var id: String { "code" }
     public nonisolated var name: String { "Code" }
-    public nonisolated var version: String { "1.2.0" }
+    public nonisolated var version: String { "1.3.0" }
     public nonisolated var botFlags: [String] { ["codeMode"] }
+    /// Code mode for a whole channel: one folder for every member, one of them working at a time.
+    public nonisolated var groupFlags: [String] { ["codeMode"] }
 
     // MARK: projects on bots and channels
 
@@ -45,6 +47,19 @@ public final class CodeEnginePlugin: EnginePlugin {
                 throw HTTPError(400, "the project has no \(name) folder")
             }
         }
+    }
+
+    /// A channel with members from other engines cannot be a Code channel, and a Code channel cannot take them:
+    /// a guest works on its own engine, on its own folders, so there is no one folder for all.
+    public func validatePatch(_ body: JSONObject, for owner: PluginDataOwner, existing: JSONObject, harness: Harness) throws {
+        guard case .group = owner else { return }
+        let wantsCode = body["codeMode"]?.bool ?? existing["codeMode"]?.bool ?? false
+        let hasGuests = existing["guest"] != nil || !(existing["guests"]?.array?.isEmpty ?? true)
+        let addsGuests = !(body["guests"]?.array?.isEmpty ?? true)
+        if body["codeMode"]?.bool == true, hasGuests {
+            throw HTTPError(400, "a channel with members from other engines cannot use Code mode")
+        }
+        if wantsCode, addsGuests { throw HTTPError(400, "a Code mode channel cannot take members from other engines") }
     }
 
     /// A chat's default folder follows the folder it works on: what it picks in the project, it works in.

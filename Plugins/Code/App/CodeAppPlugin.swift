@@ -15,14 +15,18 @@ public final class CodeAppPlugin: AppPlugin {
 
     public init() {}
 
-    public func isActive(for chat: ChatContext) -> Bool { chat.bot?.codeMode == true }
+    /// On for a bot with its switch, and for a channel with its own (a channel of this engine only).
+    public func isActive(for chat: ChatContext) -> Bool {
+        if let room = chat.room { return room.codeMode == true && room.guests?.isEmpty != false && room.guest == nil }
+        return chat.bot?.codeMode == true
+    }
 
     public func composerAccessories(_ chat: ChatContext) -> [PluginView] {
-        guard let bot = chat.bot else { return [] }
-        var chips = [PluginView(GitBranchChip(bot: bot, state: state)), PluginView(CodeModeTerminalButton(bot: bot, state: state)),
-                     PluginView(CodeOpenMenu(bot: bot, state: state))]
+        guard let code = CodeChat(chat) else { return [] }
+        var chips = [PluginView(GitBranchChip(chat: code, state: state)), PluginView(CodeModeTerminalButton(chat: code, state: state)),
+                     PluginView(CodeOpenMenu(chat: code, state: state))]
         if state.engineHasWorkflow(chat.model) {
-            chips.append(PluginView(CodeFilePicker(bot: bot, state: state)))
+            chips.append(PluginView(CodeFilePicker(chat: code, state: state)))
             chips.append(PluginView(CodeShortcuts()))
         }
         return chips
@@ -48,16 +52,18 @@ public final class CodeAppPlugin: AppPlugin {
     }
 
     public func inspectorTabs(_ chat: ChatContext) -> [PluginTab] {
-        guard let bot = chat.bot, state.engineHasWorkflow(chat.model) else { return [] }
+        guard let code = CodeChat(chat), state.engineHasWorkflow(chat.model) else { return [] }
         return [PluginTab(id: CodeDiffPanel.tabId, title: tr("Diff"), icon: "plus.forwardslash.minus", width: CodeDiffPanel.width,
-                          content: PluginView(CodeDiffPanel(bot: bot, state: state)))]
+                          content: PluginView(CodeDiffPanel(chat: code, state: state)))]
     }
 
     /// In a Code chat a reply gets a badge where its turn ends and nothing in the
     /// middle of it, in place of a card per file; the newest turn waits for the bot to be idle.
     public func replyFooter(_ message: Message, _ chat: ChatContext, _ position: TurnPosition) -> PluginView? {
-        guard position.isTurnEnd, !(position.isLatest && chat.isBusy) else { return PluginView(EmptyView()) }
-        return PluginView(CodeModeBadge(message: message, threadId: chat.threadId, latest: position.isLatest, state: state))
+        guard position.isTurnEnd, !(position.isLatest && chat.isBusy), let code = CodeChat(chat) else { return PluginView(EmptyView()) }
+        // in a channel the badge says who spoke: one of them worked, the others read
+        return PluginView(CodeModeBadge(message: message, chat: code, latest: position.isLatest, state: state,
+                                        author: chat.room != nil ? message.from?.name : nil))
     }
 
     public func settingsSections(_ scope: SettingsScope) -> [PluginView] {
@@ -99,16 +105,40 @@ private struct CodeBotSettings: View {
     }
 }
 
-/// A channel's own: the project it belongs to, which counts over its members'.
+/// A channel's own: Code mode for all its members, and the project it belongs to, which counts over its members'.
 private struct CodeRoomSettings: View {
     let room: Room
     let state: CodeState
     @Environment(AppModel.self) private var model
 
+    /// A guest works on its own engine and its own folders: there is no one folder for the channel.
+    private var mixed: Bool { room.guest != nil || room.guests?.isEmpty == false }
+
     var body: some View {
-        if state.engineHasProjects(model) {
+        if state.engineHasChannels(model) || state.engineHasProjects(model) {
             SettingsCard(tr("Code")) {
-                CodeProjectRows(owner: .room(room), state: state)
+                if state.engineHasChannels(model) {
+                    SettingRow(icon: "chevron.left.forwardslash.chevron.right", tint: Theme.accent, title: tr("Code mode"),
+                               subtitle: mixed ? tr("Non disponibile in un canale con membri di altri motori.")
+                                   : tr("Tutti i membri lavorano nella cartella del canale, uno alla volta: il branch, i file modificati, il diff e il commit sono di tutti.")) {
+                        Toggle("", isOn: Binding(get: { room.codeMode ?? false }, set: { next in
+                            Task {
+                                var patch = RoomPatch()
+                                patch.codeMode = next
+                                await model.patch(room, patch)
+                            }
+                        }))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
+                        .tint(Theme.accent)
+                        .disabled(mixed)
+                    }
+                }
+                if state.engineHasProjects(model) {
+                    if state.engineHasChannels(model) { CardDivider(leading: 48) }
+                    CodeProjectRows(owner: .room(room), state: state)
+                }
             }
             .task { await state.refreshProjects(model: model) }
         }

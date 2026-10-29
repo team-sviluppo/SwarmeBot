@@ -297,3 +297,87 @@ final class CodeCommitTests: XCTestCase {
         XCTAssertTrue(command.contains("cd -- '\(repo.folder.path)'"), command)
     }
 }
+
+/// Code mode for a whole channel.
+@MainActor
+final class CodeChannelTests: XCTestCase {
+    private func channel(_ repo: RepoFixture) -> String {
+        let id = repo.harness.store.createGroup(name: "Backend", memberIds: [repo.botId])["id"]?.string ?? ""
+        repo.harness.store.patchGroup(id, ["cwd": .string(repo.folder.path)])
+        return id
+    }
+
+    private func patch(_ repo: RepoFixture, _ id: String, _ body: JSON) async -> (status: Int, json: JSON?) {
+        await repo.callRaw("PATCH", "/api/groups/\(id)", body: body)
+    }
+
+    func testAChannelTurnsCodeModeOnAndOff() async throws {
+        let repo = try await RepoFixture()
+        let id = channel(repo)
+        let on = await patch(repo, id, ["codeMode": true])
+        XCTAssertEqual(on.status, 200, String(describing: on.json))
+        XCTAssertEqual(repo.harness.store.group(id)?["codeMode"], true)
+        let bad = await patch(repo, id, ["codeMode": "yes"])
+        XCTAssertEqual(bad.status, 400)
+        _ = await patch(repo, id, ["codeMode": false])
+        XCTAssertEqual(repo.harness.store.group(id)?["codeMode"], false)
+    }
+
+    func testGitStateAndBranchesAnswerForTheChannelsThread() async throws {
+        let repo = try await RepoFixture()
+        try repo.initRepo()
+        let id = channel(repo)
+        let thread = repo.harness.store.group(id)?["threadId"]?.string ?? ""
+        let state = await repo.callRaw("GET", "/api/threads/\(thread)/git")
+        XCTAssertEqual(state.json?["repo"], true)
+        XCTAssertEqual(state.json?["branch"], "main")
+        let branch = await repo.callRaw("POST", "/api/threads/\(thread)/git/branch", body: ["name": "feature/shared"])
+        XCTAssertEqual(branch.status, 200, String(describing: branch.json))
+        XCTAssertEqual(branch.json?["branch"], "feature/shared")
+        // a channel has no session of its own to continue in a terminal
+        let resume = await repo.callRaw("GET", "/api/threads/\(thread)/resume-command")
+        XCTAssertEqual(resume.json?["supported"], false)
+    }
+
+    func testAMixedChannelCannotUseCodeMode() async throws {
+        let repo = try await RepoFixture()
+        let id = channel(repo)
+        let guest: JSON = ["peerId": "p1", "botId": "b9", "name": "Guest", "color": "blue", "memberId": "p1:b9"]
+        repo.harness.store.patchGroup(id, ["guests": .array([guest])])
+        let refused = await patch(repo, id, ["codeMode": true])
+        XCTAssertEqual(refused.status, 400)
+        XCTAssertTrue(refused.json?["error"]?.string?.contains("other engines") == true)
+        XCTAssertNil(repo.harness.store.group(id)?["codeMode"])
+        // off stays possible: it is what a client sends to leave
+        let off = await patch(repo, id, ["codeMode": false])
+        XCTAssertEqual(off.status, 200)
+    }
+
+    func testACodeChannelTakesNoGuests() async throws {
+        let repo = try await RepoFixture()
+        let id = channel(repo)
+        _ = await patch(repo, id, ["codeMode": true])
+        let guest: JSON = ["peerId": "p1", "botId": "b9", "name": "Guest", "color": "blue", "memberId": "p1:b9"]
+        let refused = await patch(repo, id, ["guests": .array([guest])])
+        XCTAssertEqual(refused.status, 400, String(describing: refused.json))
+        XCTAssertTrue(repo.harness.store.group(id)?["guests"] == nil || repo.harness.store.group(id)?["guests"]?.array?.isEmpty == true)
+    }
+
+    func testABotSpeakingInTheChannelBlocksCheckoutAndCommit() async throws {
+        let repo = try await RepoFixture()
+        try repo.initRepo()
+        let id = channel(repo)
+        let thread = repo.harness.store.group(id)?["threadId"]?.string ?? ""
+        // the channel's turn is a member's, who works in the channel's folder, not in its own
+        repo.harness.store.patchGroup(id, ["busyBotId": .string(repo.botId)])
+        try repo.write("a.txt", "two\n")
+        let checkout = await repo.callRaw("POST", "/api/threads/\(thread)/git/checkout", body: ["ref": "refs/heads/main"])
+        XCTAssertEqual(checkout.status, 409)
+        let commit = await repo.callRaw("POST", "/api/threads/\(thread)/git/commit", body: ["message": "x"])
+        XCTAssertEqual(commit.status, 409, "a channel at work holds the repository as a bot does")
+        XCTAssertTrue(commit.json?["error"]?.string?.contains("a bot is working") == true)
+        repo.harness.store.patchGroup(id, ["busyBotId": .null])
+        let free = await repo.callRaw("POST", "/api/threads/\(thread)/git/commit", body: ["message": "x"])
+        XCTAssertEqual(free.status, 200, String(describing: free.json))
+    }
+}

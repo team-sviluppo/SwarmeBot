@@ -10,7 +10,7 @@ import SwiftUI
 /// that is not a repo, which is also what an engine without the route gives.
 /// The state it reads is kept fresh by the plugin's `chatChanged`.
 struct GitBranchChip: View {
-    let bot: Bot
+    let chat: CodeChat
     let state: CodeState
     @Environment(AppModel.self) private var model
 
@@ -23,7 +23,7 @@ struct GitBranchChip: View {
 
     var body: some View {
         Group {
-            if let git = state.gitStates[bot.threadId], git.repo, let branch = git.branch, !branch.isEmpty {
+            if let git = state.gitStates[chat.threadId], git.repo, let branch = git.branch, !branch.isEmpty {
                 Button { search = ""; choosing = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: git.detached == true ? "smallcircle.filled.circle" : "arrow.triangle.branch")
@@ -43,7 +43,7 @@ struct GitBranchChip: View {
                             error = nil
                             branches = []
                             defer { loading = false }
-                            do { branches = try await state.gitBranches(model: model, threadId: bot.threadId) }
+                            do { branches = try await state.gitBranches(model: model, threadId: chat.threadId) }
                             catch { self.error = error.localizedDescription }
                         }
                 }
@@ -75,12 +75,12 @@ struct GitBranchChip: View {
                             Label(tr("Crea branch '%@'", newName), systemImage: "plus").padding(6).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .disabled(switching || model.isBusy(bot))
+                        .disabled(switching || chat.isBusy(model))
                     }
                 }
             }.frame(height: 280)
             if !loading && branches.isEmpty && error == nil { Text(tr("Nessun branch disponibile")) }
-            if model.isBusy(bot) { Text(tr("Attendi la fine del turno per cambiare branch")) }
+            if chat.isBusy(model) { Text(tr("Attendi la fine del turno per cambiare branch")) }
         }
         .padding(16).frame(width: 360)
     }
@@ -104,7 +104,7 @@ struct GitBranchChip: View {
                     .padding(6).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(switching || model.isBusy(bot))
+                .disabled(switching || chat.isBusy(model))
             }
         }
     }
@@ -114,7 +114,7 @@ struct GitBranchChip: View {
         error = nil
         defer { switching = false }
         do {
-            try await state.checkoutBranch(model: model, threadId: bot.threadId, ref: branch.ref)
+            try await state.checkoutBranch(model: model, threadId: chat.threadId, ref: branch.ref)
             choosing = false
         } catch { self.error = error.localizedDescription }
     }
@@ -124,7 +124,7 @@ struct GitBranchChip: View {
         error = nil
         defer { switching = false }
         do {
-            try await state.createBranch(model: model, threadId: bot.threadId, name: name)
+            try await state.createBranch(model: model, threadId: chat.threadId, name: name)
             choosing = false
         } catch { self.error = error.localizedDescription }
     }
@@ -153,7 +153,7 @@ struct BranchSections: Equatable {
 }
 
 struct CodeModeTerminalButton: View {
-    let bot: Bot
+    let chat: CodeChat
     let state: CodeState
     @Environment(AppModel.self) private var model
     @State private var opening = false
@@ -167,7 +167,7 @@ struct CodeModeTerminalButton: View {
                 do {
                     let remote = model.isRemote
                     let identity = model.activeRemoteEngine.flatMap { model.identity(for: $0) }
-                    let folder = try await state.folder(model: model, threadId: bot.threadId)
+                    let folder = try await state.folder(model: model, threadId: chat.threadId)
                     let command = "cd -- " + RemoteScripts.quote(folder) + " && exec \"${SHELL:-/bin/sh}\" -l"
                     if remote {
                         guard let identity else {
@@ -197,10 +197,13 @@ struct CodeModeTerminalButton: View {
 /// to do it; anywhere else they are the files the reply points at.
 struct CodeModeBadge: View {
     let message: Message
-    let threadId: String
+    let chat: CodeChat
     /// The newest turn's last message, once the bot is idle.
     let latest: Bool
     let state: CodeState
+    /// In a channel, who spoke: "Codex · 3 files modified".
+    var author: String?
+    private var threadId: String { chat.threadId }
     @Environment(AppModel.self) private var model
     @State private var replyFiles: [ReplyFile] = []
     @State private var expanded = false
@@ -223,7 +226,7 @@ struct CodeModeBadge: View {
                 HStack(spacing: 8) {
                     badge(count: rows.count)
                     if git != nil {
-                        Button { if state.engineHasWorkflow(model), let bot = model.selectedBot { _ = bot; committing = true } else { Task { await state.commitAndPush(model: model) } } } label: {
+                        Button { if state.engineHasWorkflow(model) { committing = true } else { Task { await state.commitAndPush(model: model) } } } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "arrow.up.circle").font(.system(size: 11, weight: .semibold))
                                 Text(tr("Commit & push")).font(.system(size: 12.5, weight: .medium))
@@ -246,9 +249,7 @@ struct CodeModeBadge: View {
         .task(id: message.id) {
             replyFiles = await model.replyFiles(threadId: threadId, messageId: message.id, text: message.text ?? "")
         }
-        .sheet(isPresented: $committing) {
-            if let bot = model.selectedBot { CommitSheet(bot: bot, state: state) }
-        }
+        .sheet(isPresented: $committing) { CommitSheet(chat: chat, state: state) }
     }
 
     private func badge(count: Int) -> some View {
@@ -263,7 +264,8 @@ struct CodeModeBadge: View {
                 Image(systemName: "doc.badge.ellipsis")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.tertiary)
-                Text(count == 1 ? tr("1 file modificato") : tr("%@ file modificati", String(count)))
+                Text(verbatim: author.map { "\($0) · " } ?? "").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.secondary)
+                    + Text(count == 1 ? tr("1 file modificato") : tr("%@ file modificati", String(count)))
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.secondary)
             }

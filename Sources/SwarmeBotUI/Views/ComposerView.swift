@@ -140,6 +140,21 @@ struct ComposerView: View {
                 .padding(.leading, 6)
                 }
                 .pluginsFollowing(chat(for: bot))
+            } else if let room = model.selectedRoom {
+                // a channel has no chips of its own: only what a plugin puts there (Code mode, on)
+                let context = ChatContext.current(model)
+                let accessories = PluginHost.shared.composerAccessories(context)
+                if !accessories.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(accessories.enumerated()), id: \.offset) { $0.element }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.leading, 6)
+                    }
+                    .pluginsFollowing(context)
+                    .id(room.id)
+                }
             }
         }
     }

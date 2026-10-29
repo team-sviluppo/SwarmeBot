@@ -7,14 +7,14 @@ import SwarmeKit
 import SwiftUI
 
 struct CodeOpenMenu: View {
-    let bot: Bot
+    let chat: CodeChat
     let state: CodeState
     @Environment(AppModel.self) private var model
     @State private var error: String?
 
-    private var folder: String? { state.gitStates[bot.threadId]?.folder }
+    private var folder: String? { state.gitStates[chat.threadId]?.folder }
     private var identity: SSHIdentity? { model.activeRemoteEngine.flatMap { model.identity(for: $0) } }
-    private var resume: ResumeCommand? { state.resumeCommands[bot.threadId] }
+    private var resume: ResumeCommand? { state.resumeCommands[chat.threadId] }
 
     /// The editors installed here; on a server only those that can open one.
     private var editors: [EditorApp] {

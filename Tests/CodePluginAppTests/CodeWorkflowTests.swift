@@ -283,3 +283,60 @@ final class CodeProjectsTests: XCTestCase {
         XCTAssertEqual(plugin.settingsSections(.room(room)).count, 1)
     }
 }
+
+@MainActor
+final class CodeChannelAppTests: XCTestCase {
+    private func room(_ extra: String = "") throws -> Room {
+        try JSONDecoder().decode(Room.self, from: Data(#"{"id":"g","threadId":"gt","name":"R","memberIds":[],"defaultResponder":{"kind":"everyone"},"bulletin":"","unread":false,"createdAt":1\#(extra)}"#.utf8))
+    }
+
+    private func chat(_ room: Room, model: AppModel? = nil, busy: Bool = false) -> ChatContext {
+        ChatContext(model: model ?? AppModel(), bot: nil, room: room, threadId: room.threadId, isBusy: busy)
+    }
+
+    func testAChannelIsOnWithItsOwnSwitch() throws {
+        let plugin = CodeAppPlugin()
+        XCTAssertFalse(plugin.isActive(for: chat(try room())))
+        XCTAssertFalse(plugin.isActive(for: chat(try room(#","codeMode":false"#))))
+        XCTAssertTrue(plugin.isActive(for: chat(try room(#","codeMode":true"#))))
+    }
+
+    func testAMixedChannelIsNeverOn() throws {
+        let plugin = CodeAppPlugin()
+        let guest = #","guests":[{"peerId":"p","botId":"b","name":"G","color":"blue","memberId":"p:b"}]"#
+        XCTAssertFalse(plugin.isActive(for: chat(try room(#","codeMode":true"# + guest))), "a guest has its own engine and folders")
+        XCTAssertFalse(plugin.isActive(for: chat(try room(#","codeMode":true,"guest":{"conversationId":"c1","hostName":"Mac"}"#))))
+    }
+
+    func testAChannelGetsTheChipsAndTheTab() throws {
+        let plugin = CodeAppPlugin()
+        let model = AppModel()
+        model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.3.0", enabled: true)]
+        let context = chat(try room(#","codeMode":true"#), model: model)
+        XCTAssertEqual(plugin.composerAccessories(context).count, 5)
+        XCTAssertEqual(plugin.inspectorTabs(context).map(\.id), ["code.diff"])
+    }
+
+    func testTheChatKnowsItsThreadAndWhoIsWorking() throws {
+        let channel = try room()
+        XCTAssertEqual(CodeChat(room: channel).threadId, "gt")
+        XCTAssertEqual(CodeChat(room: channel).kind, .room)
+        XCTAssertNil(CodeChat(ChatContext(model: AppModel(), bot: nil, room: nil, threadId: "x", isBusy: false)), "neither a bot nor a channel")
+    }
+
+    func testChannelsNeedAnEngineOfVersion13() {
+        let model = AppModel()
+        let state = CodeState()
+        model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.2.0", enabled: true)]
+        XCTAssertFalse(state.engineHasChannels(model))
+        model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.3.0", enabled: true)]
+        XCTAssertTrue(state.engineHasChannels(model))
+    }
+
+    func testTheFooterSaysWhoSpokeOnlyInAChannel() throws {
+        let plugin = CodeAppPlugin()
+        let message = try JSONDecoder().decode(Message.self, from: Data(#"{"id":"m","role":"bot","kind":"text","text":"x","at":1,"from":{"botId":"codex","name":"Codex","color":"blue"}}"#.utf8))
+        let end = TurnPosition(isTurnEnd: true, isLatest: false)
+        XCTAssertNotNil(plugin.replyFooter(message, chat(try room(#","codeMode":true"#)), end))
+    }
+}

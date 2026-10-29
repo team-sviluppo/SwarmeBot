@@ -13,6 +13,8 @@ extension Translations {
         "Code mode": "Code mode",
         "Mostra il branch git accanto alla cartella e raccoglie i file modificati a fine turno in un badge.": "Shows the git branch next to the folder and gathers the files changed at the end of a turn into one badge.",
         "Code": "Code",
+        "Non disponibile in un canale con membri di altri motori.": "Not available in a channel with members from other engines.",
+        "Tutti i membri lavorano nella cartella del canale, uno alla volta: il branch, i file modificati, il diff e il commit sono di tutti.": "Every member works in the channel's folder, one at a time: the branch, the changed files, the diff and the commit are everyone's.",
         "Backend": "Backend",
         "Backoffice": "Backoffice",
         "App": "App",

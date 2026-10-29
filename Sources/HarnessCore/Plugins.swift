@@ -98,6 +98,10 @@ public protocol EnginePlugin: AnyObject {
     /// A client wants to set this plugin's data on a bot or channel (`PATCH` with `plugins.<id>`): throw an
     /// `HTTPError` to refuse it. `data` is what the client sent, not yet merged.
     func validateData(_ data: JSONObject, for owner: PluginDataOwner, harness: Harness) throws
+    /// A `PATCH` of a bot or channel is about to be applied: throw an `HTTPError` to refuse it. `existing` is the
+    /// record as it is now, `body` what the client sent. For what depends on more than one field (a flag
+    /// that a channel with guests cannot have).
+    func validatePatch(_ body: JSONObject, for owner: PluginDataOwner, existing: JSONObject, harness: Harness) throws
     /// The data was written: the plugin may follow it with changes of its own.
     func dataChanged(for owner: PluginDataOwner, harness: Harness)
 
@@ -114,6 +118,7 @@ public extension EnginePlugin {
     nonisolated var groupFlags: [String] { [] }
     nonisolated var subcommands: [PluginSubcommand] { [] }
     func validateData(_ data: JSONObject, for owner: PluginDataOwner, harness: Harness) throws {}
+    func validatePatch(_ body: JSONObject, for owner: PluginDataOwner, existing: JSONObject, harness: Harness) throws {}
     func dataChanged(for owner: PluginDataOwner, harness: Harness) {}
     func routes(_ router: PluginRouter) {}
     func beforeTurn(_ turn: inout TurnSetup) {}
@@ -272,6 +277,10 @@ public final class PluginRegistry {
             touched = true
         }
         return touched ? .object(merged) : nil
+    }
+
+    func validatePatch(_ body: JSONObject, for owner: PluginDataOwner, existing: JSONObject) throws {
+        for plugin in active { try plugin.validatePatch(body, for: owner, existing: existing, harness: harness) }
     }
 
     func dataChanged(for owner: PluginDataOwner) {

@@ -104,3 +104,28 @@ final class PluginHostTests: XCTestCase {
         XCTAssertNil(TurnEnds(try [message("u1", "user")]).latest)
     }
 }
+
+@MainActor
+final class TurnEndsInChannelsTests: XCTestCase {
+    private func message(_ id: String, _ role: String, from: String? = nil) throws -> Message {
+        let sender = from.map { #","from":{"botId":"\#($0)","name":"\#($0)","color":"blue"}"# } ?? ""
+        return try JSONDecoder().decode(Message.self, from: Data(#"{"id":"\#(id)","role":"\#(role)","kind":"text","text":"x","at":1\#(sender)}"#.utf8))
+    }
+
+    func testEachMembersAnswerIsItsOwnTurnEnd() throws {
+        let ends = TurnEnds(try [message("u1", "user"), message("a1", "bot", from: "claude"), message("a2", "bot", from: "claude"),
+                                 message("c1", "bot", from: "codex"), message("u2", "user"), message("c2", "bot", from: "codex")])
+        XCTAssertEqual(ends.ids, ["a2", "c1", "c2"], "a new speaker closes the last one's turn")
+        XCTAssertEqual(ends.latest, "c2")
+    }
+
+    func testOneBotsRepliesAreStillOneTurn() throws {
+        let ends = TurnEnds(try [message("u1", "user"), message("b1", "bot"), message("b2", "bot"), message("b3", "bot")])
+        XCTAssertEqual(ends.ids, ["b3"])
+    }
+
+    func testTheSpeakerIsForgottenAtTheNextQuestion() throws {
+        let ends = TurnEnds(try [message("a1", "bot", from: "claude"), message("u1", "user"), message("a2", "bot", from: "claude")])
+        XCTAssertEqual(ends.ids, ["a1", "a2"])
+    }
+}

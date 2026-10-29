@@ -56,8 +56,10 @@ extension ChatContext {
     /// The chat the window shows.
     @MainActor
     public static func current(_ model: AppModel) -> ChatContext {
-        ChatContext(model: model, bot: model.selectedBot, room: model.selectedRoom, threadId: model.selectedThreadId ?? "",
-                    isBusy: model.selectedBot.map(model.isBusy) ?? (model.selectedRoom?.busyBotId != nil))
+        let room = model.selectedRoom
+        return ChatContext(model: model, bot: model.selectedBot, room: room, threadId: model.selectedThreadId ?? "",
+                           folder: room.flatMap { $0.pinnedCwd ?? $0.cwd },
+                           isBusy: model.selectedBot.map(model.isBusy) ?? (room?.busyBotId != nil))
     }
 }
 

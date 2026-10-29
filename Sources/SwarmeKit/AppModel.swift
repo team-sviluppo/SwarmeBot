@@ -299,6 +299,11 @@ public final class AppModel {
     // MARK: - Reading
 
     var defaultSelection: ChatID? {
+        // `SWARMEBOT_SELECT=room:<id>` or `bot:<id>` opens that chat first — for snapshots
+        if let wanted = ProcessInfo.processInfo.environment["SWARMEBOT_SELECT"] {
+            if wanted.hasPrefix("room:"), state.rooms.contains(where: { $0.id == String(wanted.dropFirst(5)) }) { return .room(String(wanted.dropFirst(5))) }
+            if wanted.hasPrefix("bot:"), state.bots.contains(where: { $0.id == String(wanted.dropFirst(4)) }) { return .bot(String(wanted.dropFirst(4))) }
+        }
         if let pinned = visibleBots.first { return .bot(pinned.id) }
         return state.rooms.first.map { .room($0.id) }
     }

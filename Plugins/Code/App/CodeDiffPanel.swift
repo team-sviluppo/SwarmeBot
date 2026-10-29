@@ -34,7 +34,7 @@ struct CodeDiffPanel: View {
     static let tabId = "code.diff"
     static let width: CGFloat = 660
 
-    let bot: Bot
+    let chat: CodeChat
     let state: CodeState
     @Environment(AppModel.self) private var model
     @State private var selected: String?
@@ -43,9 +43,9 @@ struct CodeDiffPanel: View {
     @State private var error: String?
     @State private var showCommit = false
 
-    private var git: ThreadGitState? { state.gitStates[bot.threadId] }
+    private var git: ThreadGitState? { state.gitStates[chat.threadId] }
     private var changes: [ThreadGitState.Change] { git?.changes ?? [] }
-    private var pending: [DiffComment] { state.comments[bot.threadId] ?? [] }
+    private var pending: [DiffComment] { state.comments[chat.threadId] ?? [] }
     private var selectedChange: ThreadGitState.Change? { changes.first { $0.path == selected } }
 
     /// Reload when the choice changes or git says something else changed.
@@ -75,7 +75,7 @@ struct CodeDiffPanel: View {
         .onChange(of: changes.map(\.path), initial: true) { _, paths in
             if selected == nil || !paths.contains(selected ?? "") { selected = paths.first }
         }
-        .sheet(isPresented: $showCommit) { CommitSheet(bot: bot, state: state) }
+        .sheet(isPresented: $showCommit) { CommitSheet(chat: chat, state: state) }
     }
 
     private var toolbar: some View {
@@ -84,14 +84,14 @@ struct CodeDiffPanel: View {
                 .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.secondary)
             Spacer()
             if !pending.isEmpty {
-                Button { Task { await state.sendReview(model: model, threadId: bot.threadId) } } label: {
+                Button { Task { await state.sendReview(model: model, threadId: chat.threadId) } } label: {
                     Label(tr("Invia revisione (%@)", String(pending.count)), systemImage: "text.bubble").fixedSize()
                 }
                 .buttonStyle(ChipButtonStyle(filled: true, size: 12.5))
-                .disabled(model.isBusy(bot))
-                .help(model.isBusy(bot) ? tr("Attendi la fine del turno") : tr("Manda al bot tutti i commenti in un solo messaggio"))
+                .disabled(chat.isBusy(model))
+                .help(chat.isBusy(model) ? tr("Attendi la fine del turno") : tr("Manda al bot tutti i commenti in un solo messaggio"))
             }
-            Button { Task { await state.refreshGit(model: model, threadId: bot.threadId); await load() } } label: {
+            Button { Task { await state.refreshGit(model: model, threadId: chat.threadId); await load() } } label: {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(IconButtonStyle(size: 26, iconSize: 12))
@@ -123,7 +123,7 @@ struct CodeDiffPanel: View {
                         FileRow(change: change, chosen: change.path == selected, comments: pending.filter { $0.path == ChangeTree.relative(change.path, root: git?.root) }.count)
                             .onTapGesture { selected = change.path }
                             .contextMenu {
-                                Button(tr("Aggiungi alla chat")) { state.addReference(FileReference(path: change.path), threadId: bot.threadId) }
+                                Button(tr("Aggiungi alla chat")) { state.addReference(FileReference(path: change.path), threadId: chat.threadId) }
                                 Button(tr("Copia percorso")) {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(change.path, forType: .string)
@@ -147,7 +147,7 @@ struct CodeDiffPanel: View {
                     Text(verbatim: ChangeTree.relative(change.path, root: git?.root))
                         .font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.head)
                     Spacer()
-                    Button { state.addReference(FileReference(path: change.path), threadId: bot.threadId) } label: {
+                    Button { state.addReference(FileReference(path: change.path), threadId: chat.threadId) } label: {
                         Label(tr("Aggiungi alla chat"), systemImage: "paperclip").fixedSize()
                     }
                     .buttonStyle(ChipButtonStyle(filled: false, size: 11.5))
@@ -164,7 +164,7 @@ struct CodeDiffPanel: View {
                 placeholder(tr("File binario: niente da mostrare."))
             } else if let diff, let change = selectedChange {
                 DiffView(lines: DiffParser.parse(diff.diff), truncated: diff.truncated, path: ChangeTree.relative(change.path, root: git?.root),
-                         threadId: bot.threadId, state: state)
+                         threadId: chat.threadId, state: state)
             } else {
                 Spacer()
             }
@@ -177,7 +177,7 @@ struct CodeDiffPanel: View {
         error = nil
         defer { loading = false }
         do {
-            let fresh = try await state.diff(model: model, threadId: bot.threadId, path: selected)
+            let fresh = try await state.diff(model: model, threadId: chat.threadId, path: selected)
             guard selected == self.selected else { return }
             diff = fresh
         } catch {

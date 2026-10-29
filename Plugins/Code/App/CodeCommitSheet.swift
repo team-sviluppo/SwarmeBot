@@ -8,7 +8,7 @@ import SwarmeKit
 import SwiftUI
 
 struct CommitSheet: View {
-    let bot: Bot
+    let chat: CodeChat
     let state: CodeState
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -23,10 +23,10 @@ struct CommitSheet: View {
     @State private var result: CommitResult?
     @State private var asked = false
 
-    private var git: ThreadGitState? { state.gitStates[bot.threadId] }
+    private var git: ThreadGitState? { state.gitStates[chat.threadId] }
     private var changes: [ThreadGitState.Change] { git?.changes ?? [] }
     private var branch: String { git?.branch ?? "" }
-    private var busy: Bool { model.isBusy(bot) }
+    private var busy: Bool { chat.isBusy(model) }
 
     private var canRun: Bool {
         !running && !generating && !busy && !selection.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -159,7 +159,7 @@ struct CommitSheet: View {
         generating = true
         error = nil
         defer { generating = false }
-        do { message = try await state.commitMessage(model: model, threadId: bot.threadId) }
+        do { message = try await state.commitMessage(model: model, threadId: chat.threadId) }
         catch { self.error = error.localizedDescription }
     }
 
@@ -170,7 +170,7 @@ struct CommitSheet: View {
         // all of them: let the engine take every change, new ones included
         let files = selection.count == changes.count ? nil : changes.map(\.path).filter(selection.contains)
         do {
-            result = try await state.commit(model: model, threadId: bot.threadId, message: message.trimmingCharacters(in: .whitespacesAndNewlines),
+            result = try await state.commit(model: model, threadId: chat.threadId, message: message.trimmingCharacters(in: .whitespacesAndNewlines),
                                             files: files, mode: mode, branch: branchName.trimmingCharacters(in: .whitespaces))
         } catch { self.error = error.localizedDescription }
     }

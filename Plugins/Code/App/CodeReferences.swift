@@ -31,7 +31,7 @@ struct FileReferenceChip: View {
 
 /// "File" under the composer, and ⌘P: a search over the repository's files.
 struct CodeFilePicker: View {
-    let bot: Bot
+    let chat: CodeChat
     let state: CodeState
     @Environment(AppModel.self) private var model
     @State private var open = false
@@ -98,14 +98,14 @@ struct CodeFilePicker: View {
             defer { searching = false }
             if !query.isEmpty { try? await Task.sleep(nanoseconds: 120_000_000) }
             guard !Task.isCancelled else { return }
-            results = await state.searchFiles(model: model, threadId: bot.threadId, query: query)
+            results = await state.searchFiles(model: model, threadId: chat.threadId, query: query)
             highlighted = 0
         }
     }
 
     private func pick(_ index: Int) {
         guard results.indices.contains(index) else { return }
-        state.addReference(FileReference(path: results[index].path), threadId: bot.threadId)
+        state.addReference(FileReference(path: results[index].path), threadId: chat.threadId)
         open = false
     }
 }
