@@ -54,4 +54,19 @@ Kept in `<data>/plugins/cylon/`: `roles.json`, `settings.json`, `pipelines.json`
 
 ## In the app
 
-(see below once the app half is in)
+- **The bar** above the composer of a channel that follows the flow: the five phases with their state (done, being
+  worked on, failed, skipped, waiting), the ticket and the task's folder, the pull request once there is one, and under the
+  chips what comes next, who does it, and its button (*Spec*, *Plan it*, *Run*, *Review it*, *Open the PR*; *Retry* after a
+  failure). *Skip* goes on without a phase. While a phase is running and the channel is idle the bar says it is waiting for you
+  (the bot asked something) and offers *Mark as done*. A click on a chip says which skill and which bot, what it will send, and
+  what is missing (no project, no bot for the phase, a bot that is not a member, a skill that is not there).
+- **Start a ticket…**: the ticket's id or address, and the tag it has on ClickUp (`cylon-spec` or `cylon-plan`); the channel starts a
+  clean session. The menu of the bar starts another ticket or closes the flow. For a phase that needs the task's folder before the
+  plan has made it, the popover asks for the folder's name.
+- **A channel's settings** (the Cylon card): *Follow the Cylon flow*, which needs a project for the channel (Code card).
+- **Settings › Plugins › Cylon**: the skill source (made in Settings › Skills) and, per project, the bot of each phase.
+- The app polls the engine every 2 s while something runs and every 15 s otherwise; the engine follows the turns itself.
+
+Not done: the engine cannot read ClickUp, so the tag is chosen by the person; a phase's end is read from the skills' own closing
+lines and files (`CylonDetect`), which break if a skill changes them; the five skills are not installed by the plugin, they come from
+the source.
