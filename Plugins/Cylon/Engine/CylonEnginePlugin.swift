@@ -196,6 +196,12 @@ public final class CylonEnginePlugin: EnginePlugin {
         let botName = bot["name"]?.string ?? botId
         guard group["memberIds"]?.array?.contains(.string(botId)) == true else { throw HTTPError(409, "@\(botName) plays \(phase.rawValue) but is not a member of this channel") }
         try ensureSkill(phase, for: bot, harness: harness)
+        // A channel turn for a bot that cannot take it is skipped without a word and never ends: the phase would be left
+        // "running" with no turn behind it, and could not be sent again. So the cases the room skips are refused here.
+        guard harness.fleet.get(ModelSelection(json: bot["modelSelection"]).instanceId) != nil else {
+            throw HTTPError(409, "the model of @\(botName) is not available: choose another in the bot's settings")
+        }
+        guard !Store.isBusy(bot) else { throw HTTPError(409, "@\(botName) is working in another conversation: wait for it to finish") }
 
         if let slug = body["slug"]?.string {
             guard slug.range(of: #"^[A-Za-z0-9][A-Za-z0-9._-]{0,100}$"#, options: .regularExpression) != nil else { throw HTTPError(400, "slug is not a folder name") }
@@ -285,7 +291,9 @@ public final class CylonEnginePlugin: EnginePlugin {
             let has = harness.skillSources.augment(bot)["skills"]?.array?.contains { $0["id"]?.string == phase.skill && $0["defaultOn"]?.bool != false } == true
             return ["botId": .string(botId), "name": bot["name"] ?? .null,
                     "member": .bool(group?["memberIds"]?.array?.contains(.string(botId)) == true),
-                    "skillOnEngine": .bool(skill), "skillOnBot": .bool(has)]
+                    "skillOnEngine": .bool(skill), "skillOnBot": .bool(has),
+                    // working in another conversation: the phase cannot go to it now
+                    "busy": .bool(Store.isBusy(bot))]
         }
 
         var phases: [JSON] = []
@@ -297,7 +305,8 @@ public final class CylonEnginePlugin: EnginePlugin {
                 item["state"] = .string(entry.state.rawValue)
                 // the next to send; a phase over can be sent again
                 item["current"] = .bool(pipeline.next == phase)
-                item["canRun"] = .bool(resolved && !busy && entry.state != .running)
+                let botBusy = roles[phase].map { Store.isBusy(harness.store.bot($0)) } ?? false
+                item["canRun"] = .bool(resolved && !busy && !botBusy && entry.state != .running)
                 item["canSkip"] = .bool(resolved && (entry.state == .pending || entry.state == .failed))
                 item["canMarkDone"] = .bool(resolved && (entry.state == .pending || entry.state == .running || entry.state == .failed))
                 if let command = CylonDetect.command(phase, ticketId: pipeline.ticketId, slug: pipeline.slug) { item["command"] = .string(command) }

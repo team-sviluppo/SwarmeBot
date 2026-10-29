@@ -62,6 +62,22 @@ final class CylonWireTests: XCTestCase {
         XCTAssertNil(try problem(status(project: "p1", bot: fine)))
     }
 
+    func testABotBusyInAnotherConversationIsSaidAndNotATroubleToFix() throws {
+        func phase(state: String?, busy: String) throws -> CylonStatus.Phase {
+            let stateJSON = state.map { #","state":"\#($0)""# } ?? ""
+            let bot = #"{"botId":"b","name":"Esecutore","member":true,"skillOnEngine":true,"skillOnBot":true\#(busy)}"#
+            return try decode(#"{"follow":true,"busy":false,"projectId":"p1","pipeline":null,"phases":[{"key":"run","skill":"cylon-run","bot":\#(bot)\#(stateJSON)}]}"#).phases[0]
+        }
+        let waiting = try phase(state: "pending", busy: #","busy":true"#)
+        XCTAssertEqual(waiting.bot?.busy, true)
+        XCTAssertEqual(CylonState.busyNote(waiting), tr("%@ sta lavorando in un'altra conversazione: aspetta che finisca.", "Esecutore"))
+        XCTAssertNil(CylonState.busyNote(try phase(state: "pending", busy: #","busy":false"#)))
+        XCTAssertNil(CylonState.busyNote(try phase(state: "pending", busy: "")), "an older engine does not say")
+        XCTAssertNil(CylonState.busyNote(try phase(state: "running", busy: #","busy":true"#)), "a phase that is running is why it is busy")
+        let status = try decode(#"{"follow":true,"busy":false,"projectId":"p1","pipeline":null,"phases":[]}"#)
+        XCTAssertNil(CylonState.problem(waiting, status: status), "it is not a configuration problem")
+    }
+
     func testTheEngineIsAskedSoonWhileSomethingRunsAndRarelyWhenNothingDoes() throws {
         XCTAssertEqual(CylonState.pollInterval(try decode(live)), .seconds(2))
         let idle = try decode(#"{"follow":true,"busy":false,"projectId":null,"pipeline":null,"phases":[]}"#)

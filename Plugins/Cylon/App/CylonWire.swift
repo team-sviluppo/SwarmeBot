@@ -40,6 +40,8 @@ struct CylonStatus: Decodable, Equatable {
         var member: Bool
         var skillOnEngine: Bool
         var skillOnBot: Bool
+        /// Working in another conversation: the phase cannot go to it now. Absent from an older engine.
+        var busy: Bool?
     }
 
     struct Phase: Decodable, Equatable, Identifiable {

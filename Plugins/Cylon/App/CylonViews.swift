@@ -128,6 +128,10 @@ struct CylonPhaseBar: View {
                 Label { Text(verbatim: problem) } icon: { Image(systemName: "exclamationmark.triangle") }
                     .font(.system(size: 12)).foregroundStyle(Theme.warning).lineLimit(2)
             }
+            if problem == nil, let wait = CylonState.busyNote(phase) {
+                Label { Text(verbatim: wait) } icon: { Image(systemName: "clock") }
+                    .font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(2)
+            }
             Spacer(minLength: 8)
             if phase.state == "running" {
                 Text(status.busy ? tr("In corso…") : tr("In attesa di te")).font(.system(size: 12)).foregroundStyle(Theme.tertiary)

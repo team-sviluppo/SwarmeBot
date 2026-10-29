@@ -66,6 +66,12 @@ public final class CylonState {
         return status.running || status.busy ? .seconds(2) : .seconds(15)
     }
 
+    /// Why a phase that could go cannot yet: its bot is busy in another conversation. Not a problem to fix, only to wait out.
+    static func busyNote(_ phase: CylonStatus.Phase) -> String? {
+        guard phase.state != "running", let bot = phase.bot, bot.busy == true else { return nil }
+        return tr("%@ sta lavorando in un'altra conversazione: aspetta che finisca.", bot.name ?? "?")
+    }
+
     /// What is missing for the phase to go out, in words, or nil when nothing is.
     static func problem(_ phase: CylonStatus.Phase, status: CylonStatus) -> String? {
         let title = CylonPhaseKey.title(phase.key)

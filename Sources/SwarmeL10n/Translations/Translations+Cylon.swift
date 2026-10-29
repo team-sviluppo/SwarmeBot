@@ -39,6 +39,7 @@ extension Translations {
         "Il canale riparte da una sessione pulita: lo stato tra le fasi sta nella cartella del task.": "The channel starts from a clean session: the state between phases is in the task's folder.",
         "Il ticket in corso viene sostituito.": "The ticket in progress is replaced.",
         "Cylon": "Cylon",
+        "%@ sta lavorando in un'altra conversazione: aspetta che finisca.": "%@ is working in another conversation: wait for it to finish.",
         "Segui il flusso Cylon": "Follow the Cylon flow",
         "Spec, piano, esecuzione, revisione e PR: ogni fase la fa il bot scelto nel progetto, e la successiva aspetta la precedente. Si può saltare una fase.": "Spec, plan, run, review and PR: each phase is done by the bot chosen in the project, and the next one waits for the one before. A phase can be skipped.",
         "Serve un progetto per il canale (card Code): è lui a dire quale bot fa quale fase.": "The channel needs a project (Code card): it says which bot does which phase.",

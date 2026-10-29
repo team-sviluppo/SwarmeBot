@@ -387,6 +387,45 @@ final class CylonPipelineTests: XCTestCase {
         XCTAssertTrue(fixture.harness.store.messages(fixture.threadId).contains { $0["text"]?.string == "@Esecutore /cylon-run cylon-features/by-hand" })
     }
 
+    func testABotBusyElsewhereIsNotSentAPhaseItWouldSkip() async throws {
+        let fixture = try await CylonFixture()
+        _ = await fixture.start("t1", tag: "cylon-plan")
+        for phase in ["plan"] { _ = await fixture.call("POST", "/api/groups/\(fixture.groupId)/cylon/phases/\(phase)/done") }
+        // the runner is working in another conversation: a channel turn for it would be skipped, and the
+        // phase would be left "running" with no turn behind it, and no way to send it again
+        fixture.harness.store.patchBot(fixture.runner, ["busy": true])
+        let status = try await fixture.requireStatus()
+        let phase = status["phases"]?.array?[2]
+        XCTAssertEqual(phase?["bot"]?["busy"], true, "the app can say why")
+        XCTAssertEqual(phase?["canRun"], false)
+        let refused = await fixture.run("run", ["slug": "login"])
+        XCTAssertEqual(refused.status, 409, String(describing: refused.json))
+        XCTAssertTrue(refused.json?["error"]?.string?.contains("@Esecutore is working in another conversation") == true, String(describing: refused.json))
+        let state = await fixture.state("run")
+        XCTAssertEqual(state, "pending", "nothing was sent, so nothing is running")
+        XCTAssertTrue(fixture.adapter.received.isEmpty)
+        XCTAssertFalse(fixture.harness.store.messages(fixture.threadId).contains { $0["role"]?.string == "user" }, "and nothing was said in the channel")
+
+        // once it is free the same phase goes out
+        fixture.harness.store.patchBot(fixture.runner, ["busy": false])
+        fixture.adapter.script = { _, _, emit in fixture.said(emit, "ok") }
+        let sent = await fixture.run("run", ["slug": "login"])
+        XCTAssertEqual(sent.status, 202, String(describing: sent.json))
+        XCTAssertEqual(sent.json?["phases"]?.array?[2]["bot"]?["busy"], false)
+    }
+
+    func testAPhaseWhoseModelIsGoneIsNotSentEither() async throws {
+        let fixture = try await CylonFixture()
+        _ = await fixture.start("t1", tag: "cylon-plan")
+        let gone: JSON = ["instanceId": "no-such-engine", "model": "x"]
+        fixture.harness.store.patchBot(fixture.planner, ["modelSelection": gone])
+        let refused = await fixture.run("plan")
+        XCTAssertEqual(refused.status, 409, String(describing: refused.json))
+        XCTAssertTrue(refused.json?["error"]?.string?.contains("model of @Pianificatore is not available") == true, String(describing: refused.json))
+        let state = await fixture.state("plan")
+        XCTAssertEqual(state, "pending")
+    }
+
     func testABusyChannelTakesNoPhase() async throws {
         let fixture = try await CylonFixture()
         _ = await fixture.start("t1", tag: "cylon-plan")
