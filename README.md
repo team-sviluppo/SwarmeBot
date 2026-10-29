@@ -90,6 +90,9 @@ servers and also has private bots of its own.
   each with its cost and token usage.
 - **Attachments**: paste images, drop files, attach long text as a chip; reactions on messages.
 - **Model picker** per bot with reasoning **effort** where the agent supports it.
+- **Codex usage** in the chat header: current subscription usage in percent and an approximate
+  task cost at Standard API token prices, including prompt-cache discounts. The estimate is not
+  a subscription charge; unknown or custom model prices are left unavailable.
 - **Memory** and a **decision log** per bot.
 
 ### Channels (multi-bot)

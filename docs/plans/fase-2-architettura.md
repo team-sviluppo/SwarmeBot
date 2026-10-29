@@ -133,6 +133,10 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Codex (2026-10-29): `account/rateLimits/*` fornisce la quota dell'abbonamento anche fuori
+  da un turno; la finestra primaria non è necessariamente di cinque ore. Il costo del task è
+  una stima API Standard dai token, marcata come tale e distinta dall'addebito dell'abbonamento.
+  Vedere [Costo e utilizzo Codex](2026-10-29-utilizzo-codex.md).
 - Sottagenti nativi (2026-10-29): il risultato del padre non implica che i figli siano terminati.
   La gestione precedente chiudeva il processo e poteva perderne l'output; divergenza voluta dal
   Node: registro dei task, attività persistenti e continuazione prima della chiusura. Dettagli e

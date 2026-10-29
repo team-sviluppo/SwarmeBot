@@ -1,8 +1,8 @@
 // The subscription's session window, as the CLIs report it (Claude's
-// `rate_limit_event`). It belongs to the account behind an instance, not to a
+// `rate_limit_event`, Codex's `account/rateLimits/*`). It belongs to the account behind an instance, not to a
 // thread, so it is kept per instance: `GET /api/instances` carries the last
 // one as `usageLimit`, and a `usage-limit` frame announces each change.
-// In memory only: after a restart it is unknown until the next turn.
+// In memory only: refreshed by catalog reads (Codex) and live turn events.
 import Foundation
 
 extension Harness {

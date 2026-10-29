@@ -153,6 +153,7 @@ public struct TaskUsage: Codable, Hashable, Sendable {
     public var input: Double?
     public var output: Double?
     public var costUsd: Double?
+    public var costEstimated: Bool?
     public var turns: Int?
     /// Output tokens whose reply time was measured, and that time in seconds.
     /// Older turns have tokens and no clock, so the speed uses only these.
