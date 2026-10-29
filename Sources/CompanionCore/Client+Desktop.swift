@@ -20,6 +20,7 @@ public struct BotPatch: Sendable {
     public var notifications: Bool?
     public var autoApprove: Bool?
     public var codeMode: Bool?
+    public var showToolCalls: Bool?
     /// "" clears the label.
     public var section: String?
     public var color: String?
@@ -38,7 +39,7 @@ public struct BotPatch: Sendable {
         name: String? = nil, title: String? = nil, description: String? = nil,
         modelSelection: ModelSelection? = nil, pinned: Bool? = nil, hidden: Bool? = nil,
         unread: Bool? = nil, notifications: Bool? = nil, autoApprove: Bool? = nil, codeMode: Bool? = nil,
-        section: String? = nil, color: String? = nil, computer: String? = nil, cwd: String? = nil
+        section: String? = nil, color: String? = nil, computer: String? = nil, cwd: String? = nil, showToolCalls: Bool? = nil
     ) {
         self.computer = computer
         self.cwd = cwd
@@ -52,6 +53,7 @@ public struct BotPatch: Sendable {
         self.notifications = notifications
         self.autoApprove = autoApprove
         self.codeMode = codeMode
+        self.showToolCalls = showToolCalls
         self.section = section
         self.color = color
     }
@@ -72,6 +74,7 @@ public struct BotPatch: Sendable {
         if let notifications { out["notifications"] = notifications }
         if let autoApprove { out["autoApprove"] = autoApprove }
         if let codeMode { out["codeMode"] = codeMode }
+        if let showToolCalls { out["showToolCalls"] = showToolCalls }
         if let section { out["section"] = section }
         if let color { out["color"] = color }
         if let computer { out["computer"] = computer }

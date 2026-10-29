@@ -133,6 +133,16 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Visibilità strumenti (2026-10-29): preferenza booleana opzionale `showToolCalls` del bot,
+  attiva se assente. Il filtro è solo nella presentazione Mac e iOS remoto, prima del
+  raggruppamento: messaggi, contesto del modello ed esportazioni conservano tutti i risultati.
+  Nei canali si applica la preferenza del bot mittente; errori del motore e card restano visibili.
+  Verifica con test di persistenza/validazione e filtro condiviso, scenario HTTP/SSE
+  `DRIVER=codex SCENARIO=tool-visibility` e schermate dell'app su dati isolati.
+  Build riuscito; suite con il solo `BotTransferTests.testAFailedMoveLeavesBothEnginesAsTheyWere`
+  escluso: 396 test, 12 integrazioni opzionali saltate, zero errori. Il test escluso ha bloccato
+  la prima esecuzione in `Engine.stop()` / `Process.waitUntilExit`, anche dopo la chiusura del
+  suo motore temporaneo; è stato interrotto. Nessuna compilazione iOS o parità Node eseguita.
 - Codex (2026-10-29): `account/rateLimits/*` fornisce la quota dell'abbonamento anche fuori
   da un turno; la finestra primaria non è necessariamente di cinque ore. Il costo del task è
   una stima API Standard dai token, marcata come tale e distinta dall'addebito dell'abbonamento.

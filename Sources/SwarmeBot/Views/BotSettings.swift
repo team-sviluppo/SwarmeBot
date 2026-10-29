@@ -223,6 +223,10 @@ struct BotDetails: View {
                    tr("Mostra il branch git accanto alla cartella e raccoglie i file modificati a fine turno in un badge."),
                    value: bot.codeMode ?? false) { BotPatch(codeMode: $0) }
             CardDivider(leading: 48)
+            toggle("wrench.and.screwdriver", tint: Theme.accent, tr("Mostra gli strumenti in chat"),
+                   tr("Mostra le chiamate agli strumenti e i relativi risultati nella conversazione."),
+                   value: bot.showsToolCalls) { BotPatch(showToolCalls: $0) }
+            CardDivider(leading: 48)
             toggle("bell", tint: Theme.warning, tr("Notifiche"),
                    tr("Avvisa quando finisce un turno o ti fa una domanda."), value: bot.notifications) { BotPatch(notifications: $0) }
             CardDivider(leading: 48)

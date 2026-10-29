@@ -55,6 +55,16 @@ public struct ToolActivity: Codable, Hashable, Sendable {
     public var output: String?
 }
 
+extension Message {
+    /// Ordinary tool activity can be hidden; setup failures and engine errors
+    /// must remain visible alongside questions, replies and activity notes.
+    public var isToolCall: Bool {
+        guard kind == .activity, let tool, tool.setup != true else { return false }
+        let name = tool.name.lowercased()
+        return !name.hasPrefix("error") && !name.hasPrefix("connettore non raggiungibile")
+    }
+}
+
 public struct Sender: Codable, Hashable, Sendable {
     public var botId: String
     public var name: String
@@ -218,6 +228,9 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     /// Desktop: show the folder's git branch under the chat, and fold the
     /// files a turn changed into one badge.
     public var codeMode: Bool?
+    /// Absent on existing bots: tool calls remain visible by default.
+    public var showToolCalls: Bool?
+    public var showsToolCalls: Bool { showToolCalls ?? true }
     public var alwaysAllow: [String]?
     /// Desktop: the connectors this bot may use.
     public var connectors: [BotConnector]?

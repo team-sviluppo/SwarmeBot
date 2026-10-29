@@ -662,7 +662,7 @@ public final class Routes {
             guard ["local", "vm", "off"].contains(computer.string ?? "") else { return fail(400, "computer must be local, vm, or off") }
             patch["computer"] = computer
         }
-        for flag in ["autoApprove", "approvePeerComms", "chiefOfStaff", "composio", "codeMode"] {
+        for flag in ["autoApprove", "approvePeerComms", "chiefOfStaff", "composio", "codeMode", "showToolCalls"] {
             guard let value = body[flag] else { continue }
             guard value.bool != nil else { return fail(400, "\(flag) must be true or false") }
             patch[flag] = value
