@@ -103,6 +103,17 @@ public func effortLevelsForModel(_ options: [ModelOption], model: String, driver
 // MARK: - Runtime events
 
 public struct RuntimeEvent: Sendable {
+    /// Latest provider request's context, separate from cumulative billable usage. Internal provenance only.
+    public struct Context: Sendable, Equatable {
+        public var used: Double
+        public var window: Double?
+        public init(used: Double, window: Double? = nil) { self.used = used; self.window = window }
+        public var json: JSON {
+            var value: JSON = ["used": .number(used)]
+            if let window { value["window"] = .number(window) }
+            return value
+        }
+    }
     public enum Body: Sendable, Equatable {
         case sessionStarted(sessionId: String?, model: String?, resumeCursor: String?)
         case sessionExited(reason: String?)
@@ -148,6 +159,7 @@ public struct RuntimeEvent: Sendable {
     /// Internal lifecycle data; persisted through existing activity messages.
     /// The runtime wire envelope remains unchanged.
     public var subagent: SubagentState?
+    public var context: Context?
 
     public init(
         provider: String, providerInstanceId: InstanceID? = nil, threadId: ThreadID, turnId: String? = nil,

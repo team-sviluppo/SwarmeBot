@@ -97,3 +97,38 @@ and a "Commit & push" that asks the agent to do it.
 - **A bot's settings** (the Code card) and **a channel's settings**: *Project* and *Works on*. Choosing the folder also
   makes it the chat's default folder; a chat can still change folder from the composer. In a channel, its project
   counts, not its members'.
+
+### Code channels, chat history and scripts (engine plugin 1.4.0)
+
+Code mode can be enabled on a channel with a shared folder. Every local member uses that folder;
+branches, diff, commit and file references use the channel's thread. Mixed channels cannot enable Code,
+and Code channels cannot take guests. Repository mutations wait while a bot, channel or routine works there.
+The changed-file badge names the member who replied. With no global commit model, a channel uses its default
+member's model (or its first local member when the responder policy has no selected member).
+
+Code bots get a collapsible **Chat** column (⌘⇧L, remembered per bot and engine), with date groups, title/branch
+filtering, working/unread filters and a branch filter. Enter searches the bot's message history and shows snippets.
+The context menu renames, pins, archives, opens a terminal/editor, copies the path or deletes a chat; archived chats
+stay in a collapsed group. Read/archive markers live on the engine. ⌘K includes Code chats and branch/script actions.
+The branch and diff counts in the column describe the **current shared working folder**, rather than a separate
+worktree per chat. Line counts cover tracked text changes; the tooltip identifies untracked files excluded from them.
+PR state and CI tracking belong to the following phase.
+
+A project's folder can define up to 20 named shell commands in its editor. **Scripts** under the composer starts
+one on the engine in that folder; its output is shown below the transcript. Stop terminates the process group.
+A failed command offers **Send the error to the bot**, with the command, folder, exit status and last 60 lines.
+A chat whose working folder was overridden outside the project's repo has no scripts. One command per chat runs
+at a time; output is bounded in memory, retained for at most 50 chats, and disappears after an engine restart.
+Disabling Code or shutting down the engine stops its scripts.
+
+| Method | Path | Request | Answer |
+|---|---|---|---|
+| GET | `/api/code/chats/recent` | — | `{chats:[{botId,name,threadId,title,updatedAt}]}`, the 20 most recently active Code chats, excluding archived chats |
+| GET | `/api/bots/:bid/code/chats` | — | `{chats:[{threadId,title,createdAt,updatedAt,pinned,archived,unread,status,git?}]}`; `status`: `working`, `waiting`, `unread`, `done`, `error` |
+| GET | `/api/bots/:bid/code/chats/search` | `?q=` | `{hits:[SearchHit]}`, up to 50 messages from this bot's tasks; scope applied before the result limit |
+| PATCH | `/api/threads/:tid/code/chat` | `{archived?:bool,read?:bool}` | chat metadata; `read:true` records the newest reply seen |
+| GET | `/api/threads/:tid/code/scripts` | — | `{scripts:[{name,command}],run:null\|{id,name,command,folder,output,truncated,running,stopped,exitCode}}` |
+| POST | `/api/threads/:tid/code/scripts` | `{index}` | 202 `{run}`; runs only a configured script, 400 for an invalid index and 409 while one runs |
+| POST | `/api/threads/:tid/code/scripts/stop` | `{}` | `{run}`; stops the current script |
+
+`GET /api/threads/:tid/git` additionally returns optional `additions`, `deletions` and `summaryPartial`.

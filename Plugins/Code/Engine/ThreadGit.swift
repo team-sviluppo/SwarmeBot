@@ -36,6 +36,7 @@ enum ThreadGit {
     static func botWorking(in root: String, harness: Harness, threadId: String) -> Bool {
         let busyInRepo = harness.store.bots.contains { bot in
             guard Store.isBusy(bot), let tid = bot["threadId"]?.string,
+                  !harness.store.groups.contains(where: { $0["busyBotId"]?.string == bot["id"]?.string }),
                   let cwd = ThreadFiles.roots(harness.store, harness.paths, threadId: tid)?.first else { return false }
             let resolved = canonical(cwd)
             return resolved == root || resolved.hasPrefix(root + "/")
@@ -188,7 +189,25 @@ enum ThreadGit {
             return ["path": .string(absolute), "name": .string((change.path as NSString).lastPathComponent),
                     "status": .string(change.status), "bytes": .number(size?.doubleValue ?? 0)]
         }
-        return ["repo": true, "folder": .string(folder), "root": .string(state.root), "branch": .string(state.branch), "detached": .bool(state.detached),
+        var answer: JSON = ["repo": true, "folder": .string(folder), "root": .string(state.root), "branch": .string(state.branch), "detached": .bool(state.detached),
                 "changes": .array(changes)]
+        let stats = state.changes.isEmpty ? "" : await GitRun.text(["diff", "--numstat", "HEAD", "--", "."], in: folder)
+        if let stats {
+            let counts = lineCounts(stats)
+            answer["additions"] = .number(Double(counts.added))
+            answer["deletions"] = .number(Double(counts.deleted))
+            // Untracked files are shown in the count, but git numstat has no line count for them.
+            answer["summaryPartial"] = .bool(state.changes.contains { $0.status == "?" })
+        }
+        return answer
+    }
+
+    static func lineCounts(_ stats: String) -> (added: Int, deleted: Int) {
+        stats.split(separator: "\n").reduce(into: (0, 0)) { counts, line in
+            let fields = line.split(separator: "\t", maxSplits: 2)
+            guard fields.count == 3 else { return }
+            counts.0 += Int(fields[0]) ?? 0
+            counts.1 += Int(fields[1]) ?? 0
+        }
     }
 }

@@ -49,6 +49,10 @@ public final class Harness {
     private var firstTokenAt: [String: Date] = [:]
     /// Messages sent while the bot was busy: threadId → (botId, [(messageId, text)]).
     private var queues: [String: (botId: String, items: [(String, String)])] = [:]
+    var roomSessionResets: Set<String> = []
+    var roomQueueIds: [String: UUID] = [:]
+    var roomInterruptEpochs: [String: Int] = [:]
+    var taskSessionResets: Set<String> = []
 
     // computers (Box.swift, ComputerControl.swift, Computers.swift)
     public let computerControl = ComputerControl()
@@ -405,6 +409,12 @@ public final class Harness {
         let group = bot == nil ? store.groupByThread(threadId) : nil
         guard bot != nil || group != nil else { return }
         let botId = bot?["id"]?.string
+        if let context = event.context, context.used.isFinite, context.used >= 0 {
+            var cleaned = context
+            if let window = cleaned.window, !window.isFinite || window <= 0 { cleaned.window = nil }
+            if let botId { store.setTaskContext(botId, threadId, context: cleaned.json) }
+            else if let id = group?["id"]?.string { store.patchGroup(id, ["context": cleaned.json]) }
+        }
         // in a room the speaking member signs the bot's messages
         let speaker = group != nil ? groupSpeakers[threadId] : nil
         let push = { (message: JSONObject) -> JSONObject in
@@ -687,6 +697,7 @@ public final class Harness {
         guard let bot = store.bot(botId) else { throw TurnError(status: 404, message: "no such bot") }
         if Store.isBusy(bot) { throw TurnError(status: 409, message: "the bot is already working — interrupt it first") }
         let threadId = explicitThread ?? bot["threadId"]?.string ?? ""
+        guard !taskSessionResets.contains(threadId) else { throw TurnError(status: 409, message: "this chat is being compacted") }
         // inherited from a bot already running unattended; a person typing ends it
         if options.automationSource == "webhook" || options.unattended { markUnattended(botId) }
         else if options.automationSource == nil, options.commsDepth == 0 { clearUnattended(botId) }
@@ -716,7 +727,7 @@ public final class Harness {
 
         let userMessage = existing ?? store.appendMessage(threadId, ["role": "user", "kind": "text", "text": .string(text)])
         let userId = userMessage["id"]?.string
-        let transcript: [(role: String, text: String)] = store.activePath(threadId)
+        let transcript: [(role: String, text: String)] = Self.afterSessionDivider(store.activePath(threadId))
             .filter { $0["kind"]?.string == "text" && !($0["text"]?.string ?? "").isEmpty && $0["id"]?.string != userId }
             .suffix(40)
             .map { ($0["role"]?.string == "user" ? "user" : "assistant", $0["text"]?.string ?? "") }
@@ -794,6 +805,7 @@ public final class Harness {
                     resumeCursor: resume ? cursors[instanceId] : nil, transcript: transcript,
                     system: system.isEmpty ? nil : system, cwd: cwd, agents: agents
                 )
+                if let epoch = task?["sessionEpoch"]?.string { input.sessionKey = threadId + ":" + epoch }
                 input.cloudBoxId = computer.boxId
                 input.computer = computer.server
                 input.computerScope = computer.scope
@@ -917,6 +929,7 @@ public final class Harness {
     }
 
     public func shutdown() async {
+        plugins.stop()
         mcpPool.stopAll()
         await fleet.stopAll()
     }

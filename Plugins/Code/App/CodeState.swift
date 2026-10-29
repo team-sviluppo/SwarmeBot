@@ -77,6 +77,15 @@ public final class CodeState {
     var commitModel: CodeSettingsWire.Pick?
     /// The projects of the engine this window shows (Projects.swift on the engine).
     public internal(set) var projects: [Project] = []
+    var scriptStatus: [String: ScriptStatus] = [:]
+    var scriptErrors: [String: String] = [:]
+    var scriptPanels: Set<String> = []
+    var branchPickerRequest = 0
+
+    func engineHasPhase3(_ model: AppModel) -> Bool {
+        guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
+        return Self.version(version, atLeast: "1.4.0")
+    }
 
     /// What the agent is told when "Commit & push" is clicked. Engine-side
     /// text, so English like the rest of what the agent reads.

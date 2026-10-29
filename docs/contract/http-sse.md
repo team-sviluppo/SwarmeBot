@@ -507,3 +507,35 @@ mancano **`xai`**, **`vps`**, **`opencodeGo`**, **`localEndpoint`**, **`rooms`**
    persistere né loggare lato client.
 8. I proxy figli (agents, phone) sono lanciati con `process.execPath` + `ELECTRON_RUN_AS_NODE=1`: un host Swift che
    lancia l'harness con un `node` standalone eredita il comportamento corretto, ma va verificato.
+
+
+## Estensioni Swift: sessioni e contesto (fase 3 Code, 2026-10-29)
+
+Queste aggiunte non cambiano le forme runtime congelate sopra e funzionano anche senza il plugin Code.
+
+- `POST /api/groups/:gid/session` con `{summarize?:bool}`: 200 `{ok:true,pendingPeers:[]}`. Solo a canale libero,
+  incluse le code; 409 se occupato o se è lo specchio di un canale ospitato altrove. Azzera tutti i cursori dei membri,
+  cambia la chiave di sessione per i driver che la memorizzano e appende un messaggio `activity` con `sessionDivider:true`.
+  La cronologia resta leggibile e ricercabile; `roomContext` riparte dopo l'ultimo divisore.
+- `summarize:true` usa il membro scelto come risponditore predefinito, in una chiamata separata senza strumenti,
+  e inserisce il riassunto dopo il divisore. Un membro ospite lo scrive sul proprio motore tramite
+  `POST /api/guest-turns/summary`, con lo stesso contesto/identità di `/api/guest-turns`, senza avanzare la sessione
+  dello specchio né aggiungere messaggi. La route dedicata risponde 404 sui motori vecchi, evitando di avviare un
+  turno ordinario per errore. Nessun reset se la generazione fallisce. `everyone` e `mentions` richiedono
+  prima di scegliere un membro; errori del modello 502/504. Le chiamate di generazione possono durare fino a 90 secondi.
+- Nei canali misti il reset viaggia su `POST /api/guest-turns/session` con `{conversationId,sessionEpoch,startedAt,summary?}`,
+  autenticato e limitato allo specchio del dispositivo chiamante. I server non raggiungibili sono in `pendingPeers`.
+  `POST /api/guest-turns` porta anche `sessionEpoch` e `sessionStartedAt`: un ospite aggiornato recupera il reset prima
+  di rispondere. Un reset ritardato non può ripristinare una sessione precedente. I motori precedenti vanno aggiornati.
+- `POST /api/bots/:id/tasks/:tid/compact` con `{}`: 200 `{ok:true}`. Scrive un riassunto in una chiamata separata,
+  poi azzera i cursori del task e appende divisore e riassunto alla stessa conversazione. Lo storico sopra il divisore
+  resta disponibile ma non rientra nel prompt; anche i driver che memorizzano `sessionKey` ricevono una chiave nuova.
+  409 se il bot lavora o se la chat viene già compattata; 400 per una chat vuota. Errore del modello: nessun reset.
+- `POST /api/bots/:id/messages` e `/api/groups/:gid/messages` accettano `interrupt:true` per correggere la rotta:
+  interrompono il turno e accodano il nuovo messaggio. Nei canali l'interruzione ferma anche i risponditori rimasti
+  e le vecchie partenze in attesa; i messaggi già visibili restano nel contesto del successivo turno.
+  I messaggi in attesa portano `queued:true`, rimosso alla partenza; sono esclusi dal contesto del turno corrente.
+- Task e canali possono portare `context:{used,window?}`. È il contesto dell'ultima richiesta al modello (oggi Claude
+  e Codex), distinto dai token cumulativi fatturati. `window` viene riportato solo quando il provider lo fornisce;
+  senza limite noto l'app mostra i token, senza inventare una percentuale. Il reset rimuove il vecchio contatore.
+  Nessun campo è aggiunto all'envelope `RuntimeEvent`: i metadati interni aggiornano i frame `bot`/`group` esistenti.

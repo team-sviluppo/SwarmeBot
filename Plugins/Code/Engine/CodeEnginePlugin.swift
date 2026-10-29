@@ -9,11 +9,12 @@ import HarnessCore
 
 @MainActor
 public final class CodeEnginePlugin: EnginePlugin {
+    private lazy var scripts = ProjectScripts()
     public nonisolated init() {}
 
     public nonisolated var id: String { "code" }
     public nonisolated var name: String { "Code" }
-    public nonisolated var version: String { "1.3.0" }
+    public nonisolated var version: String { "1.4.0" }
     public nonisolated var botFlags: [String] { ["codeMode"] }
     /// Code mode for a whole channel: one folder for every member, one of them working at a time.
     public nonisolated var groupFlags: [String] { ["codeMode"] }
@@ -60,6 +61,13 @@ public final class CodeEnginePlugin: EnginePlugin {
             throw HTTPError(400, "a channel with members from other engines cannot use Code mode")
         }
         if wantsCode, addsGuests { throw HTTPError(400, "a Code mode channel cannot take members from other engines") }
+        if wantsCode {
+            let folder: String?
+            if let pinned = existing["pinnedCwd"] { folder = pinned.string }
+            else if let sent = body["cwd"] { folder = sent.string }
+            else { folder = existing["cwd"]?.string }
+            guard folder?.isEmpty == false else { throw HTTPError(400, "choose a shared folder before enabling Code mode") }
+        }
     }
 
     /// A chat's default folder follows the folder it works on: what it picks in the project, it works in.
@@ -91,6 +99,32 @@ public final class CodeEnginePlugin: EnginePlugin {
     }
 
     public func routes(_ router: PluginRouter) {
+        router.get("/api/code/chats/recent") { request in
+            .response(.json(200, CodeChats(harness: request.harness).recent()))
+        }
+        router.get("/api/bots/:bid/code/chats") { request in
+            .response(.json(200, try await CodeChats(harness: request.harness).list(botId: request.params["bid"] ?? "")))
+        }
+        router.get("/api/bots/:bid/code/chats/search") { request in
+            .response(.json(200, try CodeChats(harness: request.harness).search(botId: request.params["bid"] ?? "", query: request.http.query["q"] ?? "")))
+        }
+        router.patch("/api/threads/:tid/code/chat") { request in
+            .response(.json(200, try CodeChats(harness: request.harness).patch(thread: request.params["tid"] ?? "", body: request.http.json())))
+        }
+        router.get("/api/threads/:tid/code/scripts") { request in
+            .response(.json(200, try self.scripts.status(harness: request.harness, thread: request.params["tid"] ?? "")))
+        }
+        router.post("/api/threads/:tid/code/scripts") { request in
+            guard let index = try request.http.json()["index"]?.double, index.isFinite, index.rounded() == index, (0..<20).contains(index) else {
+                throw HTTPError(400, "index must name a project script")
+            }
+            return .response(.json(202, ["run": try self.scripts.start(harness: request.harness, thread: request.params["tid"] ?? "", index: Int(index))]))
+        }
+        router.post("/api/threads/:tid/code/scripts/stop") { request in
+            let thread = request.params["tid"] ?? ""
+            _ = try self.scripts.configuration(harness: request.harness, thread: thread)
+            return .response(.json(200, ["run": self.scripts.stop(thread: thread)]))
+        }
         router.get("/api/projects") { request in
             .response(.json(200, ["projects": .array(ProjectStore(harness: request.harness).all.map(JSON.object))]))
         }
@@ -211,4 +245,6 @@ public final class CodeEnginePlugin: EnginePlugin {
             return .response(.json(200, await ThreadGit.wire(folder: folder)))
         }
     }
+
+    public func stop(_ harness: Harness) { scripts.stopAll() }
 }

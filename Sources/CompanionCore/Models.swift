@@ -140,6 +140,8 @@ public struct Message: Codable, Hashable, Identifiable, Sendable {
     public var queued: Bool?
     /// Desktop: the reply a stopped turn left behind.
     public var interrupted: Bool?
+    /// A channel keeps its history, but a new agent session starts here.
+    public var sessionDivider: Bool?
 
     public var date: Date { Date(timeIntervalSince1970: at / 1000) }
 }
@@ -181,6 +183,16 @@ public struct TaskUsage: Codable, Hashable, Sendable {
     }
 }
 
+public struct ContextUsage: Codable, Hashable, Sendable {
+    public var used: Double
+    public var window: Double?
+    public var fraction: Double? {
+        guard used.isFinite, used >= 0, let window, window.isFinite, window > 0 else { return nil }
+        let value = used / window
+        return value.isFinite ? value : nil
+    }
+}
+
 public struct BotTask: Codable, Hashable, Sendable {
     public var threadId: String
     public var title: String
@@ -188,6 +200,7 @@ public struct BotTask: Codable, Hashable, Sendable {
     /// Desktop fields.
     public var pinned: Bool?
     public var usage: TaskUsage?
+    public var context: ContextUsage?
     public var cwd: String?
     /// Library documents switched off in this chat.
     public var libraryOff: [String]?
@@ -302,6 +315,7 @@ public struct Room: Codable, Hashable, Identifiable, Sendable {
     public var createdAt: Double
     public var dm: Bool?
     public var busyBotId: String?
+    public var context: ContextUsage?
     public var messages: [Message]?
     public var hasMore: Bool?
     /// Desktop fields.

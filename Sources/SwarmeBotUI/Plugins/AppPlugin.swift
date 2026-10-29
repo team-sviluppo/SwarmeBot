@@ -14,6 +14,18 @@ import SwiftUI
 
 public typealias PluginView = AnyView
 
+public struct PluginCommand: Identifiable {
+    public let id: String
+    public let section: String
+    public let title: String
+    public let detail: String
+    public let icon: String
+    public let action: () -> Void
+    public init(id: String, section: String, title: String, detail: String = "", icon: String, action: @escaping () -> Void) {
+        self.id = id; self.section = section; self.title = title; self.detail = detail; self.icon = icon; self.action = action
+    }
+}
+
 /// The chat a plugin is asked about: a bot's, or a channel's.
 public struct ChatContext {
     public let model: AppModel
@@ -101,6 +113,10 @@ public protocol AppPlugin: AnyObject {
     func claimDroppedFiles(_ urls: [URL], _ chat: ChatContext) -> [URL]
     /// Tabs of the right column, after the core's.
     func inspectorTabs(_ chat: ChatContext) -> [PluginTab]
+    /// Output panels between the transcript and the composer.
+    func bottomPanels(_ chat: ChatContext) -> [PluginView]
+    func chatColumn(_ chat: ChatContext) -> PluginView?
+    func commands(_ model: AppModel) async -> [PluginCommand]
     /// Rows of the settings of a bot or channel (the plugin's switch, its options).
     func settingsSections(_ scope: SettingsScope) -> [PluginView]
     /// The chat, its folder or its busy state changed: refresh what the plugin shows.
@@ -115,6 +131,9 @@ public extension AppPlugin {
     func outgoingText(_ text: String, _ chat: ChatContext) -> String { text }
     func claimDroppedFiles(_ urls: [URL], _ chat: ChatContext) -> [URL] { [] }
     func inspectorTabs(_ chat: ChatContext) -> [PluginTab] { [] }
+    func bottomPanels(_ chat: ChatContext) -> [PluginView] { [] }
+    func chatColumn(_ chat: ChatContext) -> PluginView? { nil }
+    func commands(_ model: AppModel) async -> [PluginCommand] { [] }
     func settingsSections(_ scope: SettingsScope) -> [PluginView] { [] }
     func chatChanged(_ chat: ChatContext) async {}
 }
@@ -166,6 +185,20 @@ public final class PluginHost {
 
     public func inspectorTabs(_ chat: ChatContext) -> [PluginTab] {
         active(for: chat).flatMap { $0.inspectorTabs(chat) }
+    }
+
+    public func bottomPanels(_ chat: ChatContext) -> [PluginView] {
+        active(for: chat).flatMap { $0.bottomPanels(chat) }
+    }
+
+    public func chatColumn(_ chat: ChatContext) -> PluginView? {
+        active(for: chat).lazy.compactMap { $0.chatColumn(chat) }.first
+    }
+
+    public func commands(_ model: AppModel) async -> [PluginCommand] {
+        var commands: [PluginCommand] = []
+        for plugin in available(on: model) { commands += await plugin.commands(model) }
+        return commands
     }
 
     /// Opens the right column on a plugin's tab (a shortcut of the plugin's, say).

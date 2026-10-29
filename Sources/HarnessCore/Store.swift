@@ -316,7 +316,7 @@ public final class Store {
         try? FileManager.default.removeItem(at: legacy.appendingPathExtension("imported"))
     }
 
-    public func search(_ query: String, limit: Int) -> [JSONObject] { db.search(query, limit: limit) }
+    public func search(_ query: String, limit: Int, threads: [String]? = nil) -> [JSONObject] { db.search(query, limit: limit, threads: threads) }
 
     // MARK: Bots
 
@@ -451,6 +451,20 @@ public final class Store {
         guard taskByThread(botId, threadId)?["lastInstanceId"]?.string != instanceId else { return }
         _ = updateTask(botId, threadId, save: false) { $0["lastInstanceId"] = .string(instanceId) }
         saveBots()
+    }
+
+    public func setTaskContext(_ botId: String, _ threadId: String, context: JSON) {
+        _ = updateTask(botId, threadId) { $0["context"] = context }
+    }
+
+    func resetTaskSession(_ botId: String, _ threadId: String, epoch: String) {
+        _ = updateTask(botId, threadId) { task in
+            task["resumeCursors"] = [:]
+            task["lastInstanceId"] = nil
+            task["sessionEpoch"] = .string(epoch)
+            task["context"] = nil
+        }
+        if bot(botId)?["threadId"]?.string == threadId { patchBot(botId, ["resumeCursors": [:]]) }
     }
 
     /// `timedTokens` is the output used for tok/s. It matches `output` when the

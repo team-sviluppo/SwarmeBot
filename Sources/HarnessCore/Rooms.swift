@@ -20,7 +20,7 @@ extension Harness {
 
     func roomContext(_ threadId: String, userName: String? = nil) -> String {
         let human = userName ?? self.userName
-        return store.messages(threadId).filter { $0["kind"]?.string == "text" && !($0["text"]?.string ?? "").isEmpty }
+        return sessionMessages(threadId).filter { $0["kind"]?.string == "text" && $0["queued"]?.bool != true && !($0["text"]?.string ?? "").isEmpty }
             .suffix(Self.roomContextMessages)
             .map { "\($0["role"]?.string == "user" ? human : ($0["from"]?["name"]?.string ?? "Bot")): \($0["text"]?.string ?? "")" }
             .joined(separator: "\n")
@@ -28,7 +28,10 @@ extension Harness {
 
     public func startGroupTurn(groupId: String, text: String) throws {
         guard let group = store.group(groupId), let threadId = group["threadId"]?.string else { throw TurnError(status: 404, message: "no such group") }
-        store.appendMessage(threadId, ["role": "user", "kind": "text", "text": .string(text)])
+        guard !roomSessionResets.contains(groupId) else { throw TurnError(status: 409, message: "a new session is being prepared") }
+        var message: JSONObject = ["role": "user", "kind": "text", "text": .string(text)]
+        if roomIsBusy(groupId) { message["queued"] = true }
+        let sent = store.appendMessage(threadId, message)
         // guests from other engines too (MixedRooms.swift)
         let members = roomMembers(group)
         var responders = PeerText.responders(text, members: members, policy: group["defaultResponder"])
@@ -37,11 +40,25 @@ extension Harness {
             let lastSpeaker = store.messages(threadId).reversed().first { $0["kind"]?.string == "text" && $0["from"] != nil }?["from"]?["botId"]
             if let last = members.first(where: { $0["id"] == lastSpeaker }) ?? members.first { responders = [last] }
         }
-        guard !responders.isEmpty else { return }
+        guard !responders.isEmpty else {
+            if let id = sent["id"]?.string { _ = store.patchMessage(threadId, id, ["queued": .null]) }
+            return
+        }
         let ids = responders.compactMap { $0["id"]?.string }
         let previous = groupQueues[groupId]
+        let queueId = UUID()
+        let interruptEpoch = roomInterruptEpochs[groupId, default: 0]
+        roomQueueIds[groupId] = queueId
         groupQueues[groupId] = Task { @MainActor in
             await previous?.value
+            defer {
+                if self.roomQueueIds[groupId] == queueId {
+                    self.groupQueues[groupId] = nil
+                    self.roomQueueIds[groupId] = nil
+                }
+            }
+            if let id = sent["id"]?.string { _ = self.store.patchMessage(threadId, id, ["queued": .null]) }
+            guard self.roomInterruptEpochs[groupId, default: 0] == interruptEpoch else { return }
             if let current = self.store.group(groupId), let busy = current["busyBotId"]?.string {
                 let owner = self.store.bot(busy)?["name"]?.string ?? "A room member"
                 self.store.appendMessage(threadId, ["role": "bot", "kind": "activity", "tool": [
@@ -51,6 +68,7 @@ extension Harness {
             }
             var spoken = Set<String>()
             for id in ids where !spoken.contains(id) {
+                guard self.roomInterruptEpochs[groupId, default: 0] == interruptEpoch else { break }
                 if !(await self.runGroupMemberTurn(groupId: groupId, botId: id, hop: 0, spoken: &spoken)) { break }
             }
         }
@@ -61,6 +79,7 @@ extension Harness {
     func runGroupMemberTurn(groupId: String, botId: String, hop: Int, spoken: inout Set<String>) async -> Bool {
         if GuestId.parse(botId) != nil { return await runPeerMemberTurn(groupId: groupId, memberId: botId, hop: hop, spoken: &spoken) }
         guard let group = store.group(groupId), let bot = store.bot(botId), let threadId = group["threadId"]?.string else { return false }
+        let interruptEpoch = roomInterruptEpochs[groupId, default: 0]
         spoken.insert(botId)
         let name = bot["name"]?.string ?? ""
         let from = PeerText.from(bot)
@@ -155,7 +174,7 @@ extension Harness {
                 // OpenRouter and Grok silently runs its cloud default
                 model: selection.model, effort: selection.effort,
                 resumeCursor: store.groupResumeCursor(groupId, botId: botId, instanceId: instance.instanceId),
-                system: roomSystem, cwd: cwd, sessionKey: "\(threadId):\(botId)"
+                system: roomSystem, cwd: cwd, sessionKey: "\(threadId):\(botId)" + (group["sessionEpoch"]?.string.map { ":\($0)" } ?? "")
             )
             // a room has no per-chat switches: each member brings its own defaults
             input.connectors = mountConnectors(bot: bot, task: nil, threadId: threadId, mount: instance.adapter.capabilities.connectors)
@@ -188,11 +207,13 @@ extension Harness {
 
         // chained mentions: a member's reply can summon teammates, one hop only
         // (in a mirror room the host does that)
+        guard roomInterruptEpochs[groupId, default: 0] == interruptEpoch else { return true }
         return await chainMentions(groupId: groupId, speakerId: botId, reply: replyText, hop: hop, spoken: &spoken)
     }
 
     public func interruptGroup(_ groupId: String) async -> Bool {
         guard let group = store.group(groupId), let threadId = group["threadId"]?.string else { return false }
+        roomInterruptEpochs[groupId, default: 0] += 1
         await interruptPeerTurn(groupId)
         if let busy = group["busyBotId"]?.string, let bot = store.bot(busy) {
             await fleet.get(ModelSelection(json: bot["modelSelection"]).instanceId)?.adapter.interruptTurn(threadId: threadId)

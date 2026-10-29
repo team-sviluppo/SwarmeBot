@@ -104,6 +104,8 @@ public protocol EnginePlugin: AnyObject {
     func validatePatch(_ body: JSONObject, for owner: PluginDataOwner, existing: JSONObject, harness: Harness) throws
     /// The data was written: the plugin may follow it with changes of its own.
     func dataChanged(for owner: PluginDataOwner, harness: Harness)
+    /// Release background work when disabled or when the engine shuts down.
+    func stop(_ harness: Harness)
 
     func routes(_ router: PluginRouter)
     func beforeTurn(_ turn: inout TurnSetup)
@@ -120,6 +122,7 @@ public extension EnginePlugin {
     func validateData(_ data: JSONObject, for owner: PluginDataOwner, harness: Harness) throws {}
     func validatePatch(_ body: JSONObject, for owner: PluginDataOwner, existing: JSONObject, harness: Harness) throws {}
     func dataChanged(for owner: PluginDataOwner, harness: Harness) {}
+    func stop(_ harness: Harness) {}
     func routes(_ router: PluginRouter) {}
     func beforeTurn(_ turn: inout TurnSetup) {}
     func afterTurn(_ result: TurnResult) async {}
@@ -229,9 +232,11 @@ public final class PluginRegistry {
 
     public func setEnabled(_ id: String, _ on: Bool) throws {
         guard plugin(id) != nil else { throw HTTPError(404, "no such plugin") }
+        let before = active
         if on { disabled.remove(id) } else { disabled.insert(id) }
         let json: JSON = ["disabled": .strings(disabled.sorted())]
         try FileIO.writeAtomic(json.data, to: file)
+        for plugin in before where !isEnabled(plugin.id) { plugin.stop(harness) }
     }
 
     /// `GET /api/plugins`.
@@ -303,6 +308,8 @@ public final class PluginRegistry {
     func start() async {
         for plugin in active { await plugin.start(harness) }
     }
+
+    func stop() { for plugin in plugins { plugin.stop(harness) } }
 
     /// `swarme-harness <name> …`, before the engine touches anything.
     nonisolated public static func subcommand(_ name: String, in plugins: [any EnginePlugin]) -> PluginSubcommand? {

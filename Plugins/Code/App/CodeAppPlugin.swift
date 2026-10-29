@@ -29,6 +29,10 @@ public final class CodeAppPlugin: AppPlugin {
             chips.append(PluginView(CodeFilePicker(chat: code, state: state)))
             chips.append(PluginView(CodeShortcuts()))
         }
+        if state.engineHasPhase3(chat.model) {
+            chips.append(PluginView(CodeGitSummary(state: state, thread: chat.threadId)))
+            chips.append(PluginView(CodeScriptButton(state: state, thread: chat.threadId)))
+        }
         return chips
     }
 
@@ -55,6 +59,38 @@ public final class CodeAppPlugin: AppPlugin {
         guard let code = CodeChat(chat), state.engineHasWorkflow(chat.model) else { return [] }
         return [PluginTab(id: CodeDiffPanel.tabId, title: tr("Diff"), icon: "plus.forwardslash.minus", width: CodeDiffPanel.width,
                           content: PluginView(CodeDiffPanel(chat: code, state: state)))]
+    }
+
+    public func bottomPanels(_ chat: ChatContext) -> [PluginView] {
+        guard state.engineHasPhase3(chat.model), state.scriptPanels.contains(chat.threadId) else { return [] }
+        return [PluginView(CodeScriptPanel(state: state, thread: chat.threadId))]
+    }
+
+    public func chatColumn(_ chat: ChatContext) -> PluginView? {
+        guard let bot = chat.bot, state.engineHasPhase3(chat.model) else { return nil }
+        return PluginView(CodeChatColumn(bot: bot, state: state, preferenceKey: (chat.model.activeRemoteEngine?.id ?? "local") + "." + bot.id).id(bot.id))
+    }
+
+    public func commands(_ model: AppModel) async -> [PluginCommand] {
+        guard state.engineHasPhase3(model) else { return [] }
+        struct Recent: Decodable { var botId: String; var threadId: String; var title: String; var name: String }
+        struct Answer: Decodable { var chats: [Recent] }
+        let recent = try? await model.client?.pluginRequest("GET", "/api/code/chats/recent", as: Answer.self)
+        var commands = (recent?.chats ?? []).map { chat in
+            PluginCommand(id: "code.chat.\(chat.threadId)", section: tr("Chat Code recenti"), title: chat.title, detail: chat.name, icon: "bubble.left") {
+                Task { await model.openTask(botId: chat.botId, threadId: chat.threadId) }
+            }
+        }
+        if let bot = model.selectedBot, bot.codeMode == true {
+            commands.append(PluginCommand(id: "code.new-chat", section: tr("Comandi"), title: tr("Nuova chat"), icon: "plus") { Task { await model.createTask(title: nil) } })
+        }
+        if isActive(for: .current(model)) {
+            commands.append(PluginCommand(id: "code.branch", section: tr("Comandi"), title: tr("Cambia branch"), icon: "arrow.triangle.branch") { self.state.branchPickerRequest += 1 })
+            commands.append(PluginCommand(id: "code.scripts", section: tr("Comandi"), title: tr("Mostra output degli script"), icon: "play.rectangle") {
+                if let thread = model.selectedThreadId { self.state.scriptPanels.insert(thread) }
+            })
+        }
+        return commands
     }
 
     /// In a Code chat a reply gets a badge where its turn ends and nothing in the
@@ -113,13 +149,14 @@ private struct CodeRoomSettings: View {
 
     /// A guest works on its own engine and its own folders: there is no one folder for the channel.
     private var mixed: Bool { room.guest != nil || room.guests?.isEmpty == false }
+    private var hasFolder: Bool { (room.pinnedCwd ?? room.cwd)?.isEmpty == false }
 
     var body: some View {
         if state.engineHasChannels(model) || state.engineHasProjects(model) {
             SettingsCard(tr("Code")) {
                 if state.engineHasChannels(model) {
                     SettingRow(icon: "chevron.left.forwardslash.chevron.right", tint: Theme.accent, title: tr("Code mode"),
-                               subtitle: mixed ? tr("Non disponibile in un canale con membri di altri motori.")
+                               subtitle: mixed ? tr("Non disponibile in un canale con membri di altri motori.") : !hasFolder ? tr("Scegli prima una cartella condivisa per il canale.")
                                    : tr("Tutti i membri lavorano nella cartella del canale, uno alla volta: il branch, i file modificati, il diff e il commit sono di tutti.")) {
                         Toggle("", isOn: Binding(get: { room.codeMode ?? false }, set: { next in
                             Task {
@@ -132,7 +169,7 @@ private struct CodeRoomSettings: View {
                         .controlSize(.small)
                         .labelsHidden()
                         .tint(Theme.accent)
-                        .disabled(mixed)
+                        .disabled(mixed || (!hasFolder && room.codeMode != true))
                     }
                 }
                 if state.engineHasProjects(model) {

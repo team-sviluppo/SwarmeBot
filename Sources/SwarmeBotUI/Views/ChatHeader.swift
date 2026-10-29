@@ -11,6 +11,7 @@ struct ChatHeader: View {
     @State private var title = ""
     @State private var showRoomSettings = false
     @State private var ui = UIState.shared
+    @State private var startingSession = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -50,6 +51,12 @@ struct ChatHeader: View {
                     .disabled(model.isBusy(bot))
                     .help(tr("Apri una chat nuova"))
                 taskMenu(bot)
+                if let context = currentTask(bot)?.context {
+                    contextChip(context) {
+                        startingSession = true
+                        Task { defer { startingSession = false }; await model.compactTask(bot) }
+                    }
+                }
                 Button {
                     Task { await model.patch(bot, BotPatch(pinned: !(bot.pinned ?? false))) }
                 } label: { Image(systemName: bot.pinned == true ? "pin.fill" : "pin") }
@@ -72,6 +79,20 @@ struct ChatHeader: View {
                     .buttonStyle(IconButtonStyle(size: 30, iconSize: 16, active: ui.showInspector && ui.inspectorTab == .computer))
                     .help(tr("Computer"))
             } else if let room = model.selectedRoom {
+                if let context = room.context, room.guest == nil {
+                    contextChip(context) { resetSession(room, summarize: true) }
+                }
+                if room.guest == nil {
+                    Menu {
+                        Button(tr("Nuova sessione")) { resetSession(room, summarize: false) }
+                        Button(tr("Nuova sessione con riassunto")) { resetSession(room, summarize: true) }
+                            .disabled(room.defaultResponder.kind != "member")
+                    } label: {
+                        Label(tr("Nuova sessione"), systemImage: "arrow.counterclockwise")
+                    }
+                    .menuStyle(.borderlessButton).fixedSize()
+                    .disabled(busy || startingSession)
+                }
                 Button { showRoomSettings = true } label: { Image(systemName: "slider.horizontal.3") }
                     .buttonStyle(IconButtonStyle(size: 28, iconSize: 15))
                     .help(tr("Impostazioni canale"))
@@ -97,6 +118,26 @@ struct ChatHeader: View {
     private var busy: Bool {
         if let bot = model.selectedBot { return model.isBusy(bot) }
         return model.selectedRoom?.busyBotId != nil
+    }
+
+    private func resetSession(_ room: Room, summarize: Bool) {
+        startingSession = true
+        Task {
+            defer { startingSession = false }
+            await model.newRoomSession(room, summarize: summarize)
+        }
+    }
+
+    private func contextChip(_ context: ContextUsage, compact: @escaping () -> Void) -> some View {
+        Menu {
+            Text(tr("Ultimo contesto inviato: %@ token", String(format: "%.0f", max(0, context.used.isFinite ? context.used : 0))))
+            Button(tr("Compatta con riassunto"), action: compact)
+        } label: {
+            Label(context.fraction.map { String(format: "%.0f%%", $0 * 100) } ?? String(format: "%.1fk", context.used / 1000), systemImage: "gauge.medium")
+                .font(.system(size: 11.5)).foregroundStyle((context.fraction ?? 0) >= 0.8 ? Theme.warning : Theme.secondary)
+        }
+        .menuStyle(.borderlessButton).fixedSize().disabled(busy || startingSession)
+        .help(tr("Contesto dell'ultima richiesta al modello; non è il totale dei token fatturati"))
     }
 
     private func toggle(_ tab: InspectorView.Tab?) {

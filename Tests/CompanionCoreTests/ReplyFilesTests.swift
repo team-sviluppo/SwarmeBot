@@ -63,7 +63,7 @@ final class PluginDataTests: XCTestCase {
 
     func testThePatchesCarryAPluginsDataWithNullToRemove() throws {
         var botPatch = BotPatch()
-        botPatch.pluginData = ["code": ["projectId": "p1", "role": NSNull()]]
+        botPatch.pluginData = ["code": ["projectId": .string("p1"), "role": .null]]
         let body = botPatch.bodyForTesting
         let code = (body["plugins"] as? [String: Any])?["code"] as? [String: Any]
         XCTAssertEqual(code?["projectId"] as? String, "p1")
@@ -78,7 +78,7 @@ final class PluginDataTests: XCTestCase {
         XCTAssertEqual((room.plugins ?? [:]).pluginData("code")["projectId"]?.string, "p")
         var patch = RoomPatch()
         patch.codeMode = true
-        patch.pluginData = ["code": ["role": "app"]]
+        patch.pluginData = ["code": ["role": .string("app")]]
         XCTAssertEqual(patch.bodyForTesting["codeMode"] as? Bool, true)
         XCTAssertEqual(((patch.bodyForTesting["plugins"] as? [String: Any])?["code"] as? [String: Any])?["role"] as? String, "app")
     }

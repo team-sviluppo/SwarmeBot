@@ -182,11 +182,17 @@ public final class Routes {
             return ok(["text": .string(text)])
         }
         if let m = match(#"^/api/bots/([\w-]+)/messages$"#, path), method == "POST" {
-            let text = try r.json()["text"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let body = try r.json()
+            let text = body["text"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !text.isEmpty else { return fail(400, "text required") }
             guard let bot = store.bot(m[0]) else { return fail(404, "no such bot") }
             if Store.isBusy(bot) {
                 let message = harness.queueSteeredMessage(botId: m[0], text: text)
+                if body["interrupt"]?.bool == true {
+                    if let group = store.groups.first(where: { $0["busyBotId"]?.string == m[0] }), let id = group["id"]?.string {
+                        _ = await harness.interruptGroup(id)
+                    } else { await harness.interrupt(botId: m[0]) }
+                }
                 return ok(["ok": true, "queued": true, "messageId": message?["id"] ?? .null], 202)
             }
             try harness.startTurn(botId: m[0], text: text)
@@ -250,6 +256,10 @@ public final class Routes {
         }
 
         // MARK: tasks
+        if let m = match(#"^/api/bots/([\w-]+)/tasks/([\w-]+)/compact$"#, path), method == "POST" {
+            try await harness.compactTask(botId: m[0], thread: m[1])
+            return ok(["ok": true])
+        }
         if let m = match(#"^/api/bots/([\w-]+)/tasks$"#, path), method == "POST" {
             guard let bot = store.bot(m[0]) else { return fail(404, "no such bot") }
             if Store.isBusy(bot) { return fail(409, "this bot is working — let it finish before starting a task") }
@@ -368,8 +378,16 @@ public final class Routes {
         if path == "/api/guest-turns", method == "POST" {
             return .response(await harness.guestTurn(try r.json(), deviceId: r.deviceId ?? "local"))
         }
+        if path == "/api/guest-turns/summary", method == "POST" {
+            var body = try r.json()
+            body["summaryOnly"] = true
+            return .response(await harness.guestTurn(body, deviceId: r.deviceId ?? "local"))
+        }
         if path == "/api/guest-turns/interrupt", method == "POST" {
             return .response(await harness.interruptGuestTurn(try r.json(), deviceId: r.deviceId ?? "local"))
+        }
+        if path == "/api/guest-turns/session", method == "POST" {
+            return .response(harness.resetGuestSession(try r.json(), deviceId: r.deviceId ?? "local"))
         }
 
         // MARK: rooms
@@ -444,14 +462,21 @@ public final class Routes {
                 return ok(["group": .object(harness.wireGroup(group))])
             }
         }
+        if let m = match(#"^/api/groups/([\w-]+)/session$"#, path), method == "POST" {
+            let body = try r.json()
+            if let summarize = body["summarize"], summarize.bool == nil { return fail(400, "summarize must be true or false") }
+            return ok(.object(try await harness.newRoomSession(m[0], summarize: body["summarize"]?.bool ?? false)))
+        }
         if let m = match(#"^/api/groups/([\w-]+)/read$"#, path), method == "POST" {
             guard let group = store.patchGroup(m[0], ["unread": false]) else { return fail(404, "no such room") }
             return ok(["group": .object(harness.wireGroup(group))])
         }
         if let m = match(#"^/api/groups/([\w-]+)/messages$"#, path), method == "POST" {
             if store.group(m[0])?["guest"] != nil { return fail(409, "this channel is written from where it lives") }
-            let text = (try r.json()["text"].flatMap(Harness.text) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let body = try r.json()
+            let text = (body["text"].flatMap(Harness.text) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if text.isEmpty { return fail(400, "text required") }
+            if body["interrupt"]?.bool == true { _ = await harness.interruptGroup(m[0]) }
             try harness.startGroupTurn(groupId: m[0], text: text)
             return ok(["ok": true], 202)
         }

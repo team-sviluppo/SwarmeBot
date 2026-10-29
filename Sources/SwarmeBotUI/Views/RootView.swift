@@ -46,6 +46,7 @@ struct RootView: View {
                     SidebarView()
                         .frame(width: 272)
                         .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline.opacity(0.3)).frame(width: 1) }
+                    if model.status == .live, let column = PluginHost.shared.chatColumn(ChatContext.current(model)) { column }
                     ZStack {
                         Theme.app
                         if model.status == .live {

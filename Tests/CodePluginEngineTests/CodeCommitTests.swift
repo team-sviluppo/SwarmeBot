@@ -251,7 +251,8 @@ final class CodeCommitTests: XCTestCase {
         let set = await repo.callRaw("PUT", "/api/code/settings", body: ["commitModel": ["instanceId": "claude", "model": "fake-2"]])
         XCTAssertEqual(set.status, 200, String(describing: set.json))
         XCTAssertEqual(set.json?["commitModel"]?["model"], "fake-2")
-        _ = await repo.call("POST", "git/commit-message", body: [:])
+        let generated = await repo.call("POST", "git/commit-message", body: [:])
+        XCTAssertEqual(generated.status, 200, String(describing: generated.json))
         XCTAssertEqual(adapter.received.last?.model, "fake-2")
         // cleared, the bot's own model is back
         _ = await repo.callRaw("PUT", "/api/code/settings", body: ["commitModel": .null])

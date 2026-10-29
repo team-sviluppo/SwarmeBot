@@ -87,8 +87,8 @@ servers and also has private bots of its own.
   a question (single or multiple choice), the chat shows a card. Per-bot **auto-approve** modes and
   "always allow" rules.
 - **Edit and resend** a message and move between versions of the conversation (‹ 1/3 ›).
-- **Queued messages**: write while the bot is working; messages run in order. **Stop** keeps the
-  partial reply.
+- **Queued messages**: write while a bot or channel is working; **Steer now** interrupts the turn and sends the new direction. **Stop** keeps the partial reply.
+- **Session context** from Claude and Codex, separate from billable usage. Compact a bot chat with a summary; start a new session in a channel, optionally with its default member’s summary. History stays searchable.
 - **Tasks**: a bot's work is split into tasks (threads) you can create, switch, rename, pin, delete,
   each with its cost and token usage.
 - **Attachments**: paste images, drop files, attach long text as a chip; reactions on messages.
@@ -97,6 +97,10 @@ servers and also has private bots of its own.
   task cost at Standard API token prices, including prompt-cache discounts. The estimate is not
   a subscription charge; unknown or custom model prices are left unavailable.
 - **Memory** and a **decision log** per bot.
+
+### Code projects
+
+The Code plugin adds projects with a working repo and linked read-only folders, a Chat column (⌘⇧L), branch and diff status, file references (⌘P), inline review comments and a commit window. Code channels share one folder across their local members. Project scripts run on the engine with output, Stop and a button to send failures to the bot. See [the Code plugin](Plugins/Code/README.md).
 
 ### Channels (multi-bot)
 - Channels with several bots and a **board** (shared notes for the room).

@@ -104,6 +104,14 @@ struct ComposerView: View {
                 Button(tr("Allega file o immagini…"), action: pickFiles)
             }
             .onDrop(of: [.fileURL, .image], isTargeted: $dropTargeted, perform: drop)
+            let queued = model.visibleTranscript(threadId).filter { $0.queued == true }.count
+            if queued > 0 || (busy && canSend) {
+                HStack {
+                    if queued > 0 { Label(tr("%@ in coda", String(queued)), systemImage: "clock").font(.system(size: 11.5)).foregroundStyle(Theme.secondary) }
+                    Spacer()
+                    if busy && canSend { Button(tr("Correggi la rotta")) { submit(steering: true) }.buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Theme.accent) }
+                }.padding(.horizontal, 10)
+            }
             if let bot = model.selectedBot {
                 ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -180,7 +188,9 @@ struct ComposerView: View {
         !(drafts[threadId] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(attachments[threadId] ?? []).isEmpty
     }
 
-    private func submit() {
+    private func submit() { submit(steering: false) }
+
+    private func submit(steering: Bool) {
         let text = drafts[threadId] ?? ""
         let pending = attachments[threadId] ?? []
         guard canSend else { return }
@@ -192,7 +202,7 @@ struct ComposerView: View {
             model.lastError = tr("Il server compatibile OpenAI riceve i file come testo: %@ non si può leggere. Allega testo, codice, CSV, JSON, Markdown, PDF o immagini.", refused)
             return
         }
-        if model.selectedBot != nil {
+        if model.selectedBot != nil && !steering {
             let tagged = BotTagging.mentioned(in: text, among: model.tagTargets, preferred: pickedTags[threadId] ?? [])
             if !tagged.isEmpty {
                 if let busyTarget = tagged.first(where: model.isBusy) {
@@ -213,7 +223,8 @@ struct ComposerView: View {
         attachments[threadId] = []
         pickedTags[threadId] = nil
         Task {
-            if pending.isEmpty { await model.send(outgoing) } else { await model.send(outgoing, attachments: pending) }
+            if steering { await model.steer(outgoing, attachments: pending) }
+            else if pending.isEmpty { await model.send(outgoing) } else { await model.send(outgoing, attachments: pending) }
         }
     }
 

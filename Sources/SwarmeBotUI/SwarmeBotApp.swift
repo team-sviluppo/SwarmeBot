@@ -104,7 +104,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 switch open {
                 case "palette": self.model.showPalette = true
                 case "newroom": self.model.showNewRoom = true
-                default: OpenWindowBridge.open?(open)
+                default:
+                    Task { @MainActor in
+                        if let command = await PluginHost.shared.commands(self.model).first(where: { $0.id == open }) { command.action() }
+                        else { OpenWindowBridge.open?(open) }
+                    }
                 }
             }
         }

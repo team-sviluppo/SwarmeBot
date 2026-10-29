@@ -17,6 +17,7 @@ final class FakeAdapter: ProviderAdapter {
     /// What the model does with a turn: emit events through `emit`.
     var script: (SendTurnInput, (RuntimeEvent.Body, String?) -> Void) -> Void = { _, _ in }
     var instanceId = "claude"
+    var onInterrupt: ((ThreadID) -> Void)?
 
     init(driverKind: String) { provider = driverKind }
 
@@ -28,7 +29,7 @@ final class FakeAdapter: ProviderAdapter {
         return "turn"
     }
 
-    func interruptTurn(threadId: ThreadID) async {}
+    func interruptTurn(threadId: ThreadID) async { onInterrupt?(threadId) }
 
     func respond(threadId: ThreadID, requestId: String, decision: RequestDecision) async -> RequestOutcome {
         if decision.behavior == "deny" { denied.append(requestId) }

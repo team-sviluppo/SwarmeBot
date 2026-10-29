@@ -60,7 +60,7 @@ struct CodeProjectRows: View {
 
     /// A new project clears the folder it works on, unless the same one is sent along.
     private func set(project: String?, role: String? = nil) {
-        let data: [String: Any] = ["projectId": project ?? NSNull(), "role": role ?? NSNull()]
+        let data: [String: JSONValue] = ["projectId": project.map(JSONValue.string) ?? .null, "role": role.map(JSONValue.string) ?? .null]
         Task {
             switch owner {
             case let .bot(bot):
@@ -127,6 +127,7 @@ struct ProjectEditor: View {
     @State private var name = ""
     @State private var listId = ""
     @State private var paths: [String: String] = [:]
+    @State private var scripts: [String: [ProjectScript]] = [:]
     @State private var browsing: String?
     @State private var saving = false
     @State private var error: String?
@@ -142,11 +143,26 @@ struct ProjectEditor: View {
                 TextField(tr("ID della lista ClickUp"), text: $listId)
                 Section(tr("Cartelle")) {
                     ForEach(ProjectRoles.all, id: \.self) { role in
+                        VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text(verbatim: ProjectRoles.title(role)).frame(width: 110, alignment: .leading)
                             TextField("", text: Binding(get: { paths[role] ?? "" }, set: { paths[role] = $0 }), prompt: Text(verbatim: "/"))
                                 .font(.system(size: 12, design: .monospaced)).labelsHidden()
                             Button(tr("Scegli…")) { choose(role) }
+                        }
+                        if paths[role]?.isEmpty == false {
+                            DisclosureGroup(tr("Script")) {
+                                ForEach(Array((scripts[role] ?? []).indices), id: \.self) { index in
+                                    HStack {
+                                        TextField(tr("Nome"), text: scriptBinding(role, index, \.name)).frame(width: 90)
+                                        TextField(tr("Comando"), text: scriptBinding(role, index, \.command)).font(.system(size: 11.5, design: .monospaced))
+                                        Button { scripts[role]?.remove(at: index) } label: { Image(systemName: "minus.circle") }.buttonStyle(.plain)
+                                    }
+                                }
+                                Button(tr("Aggiungi script")) { scripts[role, default: []].append(ProjectScript(name: "", command: "")) }
+                                    .disabled((scripts[role]?.count ?? 0) >= 20)
+                            }
+                        }
                         }
                     }
                 }
@@ -166,11 +182,11 @@ struct ProjectEditor: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: 620, height: 600)
         .onAppear {
             name = project?.name ?? ""
             listId = project?.clickupListId ?? ""
-            for repo in project?.repos ?? [] { paths[repo.role] = repo.path }
+            for repo in project?.repos ?? [] { paths[repo.role] = repo.path; scripts[repo.role] = repo.scripts ?? [] }
         }
         .sheet(item: Binding(get: { browsing.map(Picking.init) }, set: { browsing = $0?.role })) { picking in
             ServerFolderPicker(state: state, start: paths[picking.role]) { chosen in
@@ -188,6 +204,13 @@ struct ProjectEditor: View {
     private struct Picking: Identifiable {
         let role: String
         var id: String { role }
+    }
+
+    private func scriptBinding(_ role: String, _ index: Int, _ key: WritableKeyPath<ProjectScript, String>) -> Binding<String> {
+        Binding(get: { scripts[role]?.indices.contains(index) == true ? scripts[role]![index][keyPath: key] : "" }, set: { value in
+            guard scripts[role]?.indices.contains(index) == true else { return }
+            scripts[role]?[index][keyPath: key] = value
+        })
     }
 
     /// This Mac's own folders through the open panel; a server's through the engine.
@@ -210,8 +233,7 @@ struct ProjectEditor: View {
         defer { saving = false }
         let repos = ProjectRoles.all.compactMap { role -> ProjectRepo? in
             guard let path = paths[role]?.trimmingCharacters(in: .whitespaces), !path.isEmpty else { return nil }
-            // the scripts of a folder are kept as they were: they are edited elsewhere
-            return ProjectRepo(role: role, path: path, scripts: project?.repo(role)?.scripts)
+            return ProjectRepo(role: role, path: path, scripts: scripts[role] ?? [])
         }
         do {
             try await state.saveProject(model: model, id: project?.id, name: name.trimmingCharacters(in: .whitespaces),

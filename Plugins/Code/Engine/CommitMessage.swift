@@ -41,7 +41,10 @@ enum CommitMessage {
     /// The model to ask: the one set for commit messages, else the chat's own bot's.
     static func selection(harness: Harness, threadId: String) -> ModelSelection? {
         if let chosen = CodeSettings(harness: harness).commitModel, harness.fleet.get(chosen.instanceId) != nil { return chosen }
-        guard let bot = harness.store.botByThread(threadId) else { return nil }
+        let group = harness.store.groupByThread(threadId)
+        let defaultMember = group?["defaultResponder"]?["kind"] == "member" ? group?["defaultResponder"]?["botId"]?.string : nil
+        let member = defaultMember ?? group?["memberIds"]?.array?.first?.string
+        guard let bot = harness.store.botByThread(threadId) ?? member.flatMap({ harness.store.bot($0) }) else { return nil }
         let own = ModelSelection(json: bot["modelSelection"])
         return harness.fleet.get(own.instanceId) != nil ? own : nil
     }

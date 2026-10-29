@@ -91,6 +91,8 @@ Never run two engines on the same data directory.
 Useful environment variables:
 - `SWARMEBOT_HARNESS_URL` — attach to an engine already running instead of starting one.
 - `SWARMEBOT_SNAPSHOT=/path.png` (+ `SWARMEBOT_SNAPSHOT_DELAY`) — screenshot the window, no screen-recording permission needed.
+- `SWARMEBOT_SELECT=bot:<id>` or `room:<id>` — the opening chat on test data.
+- `SWARMEBOT_OPEN=palette` or a plugin command id (e.g. `code.scripts`) — open it after launch for snapshots.
 - `SWARMEBOT_LINUX_ENGINES=build/linux` — use locally built Linux engines instead of downloading them.
 - Engine: `OMB_PORT`, `OMB_DATA_DIR`, `OMB_WEBHOOK_PORT` (same names as the old Node engine).
 - Logs: `~/Library/Logs/SwarmeBot/server.log`.

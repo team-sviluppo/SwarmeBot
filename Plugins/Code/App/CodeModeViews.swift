@@ -6,6 +6,29 @@ import SwarmeBotUI
 import SwarmeKit
 import SwiftUI
 
+/// Repository status lives in the composer's existing chip row, for bots and channels alike.
+struct CodeGitSummary: View {
+    let state: CodeState
+    let thread: String
+    var body: some View {
+        if let git = state.gitStates[thread], git.repo {
+            Button { PluginHost.shared.openInspectorTab(CodeDiffPanel.tabId) } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "plus.forwardslash.minus")
+                    if git.changes.isEmpty { Text(tr("Nessuna modifica")) }
+                    else {
+                        Text(tr("%@ file modificati", String(git.changes.count)))
+                        if let added = git.additions, let deleted = git.deletions {
+                            Text(verbatim: "+\(added) −\(deleted)").monospacedDigit()
+                        }
+                    }
+                }
+            }.buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize)).fixedSize()
+                .help(git.summaryPartial == true ? tr("Le righe dei file non tracciati non sono incluse nel conteggio") : tr("Stato attuale della cartella condivisa"))
+        }
+    }
+}
+
 /// The folder's active git branch, under the composer. Nothing for a folder
 /// that is not a repo, which is also what an engine without the route gives.
 /// The state it reads is kept fresh by the plugin's `chatChanged`.
@@ -49,6 +72,7 @@ struct GitBranchChip: View {
                 }
             }
         }
+        .onChange(of: state.branchPickerRequest) { _, _ in choosing = true }
     }
 
     private var matches: [GitBranch] {

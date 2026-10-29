@@ -10,6 +10,7 @@ struct CommandPalette: View {
     @Environment(\.openSettings) private var openSettings
     @State private var query = ""
     @State private var hits: [SearchHit] = []
+    @State private var pluginCommands: [PluginCommand] = []
     @State private var cursor = 0
     @FocusState private var focused: Bool
 
@@ -92,6 +93,7 @@ struct CommandPalette: View {
         .shadow(color: Theme.shadow.opacity(0.6), radius: 25, y: 25)
         .padding(.horizontal, 24)
         .onAppear { focused = true }
+        .task { pluginCommands = await PluginHost.shared.commands(model) }
         .onExitCommand { dismiss() }
         .onKeyPress(.escape) { dismiss(); return .handled }
         .onKeyPress(.downArrow) { cursor = min(cursor + 1, max(items.count - 1, 0)); return .handled }
@@ -114,6 +116,9 @@ struct CommandPalette: View {
         let q = query.trimmingCharacters(in: .whitespaces)
         func matches(_ text: String) -> Bool { q.isEmpty || text.localizedCaseInsensitiveContains(q) }
         var out: [Item] = []
+        out += pluginCommands.filter { matches($0.title) || matches($0.detail) }.map { command in
+            Item(section: command.section, id: command.id, icon: command.icon, title: command.title, detail: command.detail, action: command.action)
+        }
         for bot in model.state.bots where bot.hidden != true && (matches(bot.name) || matches(bot.title)) {
             out.append(Item(id: "bot-\(bot.id)", icon: "bubble.left", title: bot.name, detail: bot.title) {
                 model.selection = .bot(bot.id)

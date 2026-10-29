@@ -28,6 +28,9 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
     public var branch: String?
     public var detached: Bool?
     public var changes: [Change]
+    public var additions: Int?
+    public var deletions: Int?
+    public var summaryPartial: Bool?
 
     public init(repo: Bool, root: String? = nil, branch: String? = nil, detached: Bool? = nil, changes: [Change] = []) {
         self.repo = repo
@@ -37,7 +40,7 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
         self.changes = changes
     }
 
-    private enum CodingKeys: String, CodingKey { case repo, folder, root, branch, detached, changes }
+    private enum CodingKeys: String, CodingKey { case repo, folder, root, branch, detached, changes, additions, deletions, summaryPartial }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -47,6 +50,9 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
         branch = try container.decodeIfPresent(String.self, forKey: .branch)
         detached = try container.decodeIfPresent(Bool.self, forKey: .detached)
         changes = try container.decodeIfPresent([Change].self, forKey: .changes) ?? []
+        additions = try container.decodeIfPresent(Int.self, forKey: .additions)
+        deletions = try container.decodeIfPresent(Int.self, forKey: .deletions)
+        summaryPartial = try container.decodeIfPresent(Bool.self, forKey: .summaryPartial)
     }
 }
 

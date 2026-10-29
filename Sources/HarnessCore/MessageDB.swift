@@ -174,20 +174,23 @@ public final class MessageDB {
     // MARK: Search
 
     /// Case-insensitive substring search over text and tool chips, newest first.
-    public func search(_ raw: String, limit: Int) -> [JSONObject] {
+    public func search(_ raw: String, limit: Int, threads: [String]? = nil) -> [JSONObject] {
         let needle = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return [] }
         let escaped = needle.replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
         let pattern = "%\(escaped)%"
         var hits: [JSONObject] = []
+        if threads?.isEmpty == true { return [] }
+        let scope = threads.map { " AND thread_id IN (" + Array(repeating: "?", count: $0.count).joined(separator: ",") + ")" } ?? ""
         let sql = """
             SELECT thread_id, id, at, role, kind, text, json_extract(json, '$.tool.name') AS tool_name, json_extract(json, '$.from.name') AS from_name FROM messages
-            WHERE (kind = 'text' AND text IS NOT NULL AND lower(text) LIKE ? ESCAPE '\\')
-               OR (kind = 'activity' AND tool_name IS NOT NULL AND lower(tool_name) LIKE ? ESCAPE '\\')
+            WHERE ((kind = 'text' AND text IS NOT NULL AND lower(text) LIKE ? ESCAPE '\\')
+               OR (kind = 'activity' AND tool_name IS NOT NULL AND lower(tool_name) LIKE ? ESCAPE '\\'))\(scope)
             ORDER BY at DESC LIMIT ?
             """
-        try? query(sql, [pattern, pattern, limit]) { statement in
+        let bindings: [Any?] = [pattern, pattern] + (threads ?? []).map { $0 as Any? } + [limit]
+        try? query(sql, bindings) { statement in
             let kind = Self.text(statement, 4) ?? "text"
             let haystack = (kind == "activity" ? Self.text(statement, 6) : Self.text(statement, 5)) ?? ""
             let chars = Array(haystack)

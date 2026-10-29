@@ -13,6 +13,7 @@ struct ChatView: View {
                 ChatHeader()
                 TranscriptView(threadId: threadId)
                     .id(threadId)
+                ForEach(Array(PluginHost.shared.bottomPanels(ChatContext.current(model)).enumerated()), id: \.offset) { $0.element }
                 if let host = model.selectedRoom?.guest {
                     // a mirror of a mixed channel: written where it lives
                     Text(tr("Canale misto di %@: si scrive da lì.", host.hostName ?? tr("un altro dispositivo")))
@@ -312,7 +313,16 @@ struct MessageRow: View {
                 }
             }
         case .activity:
-            ActivityChip(tool: message.tool, text: message.text)
+            if message.sessionDivider == true {
+                HStack {
+                    Rectangle().fill(Theme.hairline).frame(height: 1)
+                    Text(tr("Nuova sessione · %@", message.date.appFormatted(date: .abbreviated, time: .shortened)))
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.secondary).fixedSize()
+                    Rectangle().fill(Theme.hairline).frame(height: 1)
+                }.padding(.vertical, 16)
+            } else {
+                ActivityChip(tool: message.tool, text: message.text)
+            }
         case .options:
             if let card = message.card {
                 OptionCardView(card: card, threadId: threadId)
