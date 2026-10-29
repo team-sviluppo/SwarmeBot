@@ -25,6 +25,9 @@ public final class Harness {
     /// The engine's environment, never with the vault key in it.
     private(set) var environment: [String: String]
     private let drivers: [ProviderDriver]
+    private let enginePlugins: [any EnginePlugin]
+    /// The plugins linked into this engine (Plugins.swift).
+    public private(set) lazy var plugins = PluginRegistry(harness: self, plugins: enginePlugins)
     /// Secrets bots use in shell commands (Vault.swift, VaultTurns.swift).
     public let vault: Vault
     /// Turn grant token → what its `mcp-secrets` helper may run with.
@@ -147,8 +150,9 @@ public final class Harness {
         }
     }
 
-    public init(paths: DataPaths, environment: [String: String], drivers: [ProviderDriver]) throws {
+    public init(paths: DataPaths, environment: [String: String], drivers: [ProviderDriver], plugins: [any EnginePlugin] = []) throws {
         self.paths = paths
+        self.enginePlugins = plugins
         // the key opens the vault and goes no further: not to the drivers, not to any child
         let vaultKey = Vault.key(from: environment)
         var environment = environment
@@ -221,6 +225,7 @@ public final class Harness {
         let leftover = delegations.threads
         if !leftover.isEmpty { print("delegations: \(leftover.count) thread(s) with queued handoffs from a previous run — draining") }
         for threadId in leftover { drainDelegations(threadId) }
+        await plugins.start()
     }
 
     /// Nothing for the stall window: stop it, say so, keep ownership for the
@@ -546,6 +551,7 @@ public final class Harness {
             }
             // a delegated turn's terminal state belongs in its A⇄B channel
             finalizeDelegationWatch(threadId, ok: ok, reply: reply)
+            plugins.afterTurn(TurnResult(threadId: threadId, botId: botId ?? speaker?["botId"]?.string, groupId: group?["id"]?.string, ok: ok, cost: cost))
 
         case .turnStarted:
             turnStartedAt[threadId] = Date()
@@ -780,6 +786,9 @@ public final class Harness {
                                                                instance: instance, model: model)
                 input.secrets = secrets.server
                 input.secretEnvironment = secrets.environment
+                var setup = TurnSetup(botId: botId, threadId: threadId, groupId: nil, driverKind: instance.driverKind, bot: bot, group: nil, cwd: cwd)
+                self.plugins.beforeTurn(&setup)
+                setup.apply(to: &input)
                 self.watchdog.watch(threadId, botId: botId)
                 _ = try await instance.adapter.sendTurn(input)
                 if rewound { self.store.patchBot(botId, ["rewound": false, "resumeCursors": [:]]) }

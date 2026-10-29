@@ -130,7 +130,7 @@ func runSecretCommand(_ args: [String], paths: DataPaths) -> Never {
 }
 
 @MainActor
-func bootRemote(_ options: RemoteOptions, paths: DataPaths, environment: [String: String]) async {
+func bootRemote(_ options: RemoteOptions, paths: DataPaths, environment: [String: String], plugins: [any EnginePlugin]) async {
     // a client that hangs up mid-write must not kill the engine
     signal(SIGPIPE, SIG_IGN)
     do {
@@ -142,7 +142,7 @@ func bootRemote(_ options: RemoteOptions, paths: DataPaths, environment: [String
         // the CLIs' own logins, from secrets.json: on a server there may be no Keychain for them
         var environment = environment
         for (name, value) in AppConfig.readSecrets(paths) where RemoteSecrets.passthrough.contains(name) { environment[name] = value }
-        let harness = try Harness(paths: paths, environment: environment, drivers: HarnessDrivers.all)
+        let harness = try Harness(paths: paths, environment: environment, drivers: HarnessDrivers.all, plugins: plugins)
         await harness.boot()
         let routes = Routes(harness: harness)
         let remote = RemoteAccess(paths: paths, publicURL: options.publicURL)

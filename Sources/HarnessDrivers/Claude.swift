@@ -392,7 +392,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         // The CLI reports when a background completion still owes the parent
         // another turn. stdin must outlive that turn and its approval requests.
         env["CLAUDE_CODE_SDK_READS_SESSION_STATE"] = "1"
-        for (key, value) in turn.secretEnvironment { env[key] = value }
+        for (key, value) in turn.turnEnvironment { env[key] = value }
         // a download or a build through the vault may take long: Claude's default would cut it
         if turn.secrets != nil { env["MCP_TOOL_TIMEOUT"] = String(VaultTool.maxSeconds * 1000 + 60_000) }
         let process: CLIProcess

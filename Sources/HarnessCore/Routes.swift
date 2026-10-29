@@ -70,6 +70,14 @@ public final class Routes {
             return ok(["app": "swarmebot", "pid": .number(Double(ProcessInfo.processInfo.processIdentifier)), "static": false, "engine": "swift"])
         }
         if method == "GET", path == "/api/events" { return harness.hub.route(r) }
+        // the plugins linked into this engine, and which of them are on (Plugins.swift)
+        if method == "GET", path == "/api/plugins" { return ok(["plugins": harness.plugins.wire]) }
+        if method == "PUT", let id = match(#"^/api/plugins/([\w.-]+)$"#, path)?.first {
+            guard r.isJSON else { return fail(415, "content-type must be application/json") }
+            guard let enabled = try r.json()["enabled"]?.bool else { return fail(400, "enabled must be true or false") }
+            try harness.plugins.setEnabled(id, enabled)
+            return ok(["plugins": harness.plugins.wire])
+        }
         // peer comms for the agents MCP helper: loopback and the boot token only
         if let response = await harness.internalRoute(r) { return .response(response) }
 
@@ -394,6 +402,11 @@ public final class Routes {
                 let body = try r.json()
                 var patch = JSONObject()
                 for key in ["name", "bulletin", "unread"] { if let value = body[key] { patch[key] = value } }
+                for flag in harness.plugins.groupFlags {
+                    guard let value = body[flag] else { continue }
+                    guard value.bool != nil else { return fail(400, "\(flag) must be true or false") }
+                    patch[flag] = value
+                }
                 if let ids = body["memberIds"]?.array?.compactMap(\.string).filter({ store.bot($0) != nil }), !ids.isEmpty {
                     patch["memberIds"] = .strings(ids)
                 }
@@ -549,36 +562,12 @@ public final class Routes {
                 ], body: data))
             }
         }
-        if method == "GET", let threadId = match(#"^/api/threads/([\w-]+)/git$"#, path)?.first {
-            guard let roots = ThreadFiles.roots(store, harness.paths, threadId: threadId) else { return fail(404, "no such thread") }
-            return ok(await ThreadGit.wire(folder: roots.first))
-        }
-        if let threadId = match(#"^/api/threads/([\w-]+)/git/(?:branches|checkout)$"#, path)?.first {
-            guard let folder = ThreadFiles.roots(store, harness.paths, threadId: threadId)?.first else { return fail(404, "no such thread") }
-            if method == "GET", path.hasSuffix("/branches") {
-                return ok(["branches": .array(try await ThreadGit.branches(folder: folder))])
-            }
-            if method == "POST", path.hasSuffix("/checkout") {
-                guard let repo = await ThreadGit.inspect(folder: folder) else { return fail(400, "not a git repository") }
-                let busyInRepo = store.bots.contains { bot in
-                    guard Store.isBusy(bot), let tid = bot["threadId"]?.string,
-                          let cwd = ThreadFiles.roots(store, harness.paths, threadId: tid)?.first else { return false }
-                    let resolved = URL(fileURLWithPath: cwd).standardizedFileURL.resolvingSymlinksInPath().path
-                    return resolved == repo.root || resolved.hasPrefix(repo.root + "/")
-                }
-                guard !busyInRepo, harness.routines?.isActiveThread(threadId) != true else {
-                    return fail(409, "a bot is working — let it finish before switching branches")
-                }
-                let body = try r.json()
-                guard let ref = body["ref"]?.string else { return fail(400, "ref is required") }
-                try await ThreadGit.checkout(folder: folder, ref: ref)
-                return ok(await ThreadGit.wire(folder: folder))
-            }
-        }
         if method == "GET", path == "/api/decisions" {
             return ok(["decisions": .array(DecisionLog.read(harness.paths, limit: Int(r.query["limit"] ?? "") ?? 200))])
         }
 
+        // after the core's own routes: a plugin adds routes, it does not replace one
+        if let routed = try await harness.plugins.route(r) { return routed }
         if let routed = try await automationRoute(r) { return routed }
 
         // MARK: not ported yet — read routes answer empty, writes say so
@@ -662,7 +651,7 @@ public final class Routes {
             guard ["local", "vm", "off"].contains(computer.string ?? "") else { return fail(400, "computer must be local, vm, or off") }
             patch["computer"] = computer
         }
-        for flag in ["autoApprove", "approvePeerComms", "chiefOfStaff", "composio", "codeMode", "showToolCalls"] {
+        for flag in ["autoApprove", "approvePeerComms", "chiefOfStaff", "composio", "showToolCalls"] + harness.plugins.botFlags {
             guard let value = body[flag] else { continue }
             guard value.bool != nil else { return fail(400, "\(flag) must be true or false") }
             patch[flag] = value

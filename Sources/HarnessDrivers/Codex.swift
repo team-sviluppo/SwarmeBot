@@ -746,7 +746,7 @@ final class CodexTurn {
             args += Self.mount(&env, name: VaultTool.serverName, secrets)
             args += ["-c", "mcp_servers.\(VaultTool.serverName).tool_timeout_sec=\(VaultTool.maxSeconds + 60)"]
         }
-        for (key, value) in turn.secretEnvironment { env[key] = value }
+        for (key, value) in turn.turnEnvironment { env[key] = value }
         let cwd = turn.cwd ?? NSHomeDirectory()
         do {
             process = try CLIProcess(cli: instance.cli, args: args, cwd: cwd, environment: env)

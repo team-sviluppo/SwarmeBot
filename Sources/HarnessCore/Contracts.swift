@@ -359,6 +359,15 @@ public struct SendTurnInput: Sendable {
     /// Vault secrets the user put in the CLI's environment for this turn
     /// ("env" mode), for drivers that spawn a process. Empty changes nothing.
     public var secretEnvironment: [String: String] = [:]
+    /// What a plugin added to the CLI's environment for this turn (Plugins.swift).
+    /// Empty changes nothing.
+    public var pluginEnvironment: [String: String] = [:]
+
+    /// Everything the engine adds to a spawned CLI's environment for this turn;
+    /// a vault secret wins over a plugin's value.
+    public var turnEnvironment: [String: String] {
+        pluginEnvironment.merging(secretEnvironment) { _, secret in secret }
+    }
 
     public init(threadId: ThreadID, text: String, model: String? = nil, effort: String? = nil, resumeCursor: JSON? = nil,
                 transcript: [(role: String, text: String)] = [], system: String? = nil, cwd: String? = nil,

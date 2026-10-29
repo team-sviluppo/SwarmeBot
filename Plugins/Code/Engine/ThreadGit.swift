@@ -6,6 +6,7 @@
 // Mac that shows the chat. Inspections use `GIT_OPTIONAL_LOCKS=0` so that
 // looking never takes the index lock away from the agent that is committing.
 import Foundation
+import HarnessCore
 
 enum ThreadGit {
     static let maxChanges = 200
@@ -25,6 +26,18 @@ enum ThreadGit {
             let name = String(ref.dropFirst(remote ? "refs/remotes/".count : "refs/heads/".count))
             return ["ref": .string(ref), "name": .string(name), "remote": .bool(remote)]
         }
+    }
+
+    /// Whether a bot (or a routine) works in this repository: git must not move under it.
+    @MainActor
+    static func botWorking(in root: String, harness: Harness, threadId: String) -> Bool {
+        let busyInRepo = harness.store.bots.contains { bot in
+            guard Store.isBusy(bot), let tid = bot["threadId"]?.string,
+                  let cwd = ThreadFiles.roots(harness.store, harness.paths, threadId: tid)?.first else { return false }
+            let resolved = URL(fileURLWithPath: cwd).standardizedFileURL.resolvingSymlinksInPath().path
+            return resolved == root || resolved.hasPrefix(root + "/")
+        }
+        return busyInRepo || harness.routines?.isActiveThread(threadId) == true
     }
 
     private static var gitEnvironment: [String: String] {

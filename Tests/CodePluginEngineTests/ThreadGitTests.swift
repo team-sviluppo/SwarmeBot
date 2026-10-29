@@ -1,7 +1,8 @@
+@testable import CodePluginEngine
 @testable import HarnessCore
 import XCTest
 
-// Code mode's view of a chat's folder: `GET /api/threads/:tid/git`.
+// Code mode's view of a chat's folder: `GET /api/threads/:tid/git`, as the Code plugin serves it.
 @MainActor
 final class ThreadGitTests: XCTestCase {
     private var paths: DataPaths!
@@ -11,9 +12,13 @@ final class ThreadGitTests: XCTestCase {
     private var botId = ""
     private var folder: URL!
 
+    private func temporaryPaths() -> DataPaths {
+        DataPaths(root: FileManager.default.temporaryDirectory.appendingPathComponent("code-plugin-\(UUID().uuidString)", isDirectory: true))
+    }
+
     private func prepare() throws {
         paths = temporaryPaths()
-        harness = try Harness(paths: paths, environment: ProcessInfo.processInfo.environment, drivers: [])
+        harness = try Harness(paths: paths, environment: ProcessInfo.processInfo.environment, drivers: [], plugins: [CodeEnginePlugin()])
         routes = Routes(harness: harness)
         let bot = harness.store.createBot(seedMessages: false)
         threadId = bot["threadId"]!.string!

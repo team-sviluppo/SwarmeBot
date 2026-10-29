@@ -162,6 +162,9 @@ extension Harness {
             input.connectorGateway = connectorGateway(bot: bot, task: nil, instance: instance, model: selection.model)
             input.secrets = secrets.server
             input.secretEnvironment = secrets.environment
+            var setup = TurnSetup(botId: botId, threadId: threadId, groupId: groupId, driverKind: instance.driverKind, bot: bot, group: group, cwd: cwd)
+            plugins.beforeTurn(&setup)
+            setup.apply(to: &input)
             Task { @MainActor in
                 do {
                     _ = try await instance.adapter.sendTurn(input)

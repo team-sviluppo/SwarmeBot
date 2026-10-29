@@ -297,6 +297,17 @@ salvati, nei frame `runtime` e nel log eventi.
 | GET | `/api/health` | — | `{app:"swarmebot", pid, static}` | (Electron) | ❌ |
 | GET | `/*` (non `/api/`) | — | file da `OMB_STATIC_DIR`, SPA fallback | — | — |
 
+#### Plugin (solo Swift, `HarnessCore/Plugins.swift`)
+
+Il motore dichiara i plugin collegati in compilazione, così un client mostra l'interfaccia di un plugin solo se il motore lo ha (piano `docs/plans/2026-10-28-code-mode-t3.md` §12). Un motore senza plugin risponde `{plugins: []}`.
+
+| Metodo | Path | Request | Risposta |
+|---|---|---|---|
+| GET | `/api/plugins` | — | `{plugins:[{id, name, version, enabled, requires?}]}`; `enabled` è falso se l'utente l'ha spento o se manca un plugin richiesto |
+| PUT | `/api/plugins/:id` | JSON obbligatorio, `{enabled}` | come il GET; 404 per un plugin sconosciuto, 400 se `enabled` non è un booleano. La scelta resta in `<data>/plugins.json` |
+
+Un plugin spento non serve le sue route (404 come se non ci fossero), non è ascoltato dai turni e i suoi flag su bot e canali non vengono accettati; i dati già scritti restano. Le route che un plugin aggiunge si documentano con il plugin, non qui; le mutazioni (POST/PUT/PATCH) di un plugin richiedono `content-type: application/json` come quelle del nucleo.
+
 ### 2.13 Route interne (bearer `COMMS_TOKEN`, non per la UI)
 
 | Metodo | Path | Request | Risposta |
