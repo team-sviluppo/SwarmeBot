@@ -12,10 +12,6 @@ final class ThreadGitTests: XCTestCase {
     private var botId = ""
     private var folder: URL!
 
-    private func temporaryPaths() -> DataPaths {
-        DataPaths(root: FileManager.default.temporaryDirectory.appendingPathComponent("code-plugin-\(UUID().uuidString)", isDirectory: true))
-    }
-
     private func prepare() throws {
         paths = temporaryPaths()
         harness = try Harness(paths: paths, environment: ProcessInfo.processInfo.environment, drivers: [], plugins: [CodeEnginePlugin()])

@@ -181,6 +181,14 @@ public final class PluginRegistry {
 
     public func plugin(_ id: String) -> (any EnginePlugin)? { plugins.first { $0.id == id } }
 
+    /// A folder of the plugin's own in the engine's data (`<data>/plugins/<id>/`), made on
+    /// first use, for what it keeps: settings, its own records. It stays when the plugin is off.
+    public func directory(for id: String) -> URL {
+        let url = harness.paths.root.appendingPathComponent("plugins", isDirectory: true).appendingPathComponent(id, isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return url
+    }
+
     /// Off by the user, or because a plugin it needs is off or not linked in.
     public func isEnabled(_ id: String) -> Bool {
         guard let plugin = plugin(id), !disabled.contains(id) else { return false }

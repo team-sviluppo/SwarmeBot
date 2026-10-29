@@ -25,8 +25,14 @@ Mutations need `content-type: application/json`.
 | POST | `/api/threads/:tid/git/branch` | `{name}` | the updated git state, on the new branch made from HEAD (uncommitted edits come along). 400 for an invalid name or a folder that is not a repo, 409 if the name exists |
 | GET | `/api/threads/:tid/resume-command` | — | `{supported:true, tool, folder, command}` or `{supported:false, reason}`. `command` is a shell line that continues the chat's session in the agent's own CLI (`claude --resume`, `codex resume`) in the chat's folder |
 
-`checkout` and `branch` answer 409 when a bot (or a routine) works in the same repository, and for a
-conflict with local edits (git's own message).
+| GET | `/api/threads/:tid/git/diff` | `?path=` (absolute, or relative to the repo's root; optional) | `{path?, diff, truncated, binary}`: the file's changes against HEAD (staged and unstaged read as one; a new file is all added lines), or every change when no path. 400 for a path outside the repository; the diff is cut at 400 KB on a line |
+| POST | `/api/threads/:tid/git/commit-message` | `{}` | `{message}`: written from the diff by a model in a call of its own (not a turn of the chat), which runs in an empty folder and is told to use no tool (a permission request is denied). The model is the one in `/api/code/settings`, else the bot's own. 400 when there is nothing to commit, 409 with no model, 502/504 when the model fails or takes over 90 s |
+| POST | `/api/threads/:tid/git/commit` | `{message, files?, mode?, branch?, prTitle?, prBody?}` | `{ok, commit, branch, pushed, prUrl?, git}`. `files`: paths to take (default: every change; deletions included). `mode`: `commit` (default), `push` (`-u origin <branch>` when there is no upstream), `push-new-branch` (needs `branch`: made first, from HEAD), `pr` (push, then `gh pr create`: title is `prTitle` or the message's subject, body `prBody` or the rest). Run by the engine as processes, no agent. A failing hook answers 409 with its output; a failed push or PR answers 409 saying what was already done (`committed abc123, but …`). 400 for nothing to commit, no message, a path outside the repository, `gh` missing |
+| GET | `/api/threads/:tid/files` | `?q=&limit=` (default 50, max 200) | `{files:[{path, relative, name}]}`: what `git ls-files` lists (tracked, and untracked that `.gitignore` does not hide), best fuzzy match first; outside a repository, a walk that leaves out the usual heavy folders. With no `q`, changed files first. (The core's `POST` on the same path resolves references of a reply.) |
+| GET, PUT | `/api/code/settings` | `{commitModel: {instanceId, model} \| null}` | the plugin's settings on this engine, kept in `<data>/plugins/code/settings.json`: the model that writes every bot's commit messages. 400 for an engine this server does not have |
+
+`checkout`, `branch` and `commit` answer 409 when a bot (or a routine) works in the same repository, and
+`checkout` and `branch` also for a conflict with local edits (git's own message).
 
 ## In the app
 
