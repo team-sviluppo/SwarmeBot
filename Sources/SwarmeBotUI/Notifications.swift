@@ -24,6 +24,7 @@ final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate
             NSApp.dockTile.badgeLabel = count > 0 ? String(count) : nil
         }
         model.onNotify = { [weak self] frame in self?.deliver(frame) }
+        model.onSkillsUpdated = { [weak self] source, updated in self?.deliverSkillsUpdate(source, updated) }
         guard supported else { return }
         let center = UNUserNotificationCenter.current()
         center.delegate = self
@@ -43,6 +44,20 @@ final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate
         content.threadIdentifier = frame.threadId
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
+    }
+
+    /// A GitHub source changed skills: they can run scripts, so say which.
+    private func deliverSkillsUpdate(_ source: SkillSource, _ updated: SkillSource.Updated) {
+        guard supported else { return }
+        var parts: [String] = []
+        if !updated.added.isEmpty { parts.append(tr("Nuove: %@", updated.added.joined(separator: ", "))) }
+        if !updated.changed.isEmpty { parts.append(tr("Modificate: %@", updated.changed.joined(separator: ", "))) }
+        if !updated.removed.isEmpty { parts.append(tr("Rimosse: %@", updated.removed.joined(separator: ", "))) }
+        let content = UNMutableNotificationContent()
+        content.title = tr("Skill aggiornate: %@", source.name)
+        content.body = parts.joined(separator: " · ") + "\n" + tr("Le skill possono eseguire script: controlla cosa è cambiato.")
+        content.threadIdentifier = "skill-sources"
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
     nonisolated func userNotificationCenter(

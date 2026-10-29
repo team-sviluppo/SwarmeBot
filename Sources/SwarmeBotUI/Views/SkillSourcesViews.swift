@@ -54,6 +54,8 @@ struct SkillSourceEditor: View {
     @State private var error: String?
     @State private var confirmDelete = false
     @State private var confirmRollback = false
+    @State private var copyTo: RemoteEngine?
+    @State private var note: String?
 
     /// The engine's own copy, which the update and the rollback move on.
     private var current: SkillSource? { source.flatMap { id in model.skillSources.first { $0.id == id.id } } ?? source }
@@ -129,16 +131,33 @@ struct SkillSourceEditor: View {
                         if current.canRollback {
                             Button(tr("Torna alla versione precedente")) { confirmRollback = true }.disabled(busy)
                         }
+                        if !model.isRemote, !model.remoteEngines.isEmpty {
+                            Menu(tr("Copia su server")) {
+                                ForEach(model.remoteEngines) { engine in
+                                    Button(engine.name) {
+                                        if current.secret != nil { copyTo = engine } else { Task { await copy(current, to: engine, withSecret: false) } }
+                                    }
+                                }
+                            }
+                            .fixedSize().disabled(busy)
+                        }
                     }
                     Spacer()
                     if source != nil { Button(tr("Elimina"), role: .destructive) { confirmDelete = true } }
                     if busy || current?.syncing == true { ProgressView().controlSize(.small) }
                 }
                 if let error { Text(verbatim: error).font(.system(size: 12)).foregroundStyle(Theme.danger).textSelection(.enabled) }
+                if let note { Text(verbatim: note).font(.system(size: 12)).foregroundStyle(.secondary).textSelection(.enabled) }
             }
         }
         .formStyle(.grouped)
         .onAppear(perform: load)
+        .confirmationDialog(tr("Copiare anche il token?"), isPresented: Binding(get: { copyTo != nil }, set: { if !$0 { copyTo = nil } }), presenting: copyTo) { engine in
+            Button(tr("Copia con il token")) { if let current { Task { await copy(current, to: engine, withSecret: true) } } }
+            Button(tr("Copia senza il token")) { if let current { Task { await copy(current, to: engine, withSecret: false) } } }
+        } message: { engine in
+            Text(tr("Il segreto %@ va nel Vault di %@ via ssh e sostituisce uno con lo stesso nome. Senza, il server deve averlo già.", current?.secret ?? "", engine.name))
+        }
         .task { await model.refreshVault() }
         .confirmationDialog(tr("Eliminare questa sorgente?"), isPresented: $confirmDelete) {
             Button(tr("Elimina"), role: .destructive) { if let current { Task { await model.deleteSkillSource(current) } } }
@@ -241,6 +260,19 @@ struct SkillSourceEditor: View {
         error = nil
         await work()
         busy = false
+    }
+
+    /// The source onto a server, with its token if asked; the server's own first update says whether it works there.
+    private func copy(_ source: SkillSource, to engine: RemoteEngine, withSecret: Bool) async {
+        busy = true
+        error = nil
+        note = nil
+        defer { busy = false }
+        do {
+            let copied = try await model.copySkillSource(source, to: engine, withSecret: withSecret)
+            if let failure = copied.last?.error { error = tr("Copiata su %@, ma il primo aggiornamento sul server non è riuscito: %@", engine.name, failure) }
+            else { note = tr("Copiata su %@: %@ skill installate. Sul server vanno date ai bot che devono usarle.", engine.name, String(copied.installed?.skills.count ?? 0)) }
+        } catch { self.error = error.localizedDescription }
     }
 
     private func save() async {

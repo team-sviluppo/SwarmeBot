@@ -363,7 +363,8 @@ private struct SkillEditor: View {
                             .keyboardShortcut(.defaultAction)
                             .disabled(busy || !loaded || content == saved)
                     }
-                    if !model.isRemote, !model.remoteEngines.isEmpty {
+                    // a skill a GitHub source keeps goes with its source: alone it would clash with it on the server
+                    if !model.isRemote, !model.remoteEngines.isEmpty, skill.source == nil {
                         Menu(tr("Copia su server")) {
                             ForEach(model.remoteEngines) { engine in
                                 Button(engine.name) { Task { await copy(to: engine, replace: false) } }

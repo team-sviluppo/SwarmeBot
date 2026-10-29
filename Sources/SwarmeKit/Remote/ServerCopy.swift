@@ -1,4 +1,4 @@
-// "Copia su server…" for many at once: this Mac's connectors and skills sent
+// "Copia su server…" for many at once: this Mac's connectors, skills and GitHub skill sources sent
 // to a server in one go, so they are not made again by hand there
 // (docs/plans/2026-10-25-copia-su-server.md). Each item goes the way the
 // single copy already does (ConnectorCopy, copySkill); one that fails does
@@ -7,7 +7,7 @@ import CompanionCore
 import Foundation
 
 public struct ServerCopyOutcome: Identifiable, Sendable {
-    public enum Kind: Sendable { case connector, skill }
+    public enum Kind: Sendable { case connector, skill, skillSource }
     public var kind: Kind
     public var id: String
     public var name: String
@@ -19,22 +19,24 @@ public struct ServerCopyOutcome: Identifiable, Sendable {
 
 extension AppModel {
     /// What the server already has, to say which copies replace something.
-    public func serverInventory(_ engine: RemoteEngine) async throws -> (connectors: Set<String>, skills: Set<String>) {
+    public func serverInventory(_ engine: RemoteEngine) async throws -> (connectors: Set<String>, skills: Set<String>, sources: [SkillSource]) {
         let remote = try remoteClient(engine)
         async let connectors = remote.mcpConnectors()
         async let skills = remote.skills()
-        return try await (Set(connectors.map(\.id)), Set(skills.map(\.id)))
+        async let sources = remote.skillSources()
+        return try await (Set(connectors.map(\.id)), Set(skills.map(\.id)), sources)
     }
 
     /// Copy these connectors and skills of this Mac's engine to `engine`;
     /// a skill of the same name there is replaced, as a connector of the same id is.
-    public func copyToServer(connectors: [MCPConnector], skills: [Skill], engine: RemoteEngine) async -> [ServerCopyOutcome] {
+    public func copyToServer(connectors: [MCPConnector], skills: [Skill], sources: [SkillSource] = [], engine: RemoteEngine) async -> [ServerCopyOutcome] {
         var outcomes: [ServerCopyOutcome] = []
         let secrets = ConnectorCopy.readSecrets()
         let remote: CompanionClient
         do { remote = try remoteClient(engine) } catch {
             return connectors.map { ServerCopyOutcome(kind: .connector, id: $0.id, name: $0.name, error: error.localizedDescription) }
                 + skills.map { ServerCopyOutcome(kind: .skill, id: $0.id, name: $0.name, error: error.localizedDescription) }
+                + sources.map { ServerCopyOutcome(kind: .skillSource, id: $0.id, name: $0.name, error: error.localizedDescription) }
         }
         for connector in connectors {
             do {
@@ -56,6 +58,17 @@ extension AppModel {
                 outcomes.append(ServerCopyOutcome(kind: .skill, id: skill.id, name: skill.name))
             } catch {
                 outcomes.append(ServerCopyOutcome(kind: .skill, id: skill.id, name: skill.name, error: error.localizedDescription))
+            }
+        }
+        for source in sources {
+            do {
+                let copied = try await copySkillSource(source, to: engine)
+                let note: String
+                if let error = copied.last?.error { note = tr("copiata, ma il primo aggiornamento sul server non è riuscito: %@", error) }
+                else { note = tr("copiata: %@ skill installate sul server", String(copied.installed?.skills.count ?? 0)) }
+                outcomes.append(ServerCopyOutcome(kind: .skillSource, id: source.id, name: source.name, note: note))
+            } catch {
+                outcomes.append(ServerCopyOutcome(kind: .skillSource, id: source.id, name: source.name, error: error.localizedDescription))
             }
         }
         return outcomes
