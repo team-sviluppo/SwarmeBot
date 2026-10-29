@@ -15,16 +15,19 @@ enum ThreadGit {
 
     @MainActor
     static func branches(folder: String) async throws -> [JSON] {
-        let output = await CLIProcess.run("git", ["for-each-ref", "--sort=refname", "--format=%(refname)%09%(symref)", "refs/heads/", "refs/remotes/"],
+        let output = await CLIProcess.run("git", ["for-each-ref", "--sort=-committerdate", "--format=%(refname)%09%(symref)%09%(committerdate:unix)", "refs/heads/", "refs/remotes/"],
                                           environment: gitEnvironment, cwd: folder, timeout: 8)
         guard let output, output.ok else { throw HTTPError(400, "could not list git branches") }
         return output.stdout.split(separator: "\n").compactMap { line in
             let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
-            guard fields.count == 2, fields[1].isEmpty else { return nil }
+            guard fields.count == 3, fields[1].isEmpty else { return nil }
             let ref = String(fields[0])
             let remote = ref.hasPrefix("refs/remotes/")
             let name = String(ref.dropFirst(remote ? "refs/remotes/".count : "refs/heads/".count))
-            return ["ref": .string(ref), "name": .string(name), "remote": .bool(remote)]
+            var branch: JSON = ["ref": .string(ref), "name": .string(name), "remote": .bool(remote)]
+            // when the last commit on it was made, in seconds; a ref with no commit date has none
+            if let date = Double(fields[2]) { branch["date"] = .number(date) }
+            return branch
         }
     }
 
@@ -34,10 +37,18 @@ enum ThreadGit {
         let busyInRepo = harness.store.bots.contains { bot in
             guard Store.isBusy(bot), let tid = bot["threadId"]?.string,
                   let cwd = ThreadFiles.roots(harness.store, harness.paths, threadId: tid)?.first else { return false }
-            let resolved = URL(fileURLWithPath: cwd).standardizedFileURL.resolvingSymlinksInPath().path
+            let resolved = canonical(cwd)
             return resolved == root || resolved.hasPrefix(root + "/")
         }
         return busyInRepo || harness.routines?.isActiveThread(threadId) == true
+    }
+
+    /// The real path, as git reports a repository's root. Not `resolvingSymlinksInPath`, which
+    /// drops `/private` and so never matched a folder reached through `/tmp` or `/var`.
+    static func canonical(_ path: String) -> String {
+        guard let resolved = realpath(path, nil) else { return URL(fileURLWithPath: path).standardizedFileURL.path }
+        defer { free(resolved) }
+        return String(cString: resolved)
     }
 
     private static var gitEnvironment: [String: String] {
@@ -69,6 +80,26 @@ enum ThreadGit {
             args = tracking.map { ["checkout", $0, "--"] } ?? ["checkout", "--track", ref, "--"]
         }
         guard let result = await CLIProcess.run("git", args, environment: gitEnvironment, cwd: folder, timeout: 30) else {
+            throw HTTPError(500, "git checkout did not complete")
+        }
+        guard result.ok else { throw HTTPError(409, result.stderr.isEmpty ? result.stdout : result.stderr) }
+    }
+
+    /// A new branch from where HEAD is, switched to at once. Uncommitted edits come along:
+    /// nothing is lost, and git refuses only a name it cannot use.
+    @MainActor
+    static func createBranch(folder: String, name: String) async throws {
+        guard let state = await inspect(folder: folder) else { throw HTTPError(400, "not a git repository") }
+        guard switching.insert(state.root).inserted else { throw HTTPError(409, "a checkout is already running") }
+        defer { switching.remove(state.root) }
+        let name = name.trimmingCharacters(in: .whitespaces)
+        // a name that starts with a dash would read as an option
+        guard !name.isEmpty, !name.hasPrefix("-"),
+              let valid = await CLIProcess.run("git", ["check-ref-format", "--branch", name], environment: gitEnvironment, cwd: folder, timeout: 8),
+              valid.ok else { throw HTTPError(400, "invalid branch name") }
+        if let existing = await CLIProcess.run("git", ["rev-parse", "--verify", "--quiet", "refs/heads/\(name)"], environment: gitEnvironment, cwd: folder, timeout: 8),
+           existing.ok { throw HTTPError(409, "a branch named \(name) already exists") }
+        guard let result = await CLIProcess.run("git", ["checkout", "-b", name, "--"], environment: gitEnvironment, cwd: folder, timeout: 30) else {
             throw HTTPError(500, "git checkout did not complete")
         }
         guard result.ok else { throw HTTPError(409, result.stderr.isEmpty ? result.stdout : result.stderr) }

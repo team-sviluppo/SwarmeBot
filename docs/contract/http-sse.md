@@ -102,11 +102,7 @@ Shape ricorrenti: **WireBot** = `BotRecord` senza `resumeCursors`, con `tasks[]`
 
 #### Code mode (Swift desktop)
 
-- `GET /api/threads/:tid/git`: `{repo, folder?, root?, branch?, detached?, changes:[{path,name,status,bytes}]}`. `folder` è la cartella effettiva del task anche fuori da un repository.
-- `GET /api/threads/:tid/git/branches`: `{branches:[{ref,name,remote}]}`; branch locali e riferimenti remoti già presenti, esclusi gli alias simbolici come `origin/HEAD`.
-- `POST /api/threads/:tid/git/checkout`: `{ref}` completo restituito dall'elenco; risponde con lo stato Git aggiornato. I branch remoti riusano un branch locale che li traccia oppure ne creano uno con tracking. Nessun force/reset/stash; conflitti con modifiche locali e bot al lavoro nello stesso repository restituiscono 409.
-
-In Code mode il chip del branch apre un selettore ricercabile. Accanto, **Apri terminale / Open terminal** apre una shell nella cartella effettiva del task; i motori remoti richiedono un'identità SSH configurata su questo Mac.
+Le route di Code mode (`/api/threads/:tid/git*`, `resume-command`) non fanno parte del nucleo: le serve il **plugin Code** e sono documentate con lui, in `Plugins/Code/README.md`. Un client le usa solo se `GET /api/plugins` dichiara `code`.
 
 ### 2.2 Room (groups)
 

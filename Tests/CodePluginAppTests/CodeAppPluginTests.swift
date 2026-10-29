@@ -28,9 +28,9 @@ final class CodeAppPluginTests: XCTestCase {
         XCTAssertFalse(plugin.isActive(for: chat(nil)), "a channel has no Code mode yet")
     }
 
-    func testTheBranchAndTheTerminalSitUnderTheComposer() throws {
+    func testTheBranchTheTerminalAndOpenInSitUnderTheComposer() throws {
         let plugin = CodeAppPlugin()
-        XCTAssertEqual(plugin.composerAccessories(chat(try bot(codeMode: true))).count, 2)
+        XCTAssertEqual(plugin.composerAccessories(chat(try bot(codeMode: true))).count, 3)
         XCTAssertTrue(plugin.composerAccessories(chat(nil)).isEmpty)
     }
 

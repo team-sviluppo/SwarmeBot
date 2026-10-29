@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.applicationIconImage = icon
         }
         NSApp.activate(ignoringOtherApps: true)
+        model.terminalRunner = { TerminalLauncher.run($0) }
         trapTerminationSignals()
         NotificationCenterBridge.shared.install(on: model)
         _ = Updater.shared

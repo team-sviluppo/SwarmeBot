@@ -29,6 +29,23 @@ public final class CodeEnginePlugin: EnginePlugin {
             }
             return .response(.json(200, ["branches": .array(try await ThreadGit.branches(folder: folder))]))
         }
+        router.post("/api/threads/:tid/git/branch") { request in
+            let harness = request.harness
+            let threadId = request.params["tid"] ?? ""
+            guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: threadId)?.first else {
+                return .response(.error(404, "no such thread"))
+            }
+            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard !ThreadGit.botWorking(in: repo.root, harness: harness, threadId: threadId) else {
+                return .response(.error(409, "a bot is working — let it finish before switching branches"))
+            }
+            guard let name = try request.http.json()["name"]?.string else { return .response(.error(400, "name is required")) }
+            try await ThreadGit.createBranch(folder: folder, name: name)
+            return .response(.json(200, await ThreadGit.wire(folder: folder)))
+        }
+        router.get("/api/threads/:tid/resume-command") { request in
+            .response(.json(200, ResumeCommand.wire(harness: request.harness, threadId: request.params["tid"] ?? "")))
+        }
         router.post("/api/threads/:tid/git/checkout") { request in
             let harness = request.harness
             let threadId = request.params["tid"] ?? ""

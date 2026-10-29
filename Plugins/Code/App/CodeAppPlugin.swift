@@ -19,7 +19,8 @@ public final class CodeAppPlugin: AppPlugin {
 
     public func composerAccessories(_ chat: ChatContext) -> [PluginView] {
         guard let bot = chat.bot else { return [] }
-        return [PluginView(GitBranchChip(bot: bot, state: state)), PluginView(CodeModeTerminalButton(bot: bot, state: state))]
+        return [PluginView(GitBranchChip(bot: bot, state: state)), PluginView(CodeModeTerminalButton(bot: bot, state: state)),
+                PluginView(CodeOpenMenu(bot: bot, state: state))]
     }
 
     /// In a Code chat a reply gets a badge where its turn ends and nothing in the
@@ -36,6 +37,7 @@ public final class CodeAppPlugin: AppPlugin {
 
     public func chatChanged(_ chat: ChatContext) async {
         await state.refreshGit(model: chat.model, threadId: chat.threadId)
+        await state.refreshResume(model: chat.model, threadId: chat.threadId)
     }
 }
 

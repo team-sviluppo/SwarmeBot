@@ -13,5 +13,14 @@ extension Translations {
         "Code mode": "Code mode",
         "Mostra il branch git accanto alla cartella e raccoglie i file modificati a fine turno in un badge.": "Shows the git branch next to the folder and gathers the files changed at the end of a turn into one badge.",
         "Code": "Code",
+        "Recenti": "Recent",
+        "Locali": "Local",
+        "Remoti": "Remote",
+        "Crea branch '%@'": "Create branch '%@'",
+        "Apri in…": "Open in…",
+        "Mostra nel Finder": "Show in Finder",
+        "Continua nel terminale": "Continue in terminal",
+        "Apri la cartella in un editor o nel Finder, o continua la chat nel terminale": "Open the folder in an editor or Finder, or continue the chat in a terminal",
+        "Configura una connessione SSH per aprire la cartella del server in un editor": "Set up an SSH connection to open the server's folder in an editor",
     ]
 }

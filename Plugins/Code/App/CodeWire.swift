@@ -53,7 +53,20 @@ public struct GitBranch: Decodable, Hashable, Sendable, Identifiable {
     public var ref: String
     public var name: String
     public var remote: Bool
+    /// When its last commit was made, in seconds; nil from an engine that does not say.
+    public var date: Double?
     public var id: String { ref }
+}
+
+/// What continuing a chat in the agent's own CLI takes (`GET /api/threads/:tid/resume-command`).
+public struct ResumeCommand: Decodable, Hashable, Sendable {
+    public var supported: Bool
+    public var tool: String?
+    public var folder: String?
+    /// A shell command line, to run where the engine runs.
+    public var command: String?
+    /// Why it cannot, when it cannot.
+    public var reason: String?
 }
 
 extension CompanionClient {
@@ -66,6 +79,14 @@ extension CompanionClient {
     func gitBranches(threadId: String) async throws -> [GitBranch] {
         struct Answer: Decodable { var branches: [GitBranch] }
         return try await pluginRequest("GET", "/api/threads/\(threadId)/git/branches", as: Answer.self).branches
+    }
+
+    func createBranch(threadId: String, name: String) async throws -> ThreadGitState {
+        try await pluginRequest("POST", "/api/threads/\(threadId)/git/branch", body: ["name": name], as: ThreadGitState.self)
+    }
+
+    func resumeCommand(threadId: String) async throws -> ResumeCommand {
+        try await pluginRequest("GET", "/api/threads/\(threadId)/resume-command", as: ResumeCommand.self)
     }
 
     func checkoutBranch(threadId: String, ref: String) async throws -> ThreadGitState {

@@ -82,6 +82,8 @@ public final class AppModel {
     @ObservationIgnored var visibleCache: [String: (version: Int, messages: [Message])] = [:]
     /// Hooks the app layer sets: system notifications and the Dock badge.
     @ObservationIgnored public var onNotify: ((NotificationFrame) -> Void)?
+    /// Runs a shell command line in the terminal app the user picked.
+    @ObservationIgnored public var terminalRunner: ((String) -> Void)?
     @ObservationIgnored public var onUnreadChange: ((Int) -> Void)?
     /// A settings window's model (AppModel+Settings.swift): config, engines,
     /// connectors and skills of one engine, no chats, no harness of its own.

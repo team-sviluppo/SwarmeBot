@@ -380,6 +380,9 @@ extension Translations {
 
 extension Translations {
     static let plugins: [String: String] = [
+        "Terminale": "Terminal",
+        "App del terminale": "Terminal app",
+        "Dove si aprono Apri terminale, la shell di un server e Continua nel terminale.": "Where Open terminal, a server's shell and Continue in terminal open.",
         "Plugin": "Plugins",
         "Plugin del motore": "Engine plugins",
         "Questo motore non ha plugin.": "This engine has no plugins.",

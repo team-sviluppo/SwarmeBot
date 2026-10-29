@@ -15,6 +15,8 @@ struct CodeError: LocalizedError {
 public final class CodeState {
     /// The git state of each chat's folder, by thread.
     public internal(set) var gitStates: [String: ThreadGitState] = [:]
+    /// Whether and how each chat can be continued in the agent's CLI, by thread.
+    public internal(set) var resumeCommands: [String: ResumeCommand] = [:]
 
     /// What the agent is told when "Commit & push" is clicked. Engine-side
     /// text, so English like the rest of what the agent reads.
@@ -40,6 +42,19 @@ public final class CodeState {
         let state = try await client.threadGit(threadId: threadId)
         guard let folder = state.folder else { throw CodeError(message: tr("Cartella di lavoro non disponibile")) }
         return folder
+    }
+
+    func createBranch(model: AppModel, threadId: String, name: String) async throws {
+        guard let client = model.client else { throw URLError(.notConnectedToInternet) }
+        gitStates[threadId] = try await client.createBranch(threadId: threadId, name: name)
+    }
+
+    /// Asks the engine whether the chat can be continued in a terminal; an engine
+    /// without the route, or a chat with no session, says no.
+    func refreshResume(model: AppModel, threadId: String) async {
+        guard let client = model.client else { return }
+        let command = try? await client.resumeCommand(threadId: threadId)
+        if resumeCommands[threadId] != command { resumeCommands[threadId] = command }
     }
 
     /// Asks the engine for the folder's git state, asked again whenever it

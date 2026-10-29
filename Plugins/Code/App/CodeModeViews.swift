@@ -37,45 +37,74 @@ struct GitBranchChip: View {
                 .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
                 .help(tr("Cambia branch"))
                 .popover(isPresented: $choosing) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(tr("Cambia branch")).font(.headline)
-                        TextField(tr("Cerca branch"), text: $search)
-                        if loading || switching { ProgressView().controlSize(.small) }
-                        if let error { Text(verbatim: error).foregroundStyle(Theme.danger).textSelection(.enabled) }
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 2) {
-                                ForEach(branches.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { item in
-                                    Button {
-                                        Task { await checkout(item) }
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: item.remote ? "network" : "arrow.triangle.branch")
-                                            Text(verbatim: item.name).lineLimit(1).truncationMode(.middle)
-                                            Spacer()
-                                            if !item.remote && git.detached != true && item.name == branch {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                        .padding(6).contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(switching || model.isBusy(bot))
-                                }
-                            }
-                        }.frame(height: 280)
-                        if !loading && branches.isEmpty && error == nil { Text(tr("Nessun branch disponibile")) }
-                        if model.isBusy(bot) { Text(tr("Attendi la fine del turno per cambiare branch")) }
-                    }
-                    .padding(16).frame(width: 360)
-                    .task {
-                        loading = true
-                        error = nil
-                        branches = []
-                        defer { loading = false }
-                        do { branches = try await state.gitBranches(model: model, threadId: bot.threadId) }
-                        catch { self.error = error.localizedDescription }
+                    picker(current: branch, detached: git.detached == true)
+                        .task {
+                            loading = true
+                            error = nil
+                            branches = []
+                            defer { loading = false }
+                            do { branches = try await state.gitBranches(model: model, threadId: bot.threadId) }
+                            catch { self.error = error.localizedDescription }
+                        }
+                }
+            }
+        }
+    }
+
+    private var matches: [GitBranch] {
+        branches.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
+    }
+
+    private var newName: String { search.trimmingCharacters(in: .whitespaces) }
+
+    private func picker(current: String, detached: Bool) -> some View {
+        let sections = BranchSections(matches, current: detached ? nil : current, searching: !search.isEmpty)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(tr("Cambia branch")).font(.headline)
+            TextField(tr("Cerca branch"), text: $search)
+            if loading || switching { ProgressView().controlSize(.small) }
+            if let error { Text(verbatim: error).foregroundStyle(Theme.danger).textSelection(.enabled) }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    section(tr("Recenti"), sections.recent, current: current, detached: detached)
+                    section(tr("Locali"), sections.local, current: current, detached: detached)
+                    section(tr("Remoti"), sections.remote, current: current, detached: detached)
+                    // nothing by that name: offer to make it
+                    if !loading, matches.isEmpty, !newName.isEmpty {
+                        Button { Task { await create(newName) } } label: {
+                            Label(tr("Crea branch '%@'", newName), systemImage: "plus").padding(6).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(switching || model.isBusy(bot))
                     }
                 }
+            }.frame(height: 280)
+            if !loading && branches.isEmpty && error == nil { Text(tr("Nessun branch disponibile")) }
+            if model.isBusy(bot) { Text(tr("Attendi la fine del turno per cambiare branch")) }
+        }
+        .padding(16).frame(width: 360)
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, _ items: [GitBranch], current: String, detached: Bool) -> some View {
+        if !items.isEmpty {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.tertiary).padding(.horizontal, 6).padding(.top, 6)
+            ForEach(items) { item in
+                Button {
+                    Task { await checkout(item) }
+                } label: {
+                    HStack {
+                        Image(systemName: item.remote ? "network" : "arrow.triangle.branch")
+                        Text(verbatim: item.name).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        if !item.remote && !detached && item.name == current {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                    .padding(6).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(switching || model.isBusy(bot))
             }
         }
     }
@@ -88,6 +117,38 @@ struct GitBranchChip: View {
             try await state.checkoutBranch(model: model, threadId: bot.threadId, ref: branch.ref)
             choosing = false
         } catch { self.error = error.localizedDescription }
+    }
+
+    private func create(_ name: String) async {
+        switching = true
+        error = nil
+        defer { switching = false }
+        do {
+            try await state.createBranch(model: model, threadId: bot.threadId, name: name)
+            choosing = false
+        } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// How the picker groups the branches it shows: the few most recently committed
+/// to on top (not the current one, which the check mark already marks), then the
+/// rest of the local ones, then the remote ones. Searching drops "recent": it is a
+/// shortcut for when the list is not narrowed down.
+struct BranchSections: Equatable {
+    static let recentCount = 5
+    var recent: [GitBranch] = []
+    var local: [GitBranch] = []
+    var remote: [GitBranch] = []
+
+    /// `branches` come newest commit first, as the engine sends them.
+    init(_ branches: [GitBranch], current: String?, searching: Bool) {
+        let locals = branches.filter { !$0.remote }
+        if !searching {
+            recent = Array(locals.filter { $0.name != current }.prefix(Self.recentCount))
+        }
+        let shown = Set(recent.map(\.ref))
+        local = locals.filter { !shown.contains($0.ref) }
+        remote = branches.filter(\.remote)
     }
 }
 

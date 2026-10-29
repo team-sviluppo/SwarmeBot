@@ -103,6 +103,7 @@ private struct GeneralPane: View {
     @Environment(AppModel.self) private var model
     @State private var localizer = Localizer.shared
     @State private var appearance = AppearanceSettings.shared
+    @State private var terminal = TerminalLauncher.current.app
     @State private var name = ""
     @State private var email = ""
     @State private var timeout = 30
@@ -154,6 +155,16 @@ private struct GeneralPane: View {
                     Text(verbatim: language.nativeName).tag(language)
                 }
             }
+        }
+        Section(tr("Terminale")) {
+            Picker(tr("App del terminale"), selection: $terminal) {
+                ForEach(TerminalLauncher.installed()) { app in
+                    Text(verbatim: app.name).tag(app)
+                }
+            }
+            .onChange(of: terminal) { _, app in TerminalApp.selected = app }
+            Text(tr("Dove si aprono Apri terminale, la shell di un server e Continua nel terminale."))
+                .font(.system(size: 11.5)).foregroundStyle(Theme.tertiary)
         }
         Section(tr("Aspetto")) {
             Picker(tr("Tema"), selection: $appearance.appearance) {
@@ -315,8 +326,26 @@ private struct CommandRow: View {
 }
 
 public enum TerminalLauncher {
-    /// A `.command` file opened with Terminal: no Apple Events permission
-    /// needed, and the user sees exactly what runs.
+    /// Where an app is installed, nil when it is not. Terminal always is.
+    static func url(for app: TerminalApp) -> URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleId)
+            ?? (app == .terminal ? URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app") : nil)
+    }
+
+    /// The terminals this Mac has, which are the ones the setting offers.
+    public static func installed() -> [TerminalApp] {
+        TerminalApp.allCases.filter { url(for: $0) != nil }
+    }
+
+    /// The terminal the user picked, or Terminal if that one is gone.
+    static var current: (app: TerminalApp, url: URL) {
+        let picked = TerminalApp.selected
+        if let url = url(for: picked) { return (picked, url) }
+        return (.terminal, url(for: .terminal) ?? URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
+    }
+
+    /// An executable `.command` file handed to the chosen terminal: no Apple Events
+    /// permission needed, and the user sees exactly what runs.
     public static func run(_ command: String) {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("swarmebot-\(UUID().uuidString).command")
         let done = tr("Fatto. Puoi chiudere questa finestra.")
@@ -324,8 +353,16 @@ public enum TerminalLauncher {
         do {
             try script.write(to: file, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path)
-            let terminal = URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")
-            NSWorkspace.shared.open([file], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration())
+            let terminal = current
+            switch terminal.app.launch(script: file.path) {
+            case .openFile:
+                NSWorkspace.shared.open([file], withApplicationAt: terminal.url, configuration: NSWorkspace.OpenConfiguration())
+            case let .newInstance(arguments):
+                let configuration = NSWorkspace.OpenConfiguration()
+                configuration.arguments = arguments
+                configuration.createsNewApplicationInstance = true
+                NSWorkspace.shared.openApplication(at: terminal.url, configuration: configuration)
+            }
         } catch {
             NSSound.beep()
         }

@@ -150,9 +150,96 @@ final class ThreadGitTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "local edit")
         let current = await state()
         XCTAssertEqual(current?["branch"], "main")
+        // with the edit gone nothing but the busy bot can refuse the checkout: it would succeed
+        try git("checkout", "--", "a.txt")
         harness.store.patchBot(botId, ["busy": true])
         let busy = try await request("POST", "checkout", body: ["ref": "refs/heads/other"])
         XCTAssertEqual(busy.status, 409)
+        XCTAssertTrue(String(decoding: busy.body, as: UTF8.self).contains("a bot is working"), String(decoding: busy.body, as: UTF8.self))
+        let unchanged = await state()
+        XCTAssertEqual(unchanged?["branch"], "main")
+    }
+
+    private func initRepo() throws {
+        try git("init", "-q", "-b", "main")
+        try Data("one".utf8).write(to: folder.appendingPathComponent("a.txt"))
+        try git("add", ".")
+        try git("commit", "-qm", "first")
+    }
+
+    func testBranchesComeNewestFirstWithTheirDate() async throws {
+        try prepare()
+        try initRepo()
+        // a branch whose commit is a day newer than main's comes before it
+        try git("checkout", "-qb", "newer")
+        try Data("two".utf8).write(to: folder.appendingPathComponent("a.txt"))
+        try git("-c", "user.name=t", "commit", "-qam", "second", "--date=2999-01-01T00:00:00")
+        try git("checkout", "-q", "main")
+        let listed = try await request("GET", "branches")
+        let branches = try JSON.parse(listed.body)["branches"]?.array ?? []
+        XCTAssertEqual(branches.count, 2)
+        for branch in branches { XCTAssertNotNil(branch["date"]?.double, "every branch says when its last commit was made") }
+        let dates = branches.compactMap { $0["date"]?.double }
+        XCTAssertEqual(dates, dates.sorted(by: >), "newest first")
+    }
+
+    func testCreatesAndSwitchesToANewBranchKeepingLocalEdits() async throws {
+        try prepare()
+        try initRepo()
+        try Data("edited".utf8).write(to: folder.appendingPathComponent("a.txt"))
+        let created = try await request("POST", "branch", body: ["name": "feature/new"])
+        XCTAssertEqual(created.status, 200, String(decoding: created.body, as: UTF8.self))
+        let state = try JSON.parse(created.body)
+        XCTAssertEqual(state["branch"], "feature/new")
+        XCTAssertEqual(state["changes"]?.array?.count, 1, "the uncommitted edit came along")
+        XCTAssertEqual(try String(contentsOf: folder.appendingPathComponent("a.txt"), encoding: .utf8), "edited")
+    }
+
+    func testANewBranchNeedsAUsableName() async throws {
+        try prepare()
+        try initRepo()
+        for bad in ["", "  ", "-force", "has space", "a..b", "ends.lock", "~tilde"] {
+            let refused = try await request("POST", "branch", body: ["name": .string(bad)])
+            XCTAssertEqual(refused.status, 400, "'\(bad)' is not a branch name")
+        }
+        let missing = try await request("POST", "branch")
+        XCTAssertEqual(missing.status, 400)
+        let duplicate = try await request("POST", "branch", body: ["name": "main"])
+        XCTAssertEqual(duplicate.status, 409)
+        let current = await state()
+        XCTAssertEqual(current?["branch"], "main", "a refused name leaves the branch where it was")
+    }
+
+    func testANewBranchWaitsForTheBotAndNeedsARepo() async throws {
+        try prepare()
+        let notARepo = try await request("POST", "branch", body: ["name": "x"])
+        XCTAssertEqual(notARepo.status, 400)
+        try initRepo()
+        harness.store.patchBot(botId, ["busy": true])
+        let busy = try await request("POST", "branch", body: ["name": "x"])
+        XCTAssertEqual(busy.status, 409)
+        XCTAssertTrue(String(decoding: busy.body, as: UTF8.self).contains("a bot is working"))
+    }
+
+    func testTheResumeCommandKnowsClaudeAndCodex() {
+        XCTAssertEqual(ResumeCommand.cli(driverKind: "claudeAgent", session: "abc")?.tool, "claude")
+        XCTAssertEqual(ResumeCommand.cli(driverKind: "claudeAgent", session: "abc")?.arguments, ["--resume", "abc"])
+        XCTAssertNil(ResumeCommand.cli(driverKind: "claude", session: "abc"), "the driver kind, not the CLI's name")
+        XCTAssertEqual(ResumeCommand.cli(driverKind: "codex", session: "t1")?.arguments, ["resume", "t1"])
+        XCTAssertNil(ResumeCommand.cli(driverKind: "grok", session: "x"))
+        let line = ResumeCommand.command(folder: "/work/it's here", tool: "claude", arguments: ["--resume", "s 1"])
+        XCTAssertTrue(line.hasSuffix(#"cd -- '/work/it'\''s here' && exec claude '--resume' 's 1'"#), line)
+        XCTAssertTrue(line.hasPrefix("export PATH="))
+    }
+
+    func testAChatWithoutASessionCannotBeContinued() async throws {
+        try prepare()
+        let request = HTTPRequest(method: "GET", path: "/api/threads/\(threadId)/resume-command", query: [:], headers: [:], body: Data())
+        guard case let .response(response) = await routes.handle(request) else { return XCTFail("not a response") }
+        XCTAssertEqual(response.status, 200)
+        let answer = try JSON.parse(response.body)
+        XCTAssertEqual(answer["supported"], false)
+        XCTAssertNotNil(answer["reason"]?.string)
     }
 
     func testCodeModeIsAPatchableFlag() async throws {
