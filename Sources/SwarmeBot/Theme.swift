@@ -17,6 +17,9 @@ enum Theme {
     /// `NSColor(Color)` would freeze it to the appearance current at the call.
     static let nsInk = NSColor.dynamic(dark: "#FCFCFC", light: "#18181B")
     static let nsSecondary = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.6, light: "#18181B", lightAlpha: 0.62)
+    /// Quotes and h6 in a bot reply, and the bar beside a quote.
+    static let nsInkSoft = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.85, light: "#18181B", lightAlpha: 0.85)
+    static let nsQuoteBar = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.45, light: "#18181B", lightAlpha: 0.45)
     static let nsAccent = NSColor.dynamic(dark: "#1084FE", light: "#0A74E6")
 
     static let app = Color(dark: "#070707", light: "#FFFFFF")
