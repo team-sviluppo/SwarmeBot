@@ -259,6 +259,7 @@ struct CodeModeBadge: View {
                         }
                         .buttonStyle(ChipButtonStyle(filled: true, size: 12.5))
                         .help(state.engineHasWorkflow(model) ? tr("Apre la finestra di commit") : tr("Chiede all'agente di fare commit e push delle modifiche"))
+                        if state.engineHasPhase4(model) { CodeReviewMenu(chat: chat, state: state) }
                     }
                 }
                 if expanded {

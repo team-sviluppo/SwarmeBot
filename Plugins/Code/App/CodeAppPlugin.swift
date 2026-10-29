@@ -23,8 +23,12 @@ public final class CodeAppPlugin: AppPlugin {
 
     public func composerAccessories(_ chat: ChatContext) -> [PluginView] {
         guard let code = CodeChat(chat) else { return [] }
-        var chips = [PluginView(GitBranchChip(chat: code, state: state)), PluginView(CodeModeTerminalButton(chat: code, state: state)),
-                     PluginView(CodeOpenMenu(chat: code, state: state))]
+        var chips = [PluginView(GitBranchChip(chat: code, state: state))]
+        if state.engineHasPhase4(chat.model) {
+            chips.append(PluginView(CodePlanToggle(chat: code, state: state)))
+            chips.append(PluginView(CodePullRequestChip(chat: code, state: state)))
+        }
+        chips += [PluginView(CodeModeTerminalButton(chat: code, state: state)), PluginView(CodeOpenMenu(chat: code, state: state))]
         if state.engineHasWorkflow(chat.model) {
             chips.append(PluginView(CodeFilePicker(chat: code, state: state)))
             chips.append(PluginView(CodeShortcuts()))
@@ -96,10 +100,17 @@ public final class CodeAppPlugin: AppPlugin {
     /// In a Code chat a reply gets a badge where its turn ends and nothing in the
     /// middle of it, in place of a card per file; the newest turn waits for the bot to be idle.
     public func replyFooter(_ message: Message, _ chat: ChatContext, _ position: TurnPosition) -> PluginView? {
+        // another bot's review of the changes: not a turn of this chat, and it can be applied
+        if message.review != nil, let code = CodeChat(chat) { return PluginView(CodeReviewFooter(message: message, chat: code, state: state)) }
         guard position.isTurnEnd, !(position.isLatest && chat.isBusy), let code = CodeChat(chat) else { return PluginView(EmptyView()) }
         // in a channel the badge says who spoke: one of them worked, the others read
-        return PluginView(CodeModeBadge(message: message, chat: code, latest: position.isLatest, state: state,
-                                        author: chat.room != nil ? message.from?.name : nil))
+        let badge = CodeModeBadge(message: message, chat: code, latest: position.isLatest, state: state,
+                                  author: chat.room != nil ? message.from?.name : nil)
+        // the newest reply of a chat in Plan mode is a plan to approve
+        if position.isLatest, state.mode(of: chat.threadId) == .plan {
+            return PluginView(VStack(alignment: .leading, spacing: 8) { badge; CodePlanApproval(chat: code, state: state) })
+        }
+        return PluginView(badge)
     }
 
     public func settingsSections(_ scope: SettingsScope) -> [PluginView] {
@@ -113,6 +124,9 @@ public final class CodeAppPlugin: AppPlugin {
     public func chatChanged(_ chat: ChatContext) async {
         await state.refreshGit(model: chat.model, threadId: chat.threadId)
         await state.refreshResume(model: chat.model, threadId: chat.threadId)
+        await state.refreshMode(model: chat.model, threadId: chat.threadId)
+        // a turn that ended may have pushed: ask GitHub again rather than wait for the next round
+        await state.refreshPullRequest(model: chat.model, threadId: chat.threadId, refresh: !chat.isBusy)
     }
 }
 

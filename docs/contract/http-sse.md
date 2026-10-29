@@ -539,3 +539,14 @@ Queste aggiunte non cambiano le forme runtime congelate sopra e funzionano anche
   e Codex), distinto dai token cumulativi fatturati. `window` viene riportato solo quando il provider lo fornisce;
   senza limite noto l'app mostra i token, senza inventare una percentuale. Il reset rimuove il vecchio contatore.
   Nessun campo è aggiunto all'envelope `RuntimeEvent`: i metadati interni aggiornano i frame `bot`/`group` esistenti.
+
+
+## Estensioni Swift: revisione di un altro bot (fase 4 Code, 2026-10-29)
+
+Aggiunta additiva ai messaggi, scritta dal plugin Code; un client che non la conosce la ignora e vede un normale
+messaggio del bot.
+
+- Un messaggio `role:"bot", kind:"text"` può portare `review:{applied:bool}` e `from:{botId,name,color}`: è la revisione
+  che un altro bot ha scritto sulle modifiche della chat (`POST /api/threads/:tid/code/review`, in `Plugins/Code/README.md`).
+  `from` dice chi l'ha scritta anche in una chat di un solo bot. Non fa parte dei turni della chat. `applied` passa a `true`
+  quando viene consegnata al bot che ha fatto le modifiche.

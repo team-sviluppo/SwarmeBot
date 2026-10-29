@@ -112,7 +112,7 @@ The context menu renames, pins, archives, opens a terminal/editor, copies the pa
 stay in a collapsed group. Read/archive markers live on the engine. ⌘K includes Code chats and branch/script actions.
 The branch and diff counts in the column describe the **current shared working folder**, rather than a separate
 worktree per chat. Line counts cover tracked text changes; the tooltip identifies untracked files excluded from them.
-PR state and CI tracking belong to the following phase.
+The pull request's state and CI are in the last section.
 
 A project's folder can define up to 20 named shell commands in its editor. **Scripts** under the composer starts
 one on the engine in that folder; its output is shown below the transcript. Stop terminates the process group.
@@ -132,3 +132,39 @@ Disabling Code or shutting down the engine stops its scripts.
 | POST | `/api/threads/:tid/code/scripts/stop` | `{}` | `{run}`; stops the current script |
 
 `GET /api/threads/:tid/git` additionally returns optional `additions`, `deletions` and `summaryPartial`.
+
+### Plan mode, review by another bot, pull request and CI (engine plugin 1.5.0)
+
+An engine whose plugin is older than 1.5.0 has none of this, and the app shows none of it.
+
+**Plan / Execute.** The mode belongs to the chat (a bot's task, or a channel), is kept in `<data>/plugins/code/modes.json`
+and read before each turn. In Plan the agent is told to explore and propose a plan and to change nothing, and the chat's
+own folder is linked read-only (the guard of the project's linked folders: `--add-dir` and a rule for Claude, a refused
+permission for the engines that ask before writing). It is **not a sandbox**: a command that writes without asking is what
+it cannot stop. The app's chip switches the mode; under the newest reply of a chat in Plan it offers *Approve and execute*,
+which switches to Execute and tells the agent to go ahead (writing a correction instead asks for a new plan).
+
+**Review by another bot.** *Ask for a review from…* (in the Diff tab and under a reply's badge) sends the diff to a second
+bot, ideally on a different model. It runs as a task of its own on that bot (its main chat stays as it was), at a peer's
+depth (no tool to contact other bots), with the repository linked to it read-only so that it can read the code around the
+change. With no uncommitted changes (after a push, say) the diff is the branch against its base. The reply lands in the chat
+that was reviewed as a message from the reviewer, with `review:{applied:false}` (`docs/contract/http-sse.md`); *Apply* sends
+it to the first bot (in a channel, to the channel) and marks it.
+
+**Pull request and CI.** The engine asks GitHub with `gh`, in the repository, so it also works for a chat on a server;
+nothing here writes to GitHub. The answer is kept for 15 s per repository and branch. The app asks again every 30 s while
+checks run, 2 min otherwise, and whenever a turn ends.
+
+| Method | Path | Request | Answer |
+|---|---|---|---|
+| GET, PUT | `/api/threads/:tid/code/mode` | `{mode: "plan" \| "execute"}` | `{mode}`; 400 for another value |
+| GET | `/api/threads/:tid/code/review` | — | `{review: null \| {id, reviewerId, reviewerName, reviewerThread, status, branch?, error?, messageId?, startedAt, finishedAt?}}`; `status`: `running`, `done`, `failed`, `cancelled`; the running one, or the last to end until the engine restarts |
+| POST | `/api/threads/:tid/code/review` | `{botId}` | 202 `{review: {…, scope}}`, `scope` `changes` or `branch`. 400 for no changes and nothing beyond the base, for a bot reviewing its own chat or a folder that is not a repo; 404 no such bot; 409 the reviewer is working, or a review of this chat already runs |
+| DELETE | `/api/threads/:tid/code/review` | — | `{cancelled: bool}`: interrupts the reviewer's turn, nothing lands in the chat |
+| POST | `/api/threads/:tid/code/review/applied` | `{messageId}` | `{ok}`; 404 when the message is not a review |
+| GET | `/api/threads/:tid/code/pr` | `?refresh=1` skips the kept answer | `{available, reason?, pr: null \| {number, url, title, state, draft, base, head, checks:{state, total, passed, failed, pending, items:[{name, state, workflow?, url?}]}, comments, merge?, mergeable?, reviewDecision?, author?}}`. `available:false` with a `reason` when `gh` is missing or not signed in; `pr:null` for a branch with none. `state`: `open`, `closed`, `merged`; check `state`: `success`, `failure`, `pending`, `skipped`; `checks.state` folds them (`none`, `success`, `failure`, `pending`) |
+| GET | `/api/threads/:tid/code/pr/ci-failures` | — | `{message, checks}`: the text to send the agent, with the end of the failed jobs' logs (`gh run view --log-failed`, one fetch per run, 120 lines each, 24 KB in all). 404 when no check failed or there is no pull request |
+| GET | `/api/threads/:tid/code/pr/comments` | — | `{message, count}`: reviews with something to say, the **unresolved** conversations on the code, and the discussion. 404 when there is nothing |
+
+Not done: the comments of a conversation are as GitHub's GraphQL gives them (first 100 threads, 20 comments each); a
+status from an external CI with no log gives its link only.

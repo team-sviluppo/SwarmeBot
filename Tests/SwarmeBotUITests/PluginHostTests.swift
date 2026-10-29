@@ -103,6 +103,19 @@ final class PluginHostTests: XCTestCase {
         XCTAssertEqual(ends.latest, "b3")
         XCTAssertNil(TurnEnds(try [message("u1", "user")]).latest)
     }
+
+    func testAReviewByAnotherBotIsNotPartOfTheTurnsItCommentsOn() throws {
+        func message(_ id: String, _ role: String, review: Bool = false) throws -> Message {
+            let mark = review ? #","from":{"botId":"rev","name":"Revisore","color":"blue"},"review":{"applied":false}"# : ""
+            return try JSONDecoder().decode(Message.self, from: Data(#"{"id":"\#(id)","role":"\#(role)","kind":"text","text":"x","at":1\#(mark)}"#.utf8))
+        }
+        let ends = TurnEnds(try [message("u1", "user"), message("b1", "bot"), message("r1", "bot", review: true), message("u2", "user")])
+        XCTAssertEqual(ends.ids, ["b1"], "the reply keeps its footer: the review neither takes it nor ends a turn of its own")
+        XCTAssertEqual(ends.latest, nil)
+        let after = TurnEnds(try [message("u1", "user"), message("b1", "bot"), message("r1", "bot", review: true)])
+        XCTAssertEqual(after.ids, ["b1"])
+        XCTAssertEqual(after.latest, "b1", "the newest turn is still the bot's, whatever was said about it")
+    }
 }
 
 @MainActor
