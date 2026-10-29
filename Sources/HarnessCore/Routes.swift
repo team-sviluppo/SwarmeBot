@@ -434,7 +434,12 @@ public final class Routes {
                         patch["cwd"] = .string(path)
                     }
                 }
-                guard let group = store.patchGroup(m[0], patch) else { return fail(404, "no such room") }
+                if let data = try harness.plugins.mergedData(body, existing: existing, owner: .group(m[0])) { patch["plugins"] = data }
+                guard var group = store.patchGroup(m[0], patch) else { return fail(404, "no such room") }
+                if patch["plugins"] != nil {
+                    harness.plugins.dataChanged(for: .group(m[0]))
+                    group = store.group(m[0]) ?? group
+                }
                 return ok(["group": .object(harness.wireGroup(group))])
             }
         }
@@ -733,7 +738,12 @@ public final class Routes {
         if bot["sharedSource"] != nil, ["name", "title", "description"].contains(where: { body[$0] != nil && body[$0] != bot[$0] }) {
             try harness.sharedRepositories.updateBot(bot, patch: body)
         }
-        guard let updated = store.patchBot(id, patch, keepingNulls: AvatarSVG.fields) else { return fail(404, "no such bot") }
+        if let data = try harness.plugins.mergedData(body, existing: bot, owner: .bot(id)) { patch["plugins"] = data }
+        guard var updated = store.patchBot(id, patch, keepingNulls: AvatarSVG.fields) else { return fail(404, "no such bot") }
+        if patch["plugins"] != nil {
+            harness.plugins.dataChanged(for: .bot(id))
+            updated = store.bot(id) ?? updated
+        }
         return ok(["bot": .object(harness.wireBot(updated))])
     }
 

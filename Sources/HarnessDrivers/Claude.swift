@@ -329,6 +329,12 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         if let model = LocalHosts.applyClaudeInject(&probe, modelId: turn.model).model { args += ["--model", model] }
         if let effort = turn.effort { args += ["--effort", effort] }
         if let system = turn.system { args += ["--append-system-prompt", system] }
+        // linked read-only (a project's other repositories): readable from here, and no edit there.
+        // `//path` is the CLI's way to write an absolute path in a rule.
+        if !turn.readOnlyFolders.isEmpty {
+            for folder in turn.readOnlyFolders { args += ["--add-dir", folder] }
+            args += ["--disallowedTools", turn.readOnlyFolders.map { "Edit(/\($0)/**)" }.joined(separator: ",")]
+        }
 
         // integrations become MCP servers, their tools pre-allowed (a headless
         // acceptEdits run silently denies anything unlisted). For agents it

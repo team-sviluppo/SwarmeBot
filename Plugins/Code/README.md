@@ -31,6 +31,33 @@ Mutations need `content-type: application/json`.
 | GET | `/api/threads/:tid/files` | `?q=&limit=` (default 50, max 200) | `{files:[{path, relative, name}]}`: what `git ls-files` lists (tracked, and untracked that `.gitignore` does not hide), best fuzzy match first; outside a repository, a walk that leaves out the usual heavy folders. With no `q`, changed files first. (The core's `POST` on the same path resolves references of a reply.) |
 | GET, PUT | `/api/code/settings` | `{commitModel: {instanceId, model} \| null}` | the plugin's settings on this engine, kept in `<data>/plugins/code/settings.json`: the model that writes every bot's commit messages. 400 for an engine this server does not have |
 
+### Projects (engine plugin 1.2.0 and later)
+
+A project is a name, a ClickUp list id and the folders of a piece of work with a role each (`backend`,
+`backoffice`, `app`, `bruno`), kept in `<data>/plugins/code/projects.json` on the engine, because the folders are on
+its machine. A bot or a channel belongs to at most one and says which folder it **works on**; the others are linked
+**read-only**, for context. In a channel the channel's project counts, not its members'.
+
+| Method | Path | Request | Answer |
+|---|---|---|---|
+| GET | `/api/projects` | — | `{projects:[{id, name, clickupListId?, repos:[{role, path, scripts?:[{name, command}]}], createdAt}]}` |
+| POST | `/api/projects` | `{name, clickupListId?, repos?}` | 201 `{project}`. 400 for a blank name, an unknown or repeated role, a path that is not an absolute folder **that exists on the engine's machine** |
+| PATCH | `/api/projects/:id` | any of the fields above (`repos` replaces the list) | `{project}`; a bot or channel working on a folder that moved follows it |
+| DELETE | `/api/projects/:id` | — | `{ok}`; whoever belonged to it belongs to none |
+| GET | `/api/fs/dirs` | `?path=&hidden=1` (default: home) | `{path, parent?, home, dirs:[name], truncated}`: the engine machine's folders, for picking where the Mac's open panel cannot |
+
+The data of a bot or channel is `plugins.code = {projectId, role}`, set with `PATCH /api/bots/:id` or
+`/api/groups/:id` and `{"plugins": {"code": {…}}}` (merged shallowly, `null` removes a key; the part of another
+plugin and a field this version does not know are kept). Choosing a folder to work on also sets the chat's default
+folder (`cwd`) to it; a channel whose folder is already fixed keeps it.
+
+Before each turn the plugin tells the agent about the project, puts `SWARME_PROJECT_JSON` (the path of
+`<data>/plugins/code/projects/<id>.json`: id, name, ClickUp list, folders with roles) in its environment, and links
+the other folders read-only: Claude gets `--add-dir` and a rule against editing there; every engine that asks for a
+permission before writing is refused for a write under them (the engine's permission broker, `ReadOnlyGuard`); Codex
+already writes only in its working folder. Not enforced: a shell command that writes without asking, and an engine
+run with every permission open.
+
 `checkout`, `branch` and `commit` answer 409 when a bot (or a routine) works in the same repository, and
 `checkout` and `branch` also for a conflict with local edits (git's own message).
 

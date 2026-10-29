@@ -362,6 +362,10 @@ public struct SendTurnInput: Sendable {
     /// What a plugin added to the CLI's environment for this turn (Plugins.swift).
     /// Empty changes nothing.
     public var pluginEnvironment: [String: String] = [:]
+    /// Folders the agent may read and must not change (a project's linked repositories).
+    /// Real paths. Empty changes nothing; drivers that can enforce it do, and the engine's
+    /// permission broker refuses writes under them for the rest (ReadOnlyGuard.swift).
+    public var readOnlyFolders: [String] = []
 
     /// Everything the engine adds to a spawned CLI's environment for this turn;
     /// a vault secret wins over a plugin's value.

@@ -38,6 +38,10 @@ public struct TurnSetup {
     public var system = ""
     /// Added to the CLI's environment for this turn.
     public var environment: [String: String] = [:]
+    /// Folders the agent may read but not change. Real paths: `ReadOnlyGuard.canonical`.
+    public var readOnlyFolders: [String] = []
+    /// The engine the turn runs on, set before the plugins are asked.
+    public var harness: Harness?
 
     public init(botId: String, threadId: String, groupId: String?, driverKind: String, bot: JSONObject, group: JSONObject?, cwd: String?) {
         self.botId = botId
@@ -53,6 +57,19 @@ public struct TurnSetup {
     public func apply(to input: inout SendTurnInput) {
         if !system.isEmpty { input.system = [input.system, system].compactMap { $0 }.joined(separator: "\n\n") }
         input.pluginEnvironment = environment
+        input.readOnlyFolders = readOnlyFolders
+    }
+}
+
+/// Whose data a plugin is asked about: a bot's or a channel's.
+public enum PluginDataOwner: Equatable, Sendable {
+    case bot(String)
+    case group(String)
+
+    public var id: String {
+        switch self {
+        case let .bot(id), let .group(id): return id
+        }
     }
 }
 
@@ -78,6 +95,12 @@ public protocol EnginePlugin: AnyObject {
     nonisolated var groupFlags: [String] { get }
     nonisolated var subcommands: [PluginSubcommand] { get }
 
+    /// A client wants to set this plugin's data on a bot or channel (`PATCH` with `plugins.<id>`): throw an
+    /// `HTTPError` to refuse it. `data` is what the client sent, not yet merged.
+    func validateData(_ data: JSONObject, for owner: PluginDataOwner, harness: Harness) throws
+    /// The data was written: the plugin may follow it with changes of its own.
+    func dataChanged(for owner: PluginDataOwner, harness: Harness)
+
     func routes(_ router: PluginRouter)
     func beforeTurn(_ turn: inout TurnSetup)
     func afterTurn(_ result: TurnResult) async
@@ -90,6 +113,8 @@ public extension EnginePlugin {
     nonisolated var botFlags: [String] { [] }
     nonisolated var groupFlags: [String] { [] }
     nonisolated var subcommands: [PluginSubcommand] { [] }
+    func validateData(_ data: JSONObject, for owner: PluginDataOwner, harness: Harness) throws {}
+    func dataChanged(for owner: PluginDataOwner, harness: Harness) {}
     func routes(_ router: PluginRouter) {}
     func beforeTurn(_ turn: inout TurnSetup) {}
     func afterTurn(_ result: TurnResult) async {}
@@ -226,7 +251,35 @@ public final class PluginRegistry {
         return try await entry.handler(PluginRouter.Request(http: request, params: params, harness: harness))
     }
 
+    /// The `plugins` object of a bot or channel after a `PATCH` that carries `plugins`: each active plugin's
+    /// part merged shallowly (a `null` removes a key), every other plugin's part as it was. Nil when
+    /// the body has nothing for any plugin.
+    func mergedData(_ body: JSONObject, existing: JSONObject, owner: PluginDataOwner) throws -> JSON? {
+        guard let sent = body["plugins"] else { return nil }
+        guard let sentByPlugin = sent.object else { throw HTTPError(400, "plugins must be an object") }
+        var merged = existing["plugins"]?.object ?? JSONObject()
+        var touched = false
+        for (id, value) in sentByPlugin {
+            // an engine without the plugin (or with it off) does not take its data, as with its flags
+            guard let plugin = active.first(where: { $0.id == id }) else { continue }
+            guard let data = value.object else { throw HTTPError(400, "plugins.\(id) must be an object") }
+            try plugin.validateData(data, for: owner, harness: harness)
+            var own = merged[id]?.object ?? JSONObject()
+            for (key, item) in data {
+                if item.isNull { own[key] = nil } else { own[key] = item }
+            }
+            merged[id] = .object(own)
+            touched = true
+        }
+        return touched ? .object(merged) : nil
+    }
+
+    func dataChanged(for owner: PluginDataOwner) {
+        for plugin in active { plugin.dataChanged(for: owner, harness: harness) }
+    }
+
     func beforeTurn(_ setup: inout TurnSetup) {
+        setup.harness = harness
         for plugin in active { plugin.beforeTurn(&setup) }
     }
 

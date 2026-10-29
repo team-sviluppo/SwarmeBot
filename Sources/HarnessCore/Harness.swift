@@ -28,6 +28,8 @@ public final class Harness {
     private let enginePlugins: [any EnginePlugin]
     /// The plugins linked into this engine (Plugins.swift).
     public private(set) lazy var plugins = PluginRegistry(harness: self, plugins: enginePlugins)
+    /// Folders each chat's current turn may read and not change (ReadOnlyGuard.swift), by thread.
+    var readOnlyFolders: [String: [String]] = [:]
     /// Secrets bots use in shell commands (Vault.swift, VaultTurns.swift).
     public let vault: Vault
     /// Turn grant token → what its `mcp-secrets` helper may run with.
@@ -575,6 +577,20 @@ public final class Harness {
         let askerId = asker?["id"]?.string
         let unattended = permission && event.requestId != nil ? isUnattended(askerId) : false
         let alwaysAllow = asker?["alwaysAllow"]?.array?.compactMap(\.string) ?? []
+        // a folder linked read-only: no auto mode, no always-allow and no card for a write there
+        if permission, let requestId = event.requestId, let folders = readOnlyFolders[threadId],
+           let reason = ReadOnlyGuard.reason(tool: tool, summary: summary, folders: folders) {
+            let instance = fleet.get(event.providerInstanceId ?? ModelSelection(json: asker?["modelSelection"]).instanceId)
+            Task { @MainActor in
+                _ = await instance?.adapter.respond(threadId: threadId, requestId: requestId, decision: RequestDecision(behavior: "deny", message: reason))
+                _ = push(["role": "bot", "kind": "activity", "tool": ["name": .string("denied, read-only folder: \(summary.prefix(100))"), "ok": false]])
+                var entry: JSONObject = ["threadId": .string(threadId), "requestId": .string(requestId), "tool": .string(tool),
+                                         "summary": .string(summary), "decision": "auto-denied", "source": "read-only-folder"]
+                if let askerId { entry["botId"] = .string(askerId) }
+                DecisionLog.append(self.paths, entry)
+            }
+            return
+        }
         let verdict: AutoApprove.Verdict? = permission && asker != nil && event.requestId != nil
             ? AutoApprove.verdict(autoApprove: asker?["autoApprove"]?.truthy == true, alwaysAllow: alwaysAllow,
                                   tool: tool, summary: summary, unattended: unattended, scope: approvalScope)
@@ -789,6 +805,7 @@ public final class Harness {
                 var setup = TurnSetup(botId: botId, threadId: threadId, groupId: nil, driverKind: instance.driverKind, bot: bot, group: nil, cwd: cwd)
                 self.plugins.beforeTurn(&setup)
                 setup.apply(to: &input)
+                self.readOnlyFolders[threadId] = setup.readOnlyFolders.isEmpty ? nil : setup.readOnlyFolders
                 self.watchdog.watch(threadId, botId: botId)
                 _ = try await instance.adapter.sendTurn(input)
                 if rewound { self.store.patchBot(botId, ["rewound": false, "resumeCursors": [:]]) }

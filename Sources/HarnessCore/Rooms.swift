@@ -165,6 +165,7 @@ extension Harness {
             var setup = TurnSetup(botId: botId, threadId: threadId, groupId: groupId, driverKind: instance.driverKind, bot: bot, group: group, cwd: cwd)
             plugins.beforeTurn(&setup)
             setup.apply(to: &input)
+            readOnlyFolders[threadId] = setup.readOnlyFolders.isEmpty ? nil : setup.readOnlyFolders
             Task { @MainActor in
                 do {
                     _ = try await instance.adapter.sendTurn(input)
