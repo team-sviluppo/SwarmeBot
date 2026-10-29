@@ -82,6 +82,8 @@ extension Translations {
         "Copia": "Copy",
         "Copia ID conversazione": "Copy conversation ID",
         "Costo del task": "Task cost",
+        "Mostra gli strumenti in chat": "Show tools in chat",
+        "Mostra le chiamate agli strumenti e i relativi risultati nella conversazione.": "Show tool calls and their results in the conversation.",
         "Crea": "Create",
         "Desktop di %@": "%@'s desktop",
         "Dettagli": "Details",

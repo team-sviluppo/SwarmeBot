@@ -77,6 +77,9 @@ servers and also has private bots of its own.
   working folder, engine and model. Pin, hide, mark unread, search.
 - **Streaming chat** with reasoning, Markdown, and **tool calls folded** into groups that show what
   each call returned.
+- **Tool visibility per bot**: Bot settings → Behavior → Show tools in chat. Turn it off to hide tool
+  activity while keeping replies, approval cards and engine errors visible; turn it back on to
+  see recorded calls and results again. The preference is shared with remote clients.
 - **Permission and question cards**: when an agent asks to run a command or edit a file, or asks you
   a question (single or multiple choice), the chat shows a card. Per-bot **auto-approve** modes and
   "always allow" rules.

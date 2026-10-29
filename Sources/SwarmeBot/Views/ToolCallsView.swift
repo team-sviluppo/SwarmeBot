@@ -24,10 +24,7 @@ enum ToolName {
     /// Calls that fold into a group: real tools, not the error lines a
     /// turn leaves (those stay visible on their own).
     static func folds(_ message: Message) -> Bool {
-        guard message.kind == .activity, let tool = message.tool else { return false }
-        if tool.setup == true { return false }
-        let name = tool.name.lowercased()
-        return !name.hasPrefix("error") && !name.hasPrefix("connettore non raggiungibile")
+        message.isToolCall
     }
 }
 

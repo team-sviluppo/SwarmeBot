@@ -448,6 +448,15 @@ def main():
             time.sleep(1.5)
             assert request(port, "POST", f"/api/bots/{bot_id}/interrupt")[0] == 200
             settle(5)
+        if os.environ.get("SCENARIO") == "tool-visibility":
+            bot_id = bot["id"]
+            original = request(port, "GET", "/api/bots")[1]["bots"][0]["messages"]
+            assert any(m.get("tool") for m in original), "scenario needs tool activity"
+            for value in [False, True]:
+                assert request(port, "PATCH", f"/api/bots/{bot_id}", {"showToolCalls": value})[0] == 200
+                current = request(port, "GET", "/api/bots")[1]["bots"][0]
+                assert current["showToolCalls"] is value
+                assert current["messages"] == original, "visibility must not remove recorded tool results"
         if os.environ.get("SCENARIO") == "automations":
             def quiet(min_completed):
                 deadline = time.time() + 40

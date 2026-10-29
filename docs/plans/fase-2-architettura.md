@@ -133,6 +133,17 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Visibilità strumenti (2026-10-29): preferenza booleana opzionale `showToolCalls` del bot,
+  attiva se assente. Il filtro è solo nella presentazione Mac e iOS remoto, prima del
+  raggruppamento: messaggi, contesto del modello ed esportazioni conservano tutti i risultati.
+  Nei canali si applica la preferenza del bot mittente; errori del motore e card restano visibili.
+  Verifica con test di persistenza/validazione e filtro condiviso, scenario HTTP/SSE
+  `DRIVER=codex SCENARIO=tool-visibility` e schermate dell'app su dati isolati.
+  Build riuscito; suite con il solo `BotTransferTests.testAFailedMoveLeavesBothEnginesAsTheyWere`
+  escluso: 396 test, 12 integrazioni opzionali saltate, zero errori. Il test escluso ha bloccato
+  la prima esecuzione in `Engine.stop()` / `Process.waitUntilExit`, anche dopo la chiusura del
+  suo motore temporaneo; è stato interrotto. Nessuna compilazione iOS o parità Node eseguita.
+
 - `generateText` esiste sui driver Node (titoli e nomi) ma il harness non lo chiama da nessuna parte. Non è stato portato: non c'è un chiamante da far coincidere.
 - Nel Node le validazioni delle routine lanciano `Error` senza status: le route rispondono **500**, non 400. Lo si
   replica (lo scenario `automations` lo controlla); i webhook invece rispondono 400.
