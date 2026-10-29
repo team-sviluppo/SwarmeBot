@@ -219,6 +219,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         var turnId: String
         var process: CLIProcess
         var broker: PermissionBroker?
+        var stop: () -> Void
     }
     private var active: [ThreadID: Turn] = [:]
 
@@ -282,10 +283,11 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
     // MARK: Turns
 
     private func emit(_ threadId: String, _ turnId: String, itemId: String? = nil, requestId: String? = nil,
-                      input: String? = nil, output: String? = nil, _ body: RuntimeEvent.Body) {
+                      input: String? = nil, output: String? = nil, subagent: SubagentState? = nil, _ body: RuntimeEvent.Body) {
         var event = RuntimeEvent(provider: provider, threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body)
         event.toolInput = input
         event.toolOutput = output
+        event.subagent = subagent
         events.emit(event)
     }
 
@@ -387,6 +389,9 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         }
 
         var env = Self.environment(model: turn.model, source: environment)
+        // The CLI reports when a background completion still owes the parent
+        // another turn. stdin must outlive that turn and its approval requests.
+        env["CLAUDE_CODE_SDK_READS_SESSION_STATE"] = "1"
         for (key, value) in turn.secretEnvironment { env[key] = value }
         // a download or a build through the vault may take long: Claude's default would cut it
         if turn.secrets != nil { env["MCP_TOOL_TIMEOUT"] = String(VaultTool.maxSeconds * 1000 + 60_000) }
@@ -404,9 +409,15 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         }
 
         var settled = false
+        let subtasks = SubagentLedger()
+        subtasks.onChange = { [weak self] task, isNew in
+            self?.emit(threadId, turnId, itemId: "subagent:\(task.id)", subagent: task,
+                       isNew ? .itemStarted(itemType: "tool", title: "Subagent: \(task.title)") : .itemUpdated(itemType: "tool", tokens: nil))
+        }
         let settle: (Bool, String?, Double?, RuntimeEvent.TokenUsage?) -> Void = { [weak self] ok, stopReason, cost, usage in
             guard let self, !settled else { return }
             settled = true
+            subtasks.finishRunning("interrupted", reason: stopReason ?? "The parent run ended")
             // closing first answers every open ask before anyone sees the turn gone
             broker?.close()
             // a backgrounded MCP grandchild can keep a one-shot `-p` alive (#211)
@@ -419,19 +430,34 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         // true while partial messages are streaming the current block, so the
         // whole-message frame does not repeat it as one big delta
         var sawStreamDelta = false
+        var pendingResult: JSON?
+        var sessionState: String?
+        let finishResult: (JSON) -> Void = { o in
+            let usage = o["usage"].flatMap { u -> RuntimeEvent.TokenUsage? in
+                guard u.object != nil else { return nil }
+                return .init(input: (u["input_tokens"]?.double ?? 0) + (u["cache_read_input_tokens"]?.double ?? 0)
+                             + (u["cache_creation_input_tokens"]?.double ?? 0), output: u["output_tokens"]?.double ?? 0)
+            }
+            settle(o["is_error"]?.bool != true, o["stop_reason"]?.string ?? o["terminal_reason"]?.string,
+                   o["total_cost_usd"]?.double, usage)
+        }
         process.onLine = { [weak self] line in
-            guard let self, !line.trimmingCharacters(in: .whitespaces).isEmpty, let o = try? JSON.parse(line) else { return }
+            guard let self, !settled, !line.trimmingCharacters(in: .whitespaces).isEmpty, let o = try? JSON.parse(line) else { return }
             NativeLog.append(threadId: threadId, dir: "in", source: "claude.sdk.message", msg: o)
+            if subtasks.claude(o, parentId: turnId) { return }
+            if subtasks.claudeText(o) { return }
             switch o["type"]?.string {
             case "system":
                 if o["subtype"]?.string == "init" {
                     self.emit(threadId, turnId, .sessionStarted(sessionId: o["session_id"]?.string, model: o["model"]?.string, resumeCursor: nil))
                 } else if o["subtype"]?.string == "thinking_tokens" {
                     self.emit(threadId, turnId, .itemUpdated(itemType: "reasoning", tokens: o["estimated_tokens"]))
+                } else if o["subtype"]?.string == "session_state_changed" {
+                    sessionState = o["state"]?.string
+                    if sessionState == "idle", subtasks.pending.isEmpty, let result = pendingResult { finishResult(result) }
                 }
             case "stream_event":
-                // subagent narration is dropped: parallel Tasks would interleave
-                if let parent = o["parent_tool_use_id"], parent.truthy { break }
+                pendingResult = nil
                 guard o["event"]?["type"]?.string == "content_block_delta", let delta = o["event"]?["delta"] else { break }
                 if delta["type"]?.string == "text_delta", let text = delta["text"]?.string, !text.isEmpty {
                     sawStreamDelta = true
@@ -440,6 +466,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
                     self.emit(threadId, turnId, .contentDelta(streamKind: "reasoning_text", delta: text))
                 }
             case "assistant":
+                pendingResult = nil
                 let message = o["message"] ?? .null
                 let text = Self.firstText(message["content"])
                 if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -468,16 +495,10 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
                               .toolCompleted(ok: block["is_error"]?.truthy != true))
                 }
             case "result":
-                // one process per turn: result.usage is the turn's total; cache
-                // reads and writes count as input (billed, and they fill the window)
-                let usage = o["usage"].flatMap { u -> RuntimeEvent.TokenUsage? in
-                    guard u.object != nil else { return nil }
-                    return .init(input: (u["input_tokens"]?.double ?? 0) + (u["cache_read_input_tokens"]?.double ?? 0)
-                                     + (u["cache_creation_input_tokens"]?.double ?? 0),
-                                 output: u["output_tokens"]?.double ?? 0)
+                pendingResult = o
+                if o["is_error"]?.bool == true || (subtasks.pending.isEmpty && (sessionState == nil || sessionState == "idle")) {
+                    finishResult(o)
                 }
-                let stopReason = o["stop_reason"]?.string ?? o["terminal_reason"]?.string
-                settle(o["is_error"]?.bool != true, stopReason, o["total_cost_usd"]?.double, usage)
             default:
                 break
             }
@@ -496,12 +517,14 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
             settle(false, "exit_before_result", nil, nil)
         }
 
-        active[threadId] = Turn(turnId: turnId, process: process, broker: broker)
+        active[threadId] = Turn(turnId: turnId, process: process, broker: broker,
+                                stop: { settle(false, "interrupted", nil, nil) })
         emit(threadId, turnId, .turnStarted)
         process.start()
         let prompt: JSON = ["type": "user", "message": ["role": "user", "content": .string(turn.text)]]
         process.write(prompt.serialized() + "\n")
-        process.closeStdin()
+        // EOF here makes background agents lose their parent/control channel.
+        // settle closes the whole process only after the run has become idle.
         NativeLog.append(threadId: threadId, dir: "out", source: "claude.sdk.message", msg: prompt)
         return turnId
     }
@@ -515,7 +538,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
     }
 
     func interruptTurn(threadId: ThreadID) async {
-        active[threadId]?.process.killTree()
+        active[threadId]?.stop()
     }
 
     /// Fail-closed: no broker, or an ask that already timed out or settled,
@@ -533,7 +556,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
     func hasSession(threadId: ThreadID) -> Bool { active[threadId] != nil }
 
     func stopAll() async {
-        for turn in active.values { turn.process.killTree() }
+        for turn in Array(active.values) { turn.stop() }
     }
 
     @discardableResult

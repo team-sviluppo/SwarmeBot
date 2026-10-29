@@ -56,6 +56,7 @@ public final class Routes {
         if let avatar = AvatarRoutes.handle(r, harness: harness) { return avatar }
         if let connectors = try await MCPConnectorRoutes.handle(r, harness: harness) { return connectors }
         if let skills = try SkillRoutes.handle(r, harness: harness) { return skills }
+        if let shared = try SharedRepositoryRoutes.handle(r, harness: harness) { return shared }
         if let vault = try VaultRoutes.handle(r, harness: harness) { return vault }
 
         // Mutations that carry a body must declare JSON (no CSRF via HTML forms).
@@ -739,6 +740,9 @@ public final class Routes {
         if leavingLocal {
             let selection = ModelSelection(json: bot["modelSelection"])
             await harness.fleet.get(selection.instanceId)?.adapter.interruptTurn(threadId: bot["threadId"]?.string ?? "")
+        }
+        if bot["sharedSource"] != nil, ["name", "title", "description"].contains(where: { body[$0] != nil && body[$0] != bot[$0] }) {
+            try harness.sharedRepositories.updateBot(bot, patch: body)
         }
         guard let updated = store.patchBot(id, patch, keepingNulls: AvatarSVG.fields) else { return fail(404, "no such bot") }
         return ok(["bot": .object(harness.wireBot(updated))])

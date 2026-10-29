@@ -164,7 +164,7 @@ public enum CodexCatalog {
 
     /// The ChatGPT catalog the installed CLI can actually use (`model/list`, every page).
     @MainActor
-    static func fromAppServer(cli: String, env: [String: String], timeout: TimeInterval = 8) async -> ModelCatalog? {
+    static func fromAppServer(cli: String, env: [String: String], timeout: TimeInterval = 8, onRateLimits: ((JSON) -> Void)? = nil) async -> ModelCatalog? {
         guard let process = try? CLIProcess(cli: cli, args: ["app-server"], cwd: NSHomeDirectory(), environment: env) else { return nil }
         return await withCheckedContinuation { continuation in
             var finished = false
@@ -172,6 +172,8 @@ public enum CodexCatalog {
             var pending: [Int: String] = [:]
             var rows: [JSON] = []
             var cursors = Set<String>()
+            var catalogResult: ModelCatalog?
+            var limitsDone = onRateLimits == nil
             let finish: (ModelCatalog?) -> Void = { catalog in
                 guard !finished else { return }
                 finished = true
@@ -184,10 +186,17 @@ public enum CodexCatalog {
                 nextId += 1
             }
             process.onLine = { line in
-                guard let message = try? JSON.parse(line), let id = message["id"]?.int, let kind = pending.removeValue(forKey: id) else { return }
+                guard !finished, let message = try? JSON.parse(line), let id = message["id"]?.int, let kind = pending.removeValue(forKey: id) else { return }
+                if kind == "limits" {
+                    limitsDone = true
+                    if let result = message["result"] { onRateLimits?(result) }
+                    if let catalogResult { finish(catalogResult) }
+                    return
+                }
                 if message["error"] != nil { return finish(nil) }
                 if kind == "initialize" {
                     process.write(#"{"jsonrpc":"2.0","method":"initialized","params":{}}"# + "\n")
+                    if onRateLimits != nil { request("account/rateLimits/read", [:], "limits") }
                     return request("model/list", ["cursor": .null, "limit": 100], "models")
                 }
                 let page = message["result"]
@@ -204,23 +213,24 @@ public enum CodexCatalog {
                     if row["isDefault"]?.bool == true { defaultModel = id }
                 }
                 guard !options.isEmpty else { return finish(nil) }
-                finish(ModelCatalog(default: defaultModel ?? options[0].id, options: options))
+                catalogResult = ModelCatalog(default: defaultModel ?? options[0].id, options: options)
+                if limitsDone { finish(catalogResult) }
             }
-            process.onClose = { _ in finish(nil) }
+            process.onClose = { _ in finish(catalogResult) }
             process.start()
             request("initialize", ["clientInfo": ["name": "swarmebot", "version": "1"]], "initialize")
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                finish(nil)
+                finish(catalogResult)
             }
         }
     }
 
     /// `readCodexModelCatalog`: official rows, then everything ~/.codex knows.
     @MainActor
-    public static func read(env: [String: String], cli: String?, session: URLSession = .shared) async -> ModelCatalog {
+    public static func read(env: [String: String], cli: String?, session: URLSession = .shared, onRateLimits: ((JSON) -> Void)? = nil) async -> ModelCatalog {
         var officialCatalog = staticModels
-        if let cli, let live = await fromAppServer(cli: cli, env: env) { officialCatalog = live }
+        if let cli, let live = await fromAppServer(cli: cli, env: env, onRateLimits: onRateLimits) { officialCatalog = live }
         let home = home(env)
         guard let mainText = try? String(contentsOfFile: "\(home)/config.toml", encoding: .utf8) else {
             return await LocalHosts.merge(officialCatalog, env: env)
@@ -334,8 +344,13 @@ final class CodexInstance: ProviderInstance, ProviderAdapter {
     }
 
     func refreshModels() async {
-        let resolved = await CodexCatalog.read(env: childEnvironment(), cli: cli)
+        let resolved = await CodexCatalog.read(env: childEnvironment(), cli: cli, onRateLimits: { [weak self] payload in self?.noteRateLimits(payload) })
         if !resolved.options.isEmpty { models = resolved }
+    }
+
+    func noteRateLimits(_ payload: JSON) {
+        guard let limit = CodexQuota.session(payload) else { return }
+        emit(RuntimeEvent(provider: provider, threadId: "", .usageLimit(window: limit.window, utilization: limit.utilization, resetsAt: limit.resetsAt)))
     }
 
     func snapshot() async -> ProviderSnapshot {
@@ -382,7 +397,7 @@ final class CodexInstance: ProviderInstance, ProviderAdapter {
     func hasSession(threadId: ThreadID) -> Bool { active[threadId] != nil }
 
     func stopAll() async {
-        for turn in active.values { turn.stop() }
+        for turn in Array(active.values) { turn.stop() }
     }
 
     @discardableResult
@@ -399,9 +414,16 @@ final class CodexTurn {
     private var threadId: String { turn.threadId }
     private var process: CLIProcess?
     private var settled = false
+    private var providerThreadId: String?
+    private let subtasks = SubagentLedger()
+    private var drainTask: Task<Void, Never>?
+    private var parentFinished = false
     private var sawStreamDelta = false
     /// codex reports a running THREAD total; the last report is this turn's figure
     private var usage: RuntimeEvent.TokenUsage?
+    private var costEstimate = CodexCostEstimate()
+    private var effectiveModel: String?
+    private var effectiveProvider: String?
     private var nextId = 1
     private var pending: [Int: CheckedContinuation<JSON, Error>] = [:]
     private var asks: [String: (String, String?, String) -> Void] = [:]
@@ -410,6 +432,14 @@ final class CodexTurn {
     init(instance: CodexInstance, turn: SendTurnInput) {
         self.instance = instance
         self.turn = turn
+        subtasks.onChange = { [weak self] task, isNew in
+            guard let self else { return }
+            var event = RuntimeEvent(provider: "codex", threadId: self.threadId, turnId: self.turnId,
+                                     itemId: "subagent:\(task.id)",
+                                     isNew ? .itemStarted(itemType: "tool", title: "Subagent: \(task.title)") : .itemUpdated(itemType: "tool", tokens: nil))
+            event.subagent = task
+            self.instance.emit(event)
+        }
     }
 
     private func emit(itemId: String? = nil, requestId: String? = nil, input: String? = nil, output: String? = nil, _ body: RuntimeEvent.Body) {
@@ -439,17 +469,23 @@ final class CodexTurn {
         }
     }
 
-    func stop() { process?.killTree() }
+    func stop() { settle(ok: false, stopReason: "interrupted") }
 
     private func settle(ok: Bool, stopReason: String?) {
         guard !settled else { return }
         settled = true
+        drainTask?.cancel()
+        drainTask = nil
+        subtasks.finishRunning("interrupted", reason: stopReason ?? "The parent run ended")
         for finish in Array(asks.values) { finish("deny", "SwarmeBot: the turn ended", "system") }
         for continuation in pending.values { continuation.resume(throwing: RPCError(message: "turn settled")) }
         pending.removeAll()
         instance.turnEnded(threadId)
-        emit(.turnCompleted(ok: ok, stopReason: stopReason, cost: nil, denials: nil, usage: usage))
-        stop() // the app-server never exits on its own
+        var event = RuntimeEvent(provider: "codex", threadId: threadId, turnId: turnId,
+                                 .turnCompleted(ok: ok, stopReason: stopReason, cost: costEstimate.cost, denials: nil, usage: usage))
+        event.costEstimated = costEstimate.cost != nil
+        instance.emit(event)
+        process?.killTree() // the app-server never exits on its own
     }
 
     func answer(_ requestId: String, behavior: String, message: String?) -> Bool {
@@ -523,8 +559,39 @@ final class CodexTurn {
     }
 
     private func handleNotification(_ message: JSON) {
+        guard !settled else { return }
         let p = message["params"] ?? .null
+        let method = message["method"]?.string
+        if method == "thread/started", let thread = p["thread"], let id = thread["id"]?.string,
+           let parent = thread["parentThreadId"]?.string,
+           parent == providerThreadId || subtasks.tasks[parent] != nil {
+            var task = subtasks.tasks[id] ?? SubagentState(id: id, parentId: parent, title: id)
+            task.title = thread["agentNickname"]?.string ?? task.title
+            subtasks.update(task)
+            return
+        }
+        let source = p["threadId"]?.string
+        if source == nil || source == providerThreadId || source.flatMap({ subtasks.tasks[$0] }) != nil,
+           let item = p["item"] { observeSubagents(item, source: source) }
+        if let source = p["threadId"]?.string, source != providerThreadId {
+            // Child deltas, token usage and turn completion never finish or
+            // overwrite the parent's transcript. Results get their own row.
+            guard var task = subtasks.tasks[source] else { return }
+            if method == "item/completed", p["item"]?["type"]?.string == "agentMessage",
+               let text = p["item"]?["text"]?.string {
+                task.result = String(text.prefix(16_000))
+            } else if method == "turn/completed" {
+                task.status = SubagentLedger.status(p["turn"]?["status"]?.string ?? "failed")
+                if let error = p["turn"]?["error"]?["message"]?.string { task.result = error }
+            }
+            subtasks.update(task)
+            return
+        }
         switch message["method"]?.string {
+        case "account/rateLimits/updated":
+            instance.noteRateLimits(p)
+        case "turn/started":
+            parentFinished = false
         case "item/agentMessage/delta":
             if let delta = p["delta"]?.string, !delta.isEmpty {
                 sawStreamDelta = true
@@ -540,6 +607,7 @@ final class CodexTurn {
             case "fileChange": title = "edit"
             case "mcpToolCall": title = item["tool"].flatMap(ACPTurn.text) ?? item["name"].flatMap(ACPTurn.text) ?? "mcp"
             case "webSearch": title = "web_search"
+            case "collabAgentToolCall": title = item["tool"]?.string ?? "subagent"
             default: title = nil
             }
             if let title {
@@ -555,7 +623,7 @@ final class CodexTurn {
                     sawStreamDelta = false
                     emit(.textCompleted(text: text))
                 }
-            case "commandExecution", "fileChange", "mcpToolCall":
+            case "commandExecution", "fileChange", "mcpToolCall", "collabAgentToolCall":
                 let status = item["status"]?.string
                 let output = ToolText.from(item["aggregatedOutput"]) ?? ToolText.from(item["result"]) ?? ToolText.from(item["error"]?["message"])
                 emit(itemId: item["id"].flatMap(ACPTurn.text), output: output, .toolCompleted(ok: status != "failed" && status != "declined"))
@@ -565,7 +633,9 @@ final class CodexTurn {
                 break
             }
         case "thread/tokenUsage/updated":
+            if let source = p["threadId"]?.string, source != providerThreadId { break }
             let tokens = p["tokenUsage"]
+            if let tokens { costEstimate.record(tokens, model: effectiveModel, provider: effectiveProvider) }
             if let last = tokens?["last"] ?? tokens?["total"], last.truthy {
                 usage = .init(input: last["inputTokens"]?.double ?? 0, output: last["outputTokens"]?.double ?? 0)
             }
@@ -575,7 +645,9 @@ final class CodexTurn {
         case "turn/completed":
             let t = p["turn"] ?? .null
             let completed = t["status"]?.string == "completed"
-            settle(ok: completed, stopReason: completed ? nil : (t["error"]?["message"]?.string ?? t["status"]?.string ?? "failed"))
+            parentFinished = true
+            if completed, !subtasks.pending.isEmpty { drainSubagents() }
+            else { settle(ok: completed, stopReason: completed ? nil : (t["error"]?["message"]?.string ?? t["status"]?.string ?? "failed")) }
         case "error":
             // 0.144 sends {message}, 0.139 nests it under {error:{message}}
             if let text = (p["message"] ?? p["error"]?["message"]).flatMap(ACPTurn.text) {
@@ -583,6 +655,84 @@ final class CodexTurn {
             }
         default:
             break
+        }
+    }
+
+    private func observeSubagents(_ item: JSON, source: String?) {
+        if item["type"]?.string == "subAgentActivity", let id = item["agentThreadId"]?.string,
+           let parent = source ?? providerThreadId {
+            // Completion is confirmed by the child's turn/result, not by the
+            // completion of a spawn/wait *tool call* on the parent.
+            let task = subtasks.tasks[id] ?? SubagentState(id: id, parentId: parent, title: item["agentPath"]?.string ?? id)
+            subtasks.update(task)
+        }
+        guard item["type"]?.string == "collabAgentToolCall", let sender = item["senderThreadId"]?.string,
+              sender == providerThreadId || subtasks.tasks[sender] != nil else { return }
+        let states = item["agentsStates"]?.object ?? [:]
+        let ids = Set((item["receiverThreadIds"]?.array ?? []).compactMap(\.string) + states.keys)
+        for id in ids.sorted() {
+            var task = subtasks.tasks[id] ?? SubagentState(id: id, parentId: sender, title: item["prompt"]?.string.map { String($0.prefix(100)) } ?? id)
+            if let state = states[id], let status = state["status"]?.string {
+                task.status = SubagentLedger.status(status)
+                if let result = state["message"]?.string { task.result = String(result.prefix(16_000)) }
+            } else if ["sendInput", "resumeAgent", "followupTask"].contains(item["tool"]?.string ?? "") {
+                task.status = "running"
+            }
+            subtasks.update(task)
+        }
+    }
+
+    /// A child can finish after the parent's final answer. Keep the same
+    /// app-server alive, read its durable result, then let the parent consume
+    /// the results in a continuation of this SwarmeBot turn.
+    private func drainSubagents() {
+        guard drainTask == nil else { return }
+        drainTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.drainTask = nil }
+            var failures: [String: Int] = [:]
+            while !self.settled, !Task.isCancelled, !self.subtasks.pending.isEmpty {
+                for pending in self.subtasks.pending {
+                    do {
+                        let response = try await self.request("thread/read", ["threadId": .string(pending.id), "includeTurns": true])
+                        guard !self.settled, var task = self.subtasks.tasks[pending.id], task.isRunning else { continue }
+                        failures[pending.id] = 0
+                        let thread = response["thread"]
+                        if let latest = thread?["turns"]?.array?.last, let status = latest["status"]?.string {
+                            // Rollout history can lag the in-memory state when
+                            // a previously completed agent receives new work.
+                            task.status = thread?["status"]?["type"]?.string == "active" ? "running" : SubagentLedger.status(status)
+                            if let result = latest["items"]?.array?.last(where: { $0["type"]?.string == "agentMessage" })?["text"]?.string {
+                                task.result = String(result.prefix(16_000))
+                            }
+                            if let error = latest["error"]?["message"]?.string { task.result = error }
+                        }
+                        self.subtasks.update(task)
+                    } catch {
+                        guard !self.settled, !Task.isCancelled else { return }
+                        failures[pending.id, default: 0] += 1
+                        if failures[pending.id, default: 0] >= 3, var task = self.subtasks.tasks[pending.id] {
+                            task.status = "failed"
+                            task.result = "Could not retrieve the subagent result: \(error.localizedDescription)"
+                            self.subtasks.update(task)
+                        }
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            guard !self.settled, !Task.isCancelled, self.parentFinished, let parent = self.providerThreadId else { return }
+            let results = self.subtasks.tasks.values.sorted { $0.id < $1.id }.map { $0.json }.map { $0.serialized() }.joined(separator: "\n")
+            self.parentFinished = false
+            do {
+                var params: JSONObject = ["threadId": .string(parent), "input": [["type": "text", "text": .string(
+                    "SwarmeBot: the background subagents have finished. Use their results below to finish the original request. Do not repeat completed work.\n\(results)")]]]
+                if let effort = self.turn.effort { params["effort"] = .string(effort) }
+                _ = try await self.request("turn/start", .object(params))
+            } catch {
+                guard !self.settled else { return }
+                self.emit(.runtimeError(message: "Could not resume the parent after its subagents: \(error.localizedDescription)", setup: nil))
+                self.settle(ok: false, stopReason: "subagent_resume_failed")
+            }
         }
     }
 
@@ -651,11 +801,14 @@ final class CodexTurn {
     private func run(cwd: String) async throws {
         _ = try await request("initialize", ["clientInfo": ["name": "swarmebot", "version": "1"]])
         send(["jsonrpc": "2.0", "method": "initialized", "params": [:]])
+        if let limits = try? await request("account/rateLimits/read", [:], timeout: 3) { instance.noteRateLimits(limits) }
         var codexThread: String?
         var startedModel: String?
         if let cursor = turn.resumeCursor?.string, !cursor.isEmpty {
             do {
                 let resumed = try await request("thread/resume", ["threadId": .string(cursor)])
+                effectiveModel = resumed["model"]?.string
+                effectiveProvider = resumed["modelProvider"]?.string
                 codexThread = resumed["thread"]?["id"]?.string ?? cursor
             } catch {
                 // resume unsupported or thread gone — start fresh
@@ -669,9 +822,13 @@ final class CodexTurn {
             params["approvalPolicy"] = .string(instance.fullAuto ? "never" : "on-request")
             params["ephemeral"] = false
             let started = try await request("thread/start", .object(params))
+            effectiveProvider = started["modelProvider"]?.string ?? selection.provider
             codexThread = started["thread"]?["id"]?.string
             startedModel = started["model"]?.string
         }
+        effectiveModel = effectiveModel ?? startedModel ?? CodexCatalog.decode(turn.model).model
+        effectiveProvider = effectiveProvider ?? CodexCatalog.decode(turn.model).provider
+        providerThreadId = codexThread
         emit(.sessionStarted(sessionId: codexThread, model: startedModel ?? turn.model, resumeCursor: nil))
         var params: JSONObject = [
             "threadId": JSON.from(codexThread),

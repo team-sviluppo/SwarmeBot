@@ -80,6 +80,9 @@ servers and also has private bots of its own.
 - **Tool visibility per bot**: Bot settings → Behavior → Show tools in chat. Turn it off to hide tool
   activity while keeping replies, approval cards and engine errors visible; turn it back on to
   see recorded calls and results again. The preference is shared with remote clients.
+- **Native subagents** in Claude and Codex: task activity keeps its own status and result in the
+  tool details. Background subagents keep the run alive until the parent can consume their results;
+  Stop interrupts the whole run. After an engine restart, unfinished tasks are marked interrupted.
 - **Permission and question cards**: when an agent asks to run a command or edit a file, or asks you
   a question (single or multiple choice), the chat shows a card. Per-bot **auto-approve** modes and
   "always allow" rules.
@@ -90,6 +93,9 @@ servers and also has private bots of its own.
   each with its cost and token usage.
 - **Attachments**: paste images, drop files, attach long text as a chip; reactions on messages.
 - **Model picker** per bot with reasoning **effort** where the agent supports it.
+- **Codex usage** in the chat header: current subscription usage in percent and an approximate
+  task cost at Standard API token prices, including prompt-cache discounts. The estimate is not
+  a subscription charge; unknown or custom model prices are left unavailable.
 - **Memory** and a **decision log** per bot.
 
 ### Channels (multi-bot)
@@ -113,6 +119,34 @@ servers and also has private bots of its own.
   by delivery id, rate limits, history of deliveries. The payload reaches the bot inside an
   explicit *untrusted content* block.
 - Automation turns run unattended and produce tasks you can read later.
+
+### Shared bots and connector catalogs
+
+In **Settings → Sharing**, choose **Shared bots** or **MCP connectors** and select a folder
+on a shared drive or a checked-out repository. Each catalog has its own folder setting.
+Use **Share from this Mac…** to save an existing bot or connector there, or place the JSON files
+below in the folder. Select the entries you want and click **Import bots** / **Import connectors**.
+The shared MCP catalog is also accessible from the folder button in **Settings → Connectors**.
+
+- **Bots run locally.** Only name, role and instructions are shared. Avatar, model, working folder,
+  permissions, tasks and chats stay local. Editing an imported bot's profile writes its shared fields
+  back to the selected repository. The avatar remains independent on each Mac.
+- **Connector configuration is shared; authentication is local.** Import the connectors you need,
+  complete their login or secrets in **Settings → Connectors**, and assign them to bots as usual.
+  Enable/disable switches stay local. After editing a connector, use **Share from this Mac…** to
+  publish its configuration changes. Secret placeholders travel, secret values and OAuth tokens do not.
+- Imported definitions refresh when SwarmeBot starts, including when it attaches to an already
+  running local engine. **Refresh from repository** also applies updates without restarting.
+  Missing or invalid catalogs keep the last local copies. New catalog entries are never imported
+  automatically; existing local connector IDs are never overwritten by an unrelated shared entry.
+- **Disconnect** stops updates and keeps local copies. Changing folders does not relink copies to
+  unrelated definitions with the same ID. Re-select the original folder to edit a shared bot's profile.
+
+The bot folder contains `bots.json`, a JSON array with stable `id`, `name`, `title` (optional) and
+`description` (instructions). The connector folder contains `mcp-connectors.json`, a JSON array of MCP
+definitions (`id`, `name`, `transport` and the usual command/args or URL fields). The settings are saved
+locally in `config.json` under `sharedRepositories.bots` and `sharedRepositories.connectors`.
+SwarmeBot reads these folders directly; sync or Git operations are handled by your chosen drive or repository.
 
 ### MCP connectors
 - Add **MCP servers** once and hand them to any bot, whatever its agent: they are mounted on
@@ -620,9 +654,10 @@ from the Organizer.
 ## Packaging and releases
 
 ```sh
-scripts/bundle-app.sh --arch arm64 --dmg        # build/SwarmeBot.app and build/SwarmeBot.dmg (ad-hoc signed)
-scripts/bundle-app.sh --arch x86_64 --dmg       # Intel build: build/SwarmeBot-intel.dmg
+scripts/bundle-app.sh --dmg                     # Apple silicon: build/SwarmeBot.app and build/SwarmeBot.dmg (ad-hoc signed)
 ```
+
+The macOS app is built for Apple silicon (arm64). Intel and universal macOS builds are no longer supported.
 
 Signed and notarized builds:
 
@@ -632,7 +667,7 @@ SPARKLE_PUBLIC_KEY=<EdDSA public key> \
   scripts/bundle-app.sh --arch arm64 --dmg --notarize
 ```
 
-`scripts/release-mac.sh --version X.Y.Z` builds, signs and notarizes both architectures, builds the
+`scripts/release-mac.sh --version X.Y.Z` builds, signs and notarizes the arm64 macOS app, builds the
 Linux engines (`scripts/linux-engines-manifest.sh`), tags `vX.Y.Z` and publishes DMGs, zips, Linux
 engines and `appcast.xml` as a GitHub release (`--no-publish` to skip). Credentials are read from
 `.env.mac-release.local` (git-ignored; start from `.env.mac-release.example`): `MAC_SIGN_IDENTITY`,

@@ -155,6 +155,10 @@ struct BotDetails: View {
     private var profile: some View {
         SettingsCard(tr("Profilo")) {
             VStack(alignment: .leading, spacing: 12) {
+                if bot.sharedSource != nil {
+                    Label(tr("Nome e istruzioni condivisi; avatar e impostazioni locali."), systemImage: "folder.badge.person.crop")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 input(tr("Nome"), text: $name, field: .name, prompt: tr("Nome del bot"))
                 input(tr("Ruolo"), text: $title, field: .title, prompt: tr("Che cosa fa, in poche parole"))
                 VStack(alignment: .leading, spacing: 5) {

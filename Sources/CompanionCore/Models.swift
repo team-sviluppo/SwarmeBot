@@ -163,6 +163,7 @@ public struct TaskUsage: Codable, Hashable, Sendable {
     public var input: Double?
     public var output: Double?
     public var costUsd: Double?
+    public var costEstimated: Bool?
     public var turns: Int?
     /// Output tokens whose reply time was measured, and that time in seconds.
     /// Older turns have tokens and no clock, so the speed uses only these.
@@ -208,6 +209,7 @@ public struct BotConnector: Codable, Hashable, Sendable {
 }
 
 public struct Bot: Codable, Hashable, Identifiable, Sendable {
+    public var sharedSource: SharedSource?
     public var id: String
     public var threadId: String
     public var name: String

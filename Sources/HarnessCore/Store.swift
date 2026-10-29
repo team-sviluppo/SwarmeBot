@@ -158,6 +158,19 @@ public final class Store {
         for index in messages.indices {
             if messages[index]["parentId"] == nil { messages[index]["parentId"] = JSON.from(previous) }
             previous = messages[index]["id"]?.string
+            // Provider processes cannot survive an engine restart. Recover
+            // lazily with the thread, including inactive chats, rather than
+            // leaving historical subtasks looking permanently busy.
+            if var tool = messages[index]["tool"]?.object, var task = tool["subagent"]?.object,
+               task["status"]?.string == "running" {
+                task["status"] = "interrupted"
+                task["result"] = .string([task["result"]?.string, "SwarmeBot restarted before this subagent finished"].compactMap { $0 }.joined(separator: "\n"))
+                tool["subagent"] = .object(task)
+                tool["output"] = .string(JSON.object(task).serialized())
+                tool["ok"] = false
+                messages[index]["tool"] = .object(tool)
+                db.update(threadId, messages[index])
+            }
         }
         if leaf == nil { leaf = messages.last?["id"]?.string }
         threads[threadId] = (messages, leaf)
@@ -443,7 +456,7 @@ public final class Store {
     /// `timedTokens` is the output used for tok/s. It matches `output` when the
     /// provider reported a count; otherwise it is a text estimate and is not
     /// added to the token total.
-    public func addTaskUsage(_ botId: String, _ threadId: String, input: Double?, output: Double?, costUsd: Double?, generationSeconds: Double? = nil, timedTokens: Double? = nil) {
+    public func addTaskUsage(_ botId: String, _ threadId: String, input: Double?, output: Double?, costUsd: Double?, generationSeconds: Double? = nil, timedTokens: Double? = nil, costEstimated: Bool = false) {
         _ = updateTask(botId, threadId) { task in
             let previous = task["usage"]?.object ?? JSONObject()
             func clean(_ value: Double?) -> Double { value.map { $0.isFinite ? max(0, $0.rounded(.towardZero)) : 0 } ?? 0 }
@@ -463,6 +476,9 @@ public final class Store {
                 "estimatedOutput": .number((previous["estimatedOutput"]?.double ?? 0) + (fromText ? counted ?? 0 : 0)),
                 "generationSeconds": .number((previous["generationSeconds"]?.double ?? 0) + (timed ? seconds ?? 0 : 0)),
             ]
+            if previous["costEstimated"]?.bool == true || (cost != nil && costEstimated) {
+                task["usage"]?["costEstimated"] = true
+            }
         }
     }
 
