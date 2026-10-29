@@ -164,7 +164,7 @@ public enum CodexCatalog {
 
     /// The ChatGPT catalog the installed CLI can actually use (`model/list`, every page).
     @MainActor
-    static func fromAppServer(cli: String, env: [String: String], timeout: TimeInterval = 8) async -> ModelCatalog? {
+    static func fromAppServer(cli: String, env: [String: String], timeout: TimeInterval = 8, onRateLimits: ((JSON) -> Void)? = nil) async -> ModelCatalog? {
         guard let process = try? CLIProcess(cli: cli, args: ["app-server"], cwd: NSHomeDirectory(), environment: env) else { return nil }
         return await withCheckedContinuation { continuation in
             var finished = false
@@ -172,6 +172,8 @@ public enum CodexCatalog {
             var pending: [Int: String] = [:]
             var rows: [JSON] = []
             var cursors = Set<String>()
+            var catalogResult: ModelCatalog?
+            var limitsDone = onRateLimits == nil
             let finish: (ModelCatalog?) -> Void = { catalog in
                 guard !finished else { return }
                 finished = true
@@ -184,10 +186,17 @@ public enum CodexCatalog {
                 nextId += 1
             }
             process.onLine = { line in
-                guard let message = try? JSON.parse(line), let id = message["id"]?.int, let kind = pending.removeValue(forKey: id) else { return }
+                guard !finished, let message = try? JSON.parse(line), let id = message["id"]?.int, let kind = pending.removeValue(forKey: id) else { return }
+                if kind == "limits" {
+                    limitsDone = true
+                    if let result = message["result"] { onRateLimits?(result) }
+                    if let catalogResult { finish(catalogResult) }
+                    return
+                }
                 if message["error"] != nil { return finish(nil) }
                 if kind == "initialize" {
                     process.write(#"{"jsonrpc":"2.0","method":"initialized","params":{}}"# + "\n")
+                    if onRateLimits != nil { request("account/rateLimits/read", [:], "limits") }
                     return request("model/list", ["cursor": .null, "limit": 100], "models")
                 }
                 let page = message["result"]
@@ -204,23 +213,24 @@ public enum CodexCatalog {
                     if row["isDefault"]?.bool == true { defaultModel = id }
                 }
                 guard !options.isEmpty else { return finish(nil) }
-                finish(ModelCatalog(default: defaultModel ?? options[0].id, options: options))
+                catalogResult = ModelCatalog(default: defaultModel ?? options[0].id, options: options)
+                if limitsDone { finish(catalogResult) }
             }
-            process.onClose = { _ in finish(nil) }
+            process.onClose = { _ in finish(catalogResult) }
             process.start()
             request("initialize", ["clientInfo": ["name": "swarmebot", "version": "1"]], "initialize")
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                finish(nil)
+                finish(catalogResult)
             }
         }
     }
 
     /// `readCodexModelCatalog`: official rows, then everything ~/.codex knows.
     @MainActor
-    public static func read(env: [String: String], cli: String?, session: URLSession = .shared) async -> ModelCatalog {
+    public static func read(env: [String: String], cli: String?, session: URLSession = .shared, onRateLimits: ((JSON) -> Void)? = nil) async -> ModelCatalog {
         var officialCatalog = staticModels
-        if let cli, let live = await fromAppServer(cli: cli, env: env) { officialCatalog = live }
+        if let cli, let live = await fromAppServer(cli: cli, env: env, onRateLimits: onRateLimits) { officialCatalog = live }
         let home = home(env)
         guard let mainText = try? String(contentsOfFile: "\(home)/config.toml", encoding: .utf8) else {
             return await LocalHosts.merge(officialCatalog, env: env)
@@ -334,8 +344,13 @@ final class CodexInstance: ProviderInstance, ProviderAdapter {
     }
 
     func refreshModels() async {
-        let resolved = await CodexCatalog.read(env: childEnvironment(), cli: cli)
+        let resolved = await CodexCatalog.read(env: childEnvironment(), cli: cli, onRateLimits: { [weak self] payload in self?.noteRateLimits(payload) })
         if !resolved.options.isEmpty { models = resolved }
+    }
+
+    func noteRateLimits(_ payload: JSON) {
+        guard let limit = CodexQuota.session(payload) else { return }
+        emit(RuntimeEvent(provider: provider, threadId: "", .usageLimit(window: limit.window, utilization: limit.utilization, resetsAt: limit.resetsAt)))
     }
 
     func snapshot() async -> ProviderSnapshot {
@@ -402,6 +417,10 @@ final class CodexTurn {
     private var sawStreamDelta = false
     /// codex reports a running THREAD total; the last report is this turn's figure
     private var usage: RuntimeEvent.TokenUsage?
+    private var costEstimate = CodexCostEstimate()
+    private var effectiveModel: String?
+    private var effectiveProvider: String?
+    private var providerThreadId: String?
     private var nextId = 1
     private var pending: [Int: CheckedContinuation<JSON, Error>] = [:]
     private var asks: [String: (String, String?, String) -> Void] = [:]
@@ -448,7 +467,10 @@ final class CodexTurn {
         for continuation in pending.values { continuation.resume(throwing: RPCError(message: "turn settled")) }
         pending.removeAll()
         instance.turnEnded(threadId)
-        emit(.turnCompleted(ok: ok, stopReason: stopReason, cost: nil, denials: nil, usage: usage))
+        var event = RuntimeEvent(provider: "codex", threadId: threadId, turnId: turnId,
+                                 .turnCompleted(ok: ok, stopReason: stopReason, cost: costEstimate.cost, denials: nil, usage: usage))
+        event.costEstimated = costEstimate.cost != nil
+        instance.emit(event)
         stop() // the app-server never exits on its own
     }
 
@@ -525,6 +547,8 @@ final class CodexTurn {
     private func handleNotification(_ message: JSON) {
         let p = message["params"] ?? .null
         switch message["method"]?.string {
+        case "account/rateLimits/updated":
+            instance.noteRateLimits(p)
         case "item/agentMessage/delta":
             if let delta = p["delta"]?.string, !delta.isEmpty {
                 sawStreamDelta = true
@@ -565,7 +589,9 @@ final class CodexTurn {
                 break
             }
         case "thread/tokenUsage/updated":
+            if let source = p["threadId"]?.string, source != providerThreadId { break }
             let tokens = p["tokenUsage"]
+            if let tokens { costEstimate.record(tokens, model: effectiveModel, provider: effectiveProvider) }
             if let last = tokens?["last"] ?? tokens?["total"], last.truthy {
                 usage = .init(input: last["inputTokens"]?.double ?? 0, output: last["outputTokens"]?.double ?? 0)
             }
@@ -651,11 +677,14 @@ final class CodexTurn {
     private func run(cwd: String) async throws {
         _ = try await request("initialize", ["clientInfo": ["name": "swarmebot", "version": "1"]])
         send(["jsonrpc": "2.0", "method": "initialized", "params": [:]])
+        if let limits = try? await request("account/rateLimits/read", [:], timeout: 3) { instance.noteRateLimits(limits) }
         var codexThread: String?
         var startedModel: String?
         if let cursor = turn.resumeCursor?.string, !cursor.isEmpty {
             do {
                 let resumed = try await request("thread/resume", ["threadId": .string(cursor)])
+                effectiveModel = resumed["model"]?.string
+                effectiveProvider = resumed["modelProvider"]?.string
                 codexThread = resumed["thread"]?["id"]?.string ?? cursor
             } catch {
                 // resume unsupported or thread gone — start fresh
@@ -669,9 +698,13 @@ final class CodexTurn {
             params["approvalPolicy"] = .string(instance.fullAuto ? "never" : "on-request")
             params["ephemeral"] = false
             let started = try await request("thread/start", .object(params))
+            effectiveProvider = started["modelProvider"]?.string ?? selection.provider
             codexThread = started["thread"]?["id"]?.string
             startedModel = started["model"]?.string
         }
+        effectiveModel = effectiveModel ?? startedModel ?? CodexCatalog.decode(turn.model).model
+        effectiveProvider = effectiveProvider ?? CodexCatalog.decode(turn.model).provider
+        providerThreadId = codexThread
         emit(.sessionStarted(sessionId: codexThread, model: startedModel ?? turn.model, resumeCursor: nil))
         var params: JSONObject = [
             "threadId": JSON.from(codexThread),

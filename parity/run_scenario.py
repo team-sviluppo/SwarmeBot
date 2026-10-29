@@ -255,6 +255,8 @@ def main():
         os.makedirs(home)
         env.update(HOME=home, FAKE_CODEX_RECORD=claude_record, FAKE_CODEX_STATE=os.path.join(data_dir, "codex-state"),
                    OPENAI_API_KEY="sk-should-not-leak")
+        if os.environ.get("SCENARIO") == "usage":
+            env["FAKE_CODEX_USAGE"] = "1"
     elif DRIVER.startswith("acp:"):
         # a private HOME: the harnesses write their CLI's config there for local models
         home = os.path.join(data_dir, "home")
@@ -448,6 +450,17 @@ def main():
             time.sleep(1.5)
             assert request(port, "POST", f"/api/bots/{bot_id}/interrupt")[0] == 200
             settle(5)
+        if os.environ.get("SCENARIO") == "usage":
+            assert DRIVER == "codex"
+            bot_id = bot["id"]
+            completed = sum(f.get("kind") == "runtime" and f["event"]["type"] == "turn.completed" for f in frames)
+            assert request(port, "PATCH", f"/api/bots/{bot_id}", {"modelSelection": {"instanceId": "codex", "model": "gpt-6.1-sol"}})[0] == 200
+            assert request(port, "POST", f"/api/bots/{bot_id}/messages", {"text": "USAGE"})[0] == 202
+            settle(completed + 1)
+            instance = next(i for i in request(port, "GET", "/api/instances")[1]["instances"] if i["instanceId"] == "codex")
+            assert instance["usageLimit"]["utilization"] == .42, instance
+            task = request(port, "GET", "/api/bots")[1]["bots"][0]["tasks"][0]
+            assert task["usage"]["costUsd"] > 0 and task["usage"]["costEstimated"], task
         if os.environ.get("SCENARIO") == "automations":
             def quiet(min_completed):
                 deadline = time.time() + 40

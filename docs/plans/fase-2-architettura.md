@@ -133,6 +133,11 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Codex (2026-10-29): `account/rateLimits/*` fornisce la quota dell'abbonamento anche fuori
+  da un turno; la finestra primaria non è necessariamente di cinque ore. Il costo del task è
+  una stima API Standard dai token, marcata come tale e distinta dall'addebito dell'abbonamento.
+  Vedere [Costo e utilizzo Codex](2026-10-29-utilizzo-codex.md).
+
 - `generateText` esiste sui driver Node (titoli e nomi) ma il harness non lo chiama da nessuna parte. Non è stato portato: non c'è un chiamante da far coincidere.
 - Nel Node le validazioni delle routine lanciano `Error` senza status: le route rispondono **500**, non 400. Lo si
   replica (lo scenario `automations` lo controlla); i webhook invece rispondono 400.

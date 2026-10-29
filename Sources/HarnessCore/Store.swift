@@ -443,7 +443,7 @@ public final class Store {
     /// `timedTokens` is the output used for tok/s. It matches `output` when the
     /// provider reported a count; otherwise it is a text estimate and is not
     /// added to the token total.
-    public func addTaskUsage(_ botId: String, _ threadId: String, input: Double?, output: Double?, costUsd: Double?, generationSeconds: Double? = nil, timedTokens: Double? = nil) {
+    public func addTaskUsage(_ botId: String, _ threadId: String, input: Double?, output: Double?, costUsd: Double?, generationSeconds: Double? = nil, timedTokens: Double? = nil, costEstimated: Bool = false) {
         _ = updateTask(botId, threadId) { task in
             let previous = task["usage"]?.object ?? JSONObject()
             func clean(_ value: Double?) -> Double { value.map { $0.isFinite ? max(0, $0.rounded(.towardZero)) : 0 } ?? 0 }
@@ -463,6 +463,9 @@ public final class Store {
                 "estimatedOutput": .number((previous["estimatedOutput"]?.double ?? 0) + (fromText ? counted ?? 0 : 0)),
                 "generationSeconds": .number((previous["generationSeconds"]?.double ?? 0) + (timed ? seconds ?? 0 : 0)),
             ]
+            if previous["costEstimated"]?.bool == true || (cost != nil && costEstimated) {
+                task["usage"]?["costEstimated"] = true
+            }
         }
     }
 

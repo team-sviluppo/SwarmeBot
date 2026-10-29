@@ -495,7 +495,7 @@ public final class Harness {
                 // Providers that omit usage still get a speed: about 3.5
                 // characters a token, same ratio as the connector estimate.
                 let timedTokens = reportedOutput > 0 ? reportedOutput : Self.estimatedTokens(reply)
-                store.addTaskUsage(botId, threadId, input: tokens?.input, output: tokens?.output, costUsd: cost, generationSeconds: generationSeconds, timedTokens: timedTokens)
+                store.addTaskUsage(botId, threadId, input: tokens?.input, output: tokens?.output, costUsd: cost, generationSeconds: generationSeconds, timedTokens: timedTokens, costEstimated: event.costEstimated)
                 if store.bot(botId)?["activity"]?.string != "dead" { store.setActivity(botId, "idle") }
                 store.patchBot(botId, ["unread": true])
                 notify("done", bot: bot, threadId: threadId, detail: reply)

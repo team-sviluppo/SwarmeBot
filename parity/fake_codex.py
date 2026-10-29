@@ -97,7 +97,13 @@ def run_turn(params):
     if os.environ.get("FAKE_CODEX_RECORD"):
         with open(os.environ["FAKE_CODEX_RECORD"], "a") as f:
             f.write(json.dumps(record) + "\n")
-    if "CONNETTORE " in text:
+    if "USAGE" in text:
+        with open(os.path.join(state_dir, "usage.json"), "w") as f:
+            json.dump({"usedPercent": 42, "windowDurationMins": 300, "resetsAt": 4102444800}, f)
+        note("account/rateLimits/updated", {"rateLimits": {"limitId": "codex", "primary": {
+            "usedPercent": 42, "windowDurationMins": 300, "resetsAt": 4102444800}}})
+        message("Codex usage test", [])
+    elif "CONNETTORE " in text:
         name, _, said = text.split("CONNETTORE ", 1)[1].strip().partition(" ")
         servers = mcp_servers()
         answer = mcp_echo(servers[name], said) if name in servers else f"nessun server {name}"
@@ -127,8 +133,8 @@ def run_turn(params):
         note("item/started", {"item": {"type": "userMessage", "id": "u1"}})
         message("Ciao dal finto codex", ["Ciao ", "dal finto codex"])
         note("error", {"error": {"message": "avviso di prova"}})
-    note("thread/tokenUsage/updated", {"tokenUsage": {"total": {"inputTokens": 120, "outputTokens": 30},
-                                                      "last": {"inputTokens": 20, "outputTokens": 6}}})
+    note("thread/tokenUsage/updated", {"tokenUsage": {"total": {"inputTokens": 120, "cachedInputTokens": 5, "outputTokens": 30},
+                                                      "last": {"inputTokens": 20, "cachedInputTokens": 5, "outputTokens": 6}}})
     note("turn/completed", {"turn": {"status": "completed"}})
 
 
@@ -146,6 +152,10 @@ def handle(msg):
     result = {}
     if method == "initialize":
         result = {"userAgent": "fake"}
+    elif method == "account/rateLimits/read" and os.environ.get("FAKE_CODEX_USAGE"):
+        path = os.path.join(state_dir, "usage.json")
+        primary = json.load(open(path)) if os.path.exists(path) else {"usedPercent": 25, "windowDurationMins": 300, "resetsAt": 4102444800}
+        result = {"rateLimits": {"limitId": "codex", "primary": primary}}
     elif method == "model/list":
         if msg["params"].get("cursor") is None:
             result = {"data": [{"id": "gpt-fake-1", "displayName": "GPT Fake 1"}, {"id": "gpt-hidden", "hidden": True}], "nextCursor": "p2"}
