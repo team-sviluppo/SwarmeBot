@@ -709,7 +709,7 @@ struct ShimmerText: View {
 }
 
 /// "Working": `raised` bubble, the working bot's mascot pacing left and
-/// right, and "Al lavoro da Ns". Three bouncing dots when nobody is known.
+/// right, and elapsed time in seconds, minutes and hours as needed.
 struct TypingIndicator: View {
     var bot: Bot?
     @State private var start = Date()
@@ -733,7 +733,7 @@ struct TypingIndicator: View {
                         }
                     }
                 }
-                Text(tr("Al lavoro da %@s", String(Int(t))))
+                Text(Self.elapsedLabel(t))
                     .font(.system(size: 12.5).monospacedDigit())
                     .foregroundStyle(Theme.secondary)
             }
@@ -741,6 +741,15 @@ struct TypingIndicator: View {
             .padding(.vertical, bot == nil ? 12 : 7)
             .background(RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous).fill(Theme.raised))
         }
+    }
+
+    private static func elapsedLabel(_ elapsed: TimeInterval) -> String {
+        let seconds = max(0, Int(elapsed))
+        if seconds < 60 { return tr("Al lavoro da %@ s", String(seconds)) }
+        if seconds < 3600 {
+            return tr("Al lavoro da %@ min %@ s", String(seconds / 60), String(seconds % 60))
+        }
+        return tr("Al lavoro da %@ h %@ min %@ s", String(seconds / 3600), String((seconds % 3600) / 60), String(seconds % 60))
     }
 
     /// translateY −25% (of 6 pt) at 0/100% easing in, 0 at 50% easing out.

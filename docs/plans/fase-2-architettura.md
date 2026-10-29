@@ -133,6 +133,17 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Integrazione PR #27–#29 (2026-10-29): aggiornare ogni branch da `main` dopo il merge
+  della PR precedente. Nel driver Codex conservare insieme costo stimato e registro dei
+  sottoagenti, con un solo `providerThreadId` e `killTree()` al termine della run.
+  Build e suite integrate riuscite: 416 test, 13 opzionali saltati, zero errori; escluso
+  il test di trasferimento già noto per bloccarsi. Scenari HTTP/SSE Codex `usage`,
+  `subagents` e `tool-visibility` riusciti, schermate isolate del filtro e del timer
+  controllate. Parità Node, compilazione Linux e compilazione iOS non eseguite.
+- Contatore di lavoro (2026-10-29): mostra secondi sotto il minuto, minuti e secondi fino
+  all'ora, poi ore/minuti/secondi. Esempio: 560 secondi → `9 min 20 s`. Stringhe localizzate
+  in italiano e inglese; verifica visiva con valore di prova e build finale ripristinata sul
+  tempo reale. Nessuna modifica al ciclo di vita del turno.
 - Visibilità strumenti (2026-10-29): preferenza booleana opzionale `showToolCalls` del bot,
   attiva se assente. Il filtro è solo nella presentazione Mac e iOS remoto, prima del
   raggruppamento: messaggi, contesto del modello ed esportazioni conservano tutti i risultati.
