@@ -121,12 +121,18 @@ struct PillButtonStyle: ButtonStyle {
 }
 
 /// A borderless icon button that highlights on hover.
-struct IconButtonStyle: ButtonStyle {
+public struct IconButtonStyle: ButtonStyle {
     var size: CGFloat = 28
     var iconSize: CGFloat = 16
     var active = false
 
-    func makeBody(configuration: Configuration) -> some View {
+    public init(size: CGFloat = 28, iconSize: CGFloat = 16, active: Bool = false) {
+        self.size = size
+        self.iconSize = iconSize
+        self.active = active
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
         IconButtonBody(configuration: configuration, size: size, iconSize: iconSize, active: active)
     }
 

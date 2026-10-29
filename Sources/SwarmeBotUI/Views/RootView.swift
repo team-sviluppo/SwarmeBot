@@ -13,6 +13,9 @@ final class UIState {
     var showInspector = true
     /// `SWARMEBOT_INSPECTOR_TAB` picks the opening tab — for snapshots.
     var inspectorTab: InspectorView.Tab = ProcessInfo.processInfo.environment["SWARMEBOT_INSPECTOR_TAB"].flatMap(InspectorView.Tab.init(rawValue:)) ?? .details
+    /// The id of the plugin tab open in the right column, which then stands in for `inspectorTab`.
+    /// `SWARMEBOT_PLUGIN_TAB` picks it at launch, for snapshots.
+    var pluginTab: String? = ProcessInfo.processInfo.environment["SWARMEBOT_PLUGIN_TAB"]
 }
 
 /// Sidebar 272 · transcript · right panel (400, events 460) — the Electron
@@ -58,7 +61,7 @@ struct RootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     if ui.showInspector, model.status == .live, model.selectedThreadId != nil {
                         InspectorView()
-                            .frame(width: 400)
+                            .frame(width: InspectorView.width(model))
                             .overlay(alignment: .leading) { Rectangle().fill(Theme.hairline.opacity(0.4)).frame(width: 1) }
                             .transition(.offset(x: 28).combined(with: .opacity))
                     }

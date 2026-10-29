@@ -34,6 +34,33 @@ public struct ChatContext {
     }
 }
 
+/// A tab a plugin adds to the right column of a chat.
+public struct PluginTab: Identifiable {
+    public let id: String
+    public let title: String
+    public let icon: String
+    /// The column's width while the tab is open; nil keeps the usual one.
+    public var width: CGFloat?
+    public let content: PluginView
+
+    public init(id: String, title: String, icon: String, width: CGFloat? = nil, content: PluginView) {
+        self.id = id
+        self.title = title
+        self.icon = icon
+        self.width = width
+        self.content = content
+    }
+}
+
+extension ChatContext {
+    /// The chat the window shows.
+    @MainActor
+    public static func current(_ model: AppModel) -> ChatContext {
+        ChatContext(model: model, bot: model.selectedBot, room: model.selectedRoom, threadId: model.selectedThreadId ?? "",
+                    isBusy: model.selectedBot.map(model.isBusy) ?? (model.selectedRoom?.busyBotId != nil))
+    }
+}
+
 public enum SettingsScope {
     case bot(Bot)
     case room(Room)
@@ -64,6 +91,14 @@ public protocol AppPlugin: AnyObject {
     /// What goes under a bot reply in place of the cards of the files it points at;
     /// nil leaves the cards. Asked for every bot text of a chat the plugin is active in.
     func replyFooter(_ message: Message, _ chat: ChatContext, _ position: TurnPosition) -> PluginView?
+    /// Chips above the text field, in the row of the attachments (the files a message refers to).
+    func composerChips(_ chat: ChatContext) -> [PluginView]
+    /// The text to send for what was typed: a plugin adds what it holds for this message (and lets go of it).
+    func outgoingText(_ text: String, _ chat: ChatContext) -> String
+    /// Files dropped on the composer that the plugin takes instead of attaching; returns the ones it took.
+    func claimDroppedFiles(_ urls: [URL], _ chat: ChatContext) -> [URL]
+    /// Tabs of the right column, after the core's.
+    func inspectorTabs(_ chat: ChatContext) -> [PluginTab]
     /// Rows of the settings of a bot or channel (the plugin's switch, its options).
     func settingsSections(_ scope: SettingsScope) -> [PluginView]
     /// The chat, its folder or its busy state changed: refresh what the plugin shows.
@@ -74,6 +109,10 @@ public extension AppPlugin {
     func isActive(for chat: ChatContext) -> Bool { false }
     func composerAccessories(_ chat: ChatContext) -> [PluginView] { [] }
     func replyFooter(_ message: Message, _ chat: ChatContext, _ position: TurnPosition) -> PluginView? { nil }
+    func composerChips(_ chat: ChatContext) -> [PluginView] { [] }
+    func outgoingText(_ text: String, _ chat: ChatContext) -> String { text }
+    func claimDroppedFiles(_ urls: [URL], _ chat: ChatContext) -> [URL] { [] }
+    func inspectorTabs(_ chat: ChatContext) -> [PluginTab] { [] }
     func settingsSections(_ scope: SettingsScope) -> [PluginView] { [] }
     func chatChanged(_ chat: ChatContext) async {}
 }
@@ -102,6 +141,35 @@ public final class PluginHost {
 
     public func composerAccessories(_ chat: ChatContext) -> [PluginView] {
         active(for: chat).flatMap { $0.composerAccessories(chat) }
+    }
+
+    public func composerChips(_ chat: ChatContext) -> [PluginView] {
+        active(for: chat).flatMap { $0.composerChips(chat) }
+    }
+
+    /// The text with what each active plugin adds to it, in order.
+    public func outgoingText(_ text: String, _ chat: ChatContext) -> String {
+        active(for: chat).reduce(text) { $1.outgoingText($0, chat) }
+    }
+
+    /// The files no plugin took: what the composer attaches as it always did.
+    public func unclaimedFiles(_ urls: [URL], _ chat: ChatContext) -> [URL] {
+        var rest = urls
+        for plugin in active(for: chat) {
+            let taken = Set(plugin.claimDroppedFiles(rest, chat))
+            rest.removeAll { taken.contains($0) }
+        }
+        return rest
+    }
+
+    public func inspectorTabs(_ chat: ChatContext) -> [PluginTab] {
+        active(for: chat).flatMap { $0.inspectorTabs(chat) }
+    }
+
+    /// Opens the right column on a plugin's tab (a shortcut of the plugin's, say).
+    public func openInspectorTab(_ id: String) {
+        UIState.shared.pluginTab = id
+        UIState.shared.showInspector = true
     }
 
     /// The first plugin's footer for the reply, if any takes it over.

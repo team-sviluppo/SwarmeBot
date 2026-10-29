@@ -23,6 +23,8 @@ struct PluginsPane: View {
             } footer: {
                 Text(tr("Un plugin acceso aggiunge funzioni a bot e canali; spento, smette di rispondere e di essere ascoltato, ma non perde i suoi dati."))
             }
+            // each plugin's own settings, for the plugins this engine has on
+            ForEach(Array(PluginHost.shared.settingsSections(.global, on: model).enumerated()), id: \.offset) { $0.element }
         }
         .formStyle(.grouped)
     }

@@ -42,3 +42,21 @@ Finder (local only), an editor (VS Code, Cursor, Zed, Xcode; on a server only VS
 through Remote - SSH) or the chat's session in a terminal. A remote engine needs an SSH identity
 configured on this Mac for the terminal and the editors. The terminal is the one picked in
 Settings › General.
+
+### Diff, commit and file references (engine plugin 1.1.0 and later)
+
+An engine whose plugin is older than 1.1.0 keeps the first version: the branch, the terminal, Open in…
+and a "Commit & push" that asks the agent to do it.
+
+- **Diff tab** (⌘⇧D) in the right column, 660 pt wide: the changed files by folder on the left, the
+  diff of the chosen one on the right. A click on a line opens a comment; **Send review** sends every
+  comment to the agent as one message, with file and line. Each file has *Add to chat* (also a drag
+  to the composer, on this Mac).
+- **Commit…** (from the diff tab, or the badge under a reply): the message is written by the model set in
+  Settings › Plugins (else the bot's own) and can be edited; checkboxes pick the files; then commit,
+  commit and push, push to a new branch, or push and open a pull request with `gh`. The engine runs
+  it; a failing hook's output is shown as it is.
+- **⌘P / the File chip** searches the repository's files (`.gitignore` respected) and adds the file as a
+  chip above the field. It is a path, not an upload: the message carries `Files I am referring to…` and
+  the agent reads the file itself, so it also works with an engine on a server. A file dragged in from
+  Finder that lies inside the chat's folder becomes a reference too (this Mac only); images stay attachments.

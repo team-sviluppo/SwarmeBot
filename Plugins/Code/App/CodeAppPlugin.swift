@@ -19,8 +19,38 @@ public final class CodeAppPlugin: AppPlugin {
 
     public func composerAccessories(_ chat: ChatContext) -> [PluginView] {
         guard let bot = chat.bot else { return [] }
-        return [PluginView(GitBranchChip(bot: bot, state: state)), PluginView(CodeModeTerminalButton(bot: bot, state: state)),
-                PluginView(CodeOpenMenu(bot: bot, state: state))]
+        var chips = [PluginView(GitBranchChip(bot: bot, state: state)), PluginView(CodeModeTerminalButton(bot: bot, state: state)),
+                     PluginView(CodeOpenMenu(bot: bot, state: state))]
+        if state.engineHasWorkflow(chat.model) {
+            chips.append(PluginView(CodeFilePicker(bot: bot, state: state)))
+            chips.append(PluginView(CodeShortcuts()))
+        }
+        return chips
+    }
+
+    public func composerChips(_ chat: ChatContext) -> [PluginView] {
+        (state.references[chat.threadId] ?? []).map { PluginView(FileReferenceChip(file: $0, state: state, threadId: chat.threadId)) }
+    }
+
+    /// The files are named after the message, for the agent; they go with this message and no other.
+    public func outgoingText(_ text: String, _ chat: ChatContext) -> String {
+        let files = state.takeReferences(threadId: chat.threadId)
+        return files.isEmpty ? text : text + "\n\n" + CodeState.referencesBlock(files)
+    }
+
+    /// A file of this Mac inside the chat's folder is a reference; one from elsewhere is attached as usual.
+    public func claimDroppedFiles(_ urls: [URL], _ chat: ChatContext) -> [URL] {
+        guard !chat.model.isRemote, state.engineHasWorkflow(chat.model) else { return [] }
+        let git = state.gitStates[chat.threadId]
+        let claimed = DroppedFiles.claimable(urls, folders: [git?.root, git?.folder].compactMap { $0 })
+        for url in claimed { state.addReference(FileReference(path: url.path), threadId: chat.threadId) }
+        return claimed
+    }
+
+    public func inspectorTabs(_ chat: ChatContext) -> [PluginTab] {
+        guard let bot = chat.bot, state.engineHasWorkflow(chat.model) else { return [] }
+        return [PluginTab(id: CodeDiffPanel.tabId, title: tr("Diff"), icon: "plus.forwardslash.minus", width: CodeDiffPanel.width,
+                          content: PluginView(CodeDiffPanel(bot: bot, state: state)))]
     }
 
     /// In a Code chat a reply gets a badge where its turn ends and nothing in the
@@ -31,8 +61,11 @@ public final class CodeAppPlugin: AppPlugin {
     }
 
     public func settingsSections(_ scope: SettingsScope) -> [PluginView] {
-        guard case let .bot(bot) = scope else { return [] }
-        return [PluginView(CodeBotSettings(bot: bot))]
+        switch scope {
+        case let .bot(bot): return [PluginView(CodeBotSettings(bot: bot))]
+        case .global: return [PluginView(CodeGlobalSettings(state: state))]
+        case .room: return []
+        }
     }
 
     public func chatChanged(_ chat: ChatContext) async {

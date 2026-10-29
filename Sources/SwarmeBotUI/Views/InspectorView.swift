@@ -23,6 +23,35 @@ struct InspectorView: View {
         }
     }
 
+    /// A core tab, or one a plugin added, as the segmented picker holds them.
+    enum Choice: Hashable {
+        case core(Tab)
+        case plugin(String)
+    }
+
+    /// The plugins' tabs for the open chat.
+    @MainActor
+    static func pluginTabs(_ model: AppModel) -> [PluginTab] {
+        guard model.selectedBot != nil else { return [] }
+        return PluginHost.shared.inspectorTabs(ChatContext.current(model))
+    }
+
+    /// The plugin tab that is open, if the chat still has it.
+    @MainActor
+    static func openPluginTab(_ model: AppModel) -> PluginTab? {
+        guard let id = UIState.shared.pluginTab else { return nil }
+        return pluginTabs(model).first { $0.id == id }
+    }
+
+    /// The column is as wide as its open tab asks, 400 otherwise.
+    @MainActor
+    static func width(_ model: AppModel) -> CGFloat {
+        openPluginTab(model)?.width ?? 400
+    }
+
+    private var pluginTabs: [PluginTab] { Self.pluginTabs(model) }
+    private var openPlugin: PluginTab? { Self.openPluginTab(model) }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -37,7 +66,7 @@ struct InspectorView: View {
             .padding(.top, 14)
             .padding(.bottom, 12)
             if let bot = model.selectedBot {
-                if ui.inspectorTab != .details {
+                if ui.inspectorTab != .details || openPlugin != nil {
                     HStack(spacing: 10) {
                         BotAvatar(bot: bot, size: 32, state: SwarmeState.forBot(bot, last: model.visibleTranscript(bot.threadId).last))
                         VStack(alignment: .leading, spacing: 1) {
@@ -52,18 +81,29 @@ struct InspectorView: View {
                     .padding(.bottom, 12)
                 }
 
-                SegmentedPicker(options: Tab.allCases.map { ($0, $0.title) }, selection: Binding(
-                    get: { ui.inspectorTab }, set: { ui.inspectorTab = $0 }
+                SegmentedPicker(options: Tab.allCases.map { (Choice.core($0), $0.title) } + pluginTabs.map { (Choice.plugin($0.id), $0.title) }, selection: Binding(
+                    get: { openPlugin.map { Choice.plugin($0.id) } ?? .core(ui.inspectorTab) },
+                    set: {
+                        switch $0 {
+                        case let .core(tab): ui.pluginTab = nil; ui.inspectorTab = tab
+                        case let .plugin(id): ui.pluginTab = id
+                        }
+                    }
                 ))
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
 
+                if let openPlugin {
+                    // a plugin's tab lays itself out and scrolls what it needs to
+                    openPlugin.content
+                } else {
                 ScrollView {
                     switch ui.inspectorTab {
                     case .details: BotDetails(bot: bot)
                     case .library: LibraryTab(bot: bot)
                     case .computer: ComputerTab(bot: bot)
                     }
+                }
                 }
             } else if let room = model.selectedRoom {
                 RoomDetails(room: room)
@@ -77,6 +117,7 @@ struct InspectorView: View {
 
     private var title: String {
         if model.selectedRoom != nil { return tr("Canale") }
+        if let openPlugin { return openPlugin.title }
         switch ui.inspectorTab {
         case .details: return tr("Impostazioni bot")
         case .library: return tr("Libreria")
@@ -86,6 +127,7 @@ struct InspectorView: View {
 
     private var icon: String {
         if model.selectedRoom != nil { return "number" }
+        if let openPlugin { return openPlugin.icon }
         switch ui.inspectorTab {
         case .details: return "slider.horizontal.3"
         case .library: return "books.vertical"

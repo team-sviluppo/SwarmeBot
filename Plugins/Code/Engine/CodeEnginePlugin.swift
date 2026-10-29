@@ -13,7 +13,7 @@ public final class CodeEnginePlugin: EnginePlugin {
 
     public nonisolated var id: String { "code" }
     public nonisolated var name: String { "Code" }
-    public nonisolated var version: String { "1.0.0" }
+    public nonisolated var version: String { "1.1.0" }
     public nonisolated var botFlags: [String] { ["codeMode"] }
 
     public func routes(_ router: PluginRouter) {

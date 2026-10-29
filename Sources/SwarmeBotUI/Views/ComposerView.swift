@@ -43,8 +43,9 @@ struct ComposerView: View {
                 SkillSuggestionList(skills: candidates) { insertSkill($0) }
             }
             PendingApprovalSlot(threadId: threadId)
-            if !(attachments[threadId] ?? []).isEmpty {
-                AttachmentChips(items: attachments[threadId] ?? []) { id in
+            let pluginChips = PluginHost.shared.composerChips(ChatContext.current(model))
+            if !(attachments[threadId] ?? []).isEmpty || !pluginChips.isEmpty {
+                AttachmentChips(items: attachments[threadId] ?? [], extra: pluginChips) { id in
                     attachments[threadId]?.removeAll { $0.id == id }
                 }
             }
@@ -104,6 +105,7 @@ struct ComposerView: View {
             }
             .onDrop(of: [.fileURL, .image], isTargeted: $dropTargeted, perform: drop)
             if let bot = model.selectedBot {
+                ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ModelPickerButton(bot: bot)
                     let folder = workingFolder(bot)
@@ -136,6 +138,7 @@ struct ComposerView: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 6)
+                }
                 .pluginsFollowing(chat(for: bot))
             }
         }
@@ -181,18 +184,21 @@ struct ComposerView: View {
                     model.lastError = tr("%@ sta lavorando: riprova quando il turno finisce", busyTarget.bot.name)
                     return
                 }
+                // past every check: a plugin adds what it holds (and lets go of it) only for a message that goes
+                let outgoing = PluginHost.shared.outgoingText(text, ChatContext.current(model))
                 drafts[threadId] = ""
                 attachments[threadId] = []
                 pickedTags[threadId] = nil
-                Task { await model.sendTagged(text, attachments: pending, to: tagged) }
+                Task { await model.sendTagged(outgoing, attachments: pending, to: tagged) }
                 return
             }
         }
+        let outgoing = PluginHost.shared.outgoingText(text, ChatContext.current(model))
         drafts[threadId] = ""
         attachments[threadId] = []
         pickedTags[threadId] = nil
         Task {
-            if pending.isEmpty { await model.send(text) } else { await model.send(text, attachments: pending) }
+            if pending.isEmpty { await model.send(outgoing) } else { await model.send(outgoing, attachments: pending) }
         }
     }
 
@@ -266,6 +272,8 @@ struct ComposerView: View {
     /// Images go up as attachments the engine can see; anything else is
     /// passed by path, which every engine here can open itself.
     private func addFile(_ url: URL) {
+        // a plugin may take it (a file inside the repository becomes a reference, not an upload)
+        if PluginHost.shared.unclaimedFiles([url], ChatContext.current(model)).isEmpty { return }
         let type = UTType(filenameExtension: url.pathExtension)
         if let type, let mime = Self.imageMime(type), let data = try? Data(contentsOf: url), data.count <= 10_000_000 {
             add(.init(name: url.lastPathComponent, kind: .image(data, mime: mime)))
@@ -464,11 +472,14 @@ private struct MentionList: View {
 
 private struct AttachmentChips: View {
     let items: [ComposerAttachment]
+    /// What plugins put in the same row (the files a message refers to).
+    var extra: [PluginView] = []
     let remove: (UUID) -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                ForEach(Array(extra.enumerated()), id: \.offset) { $0.element }
                 ForEach(items) { item in
                     HStack(spacing: 6) {
                         preview(item)

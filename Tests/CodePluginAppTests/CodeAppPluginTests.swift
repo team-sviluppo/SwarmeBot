@@ -45,9 +45,9 @@ final class CodeAppPluginTests: XCTestCase {
         XCTAssertNotNil(plugin.replyFooter(try message(), chat(try bot(codeMode: true), busy: true), busyLatest))
     }
 
-    func testOnlyABotHasASwitch() throws {
+    func testOnlyABotHasASwitchAndTheEngineHasTheCommitModel() throws {
         let plugin = CodeAppPlugin()
         XCTAssertEqual(plugin.settingsSections(.bot(try bot(codeMode: false))).count, 1)
-        XCTAssertTrue(plugin.settingsSections(.global).isEmpty)
+        XCTAssertEqual(plugin.settingsSections(.global).count, 1, "the model that writes commit messages")
     }
 }

@@ -204,6 +204,7 @@ struct CodeModeBadge: View {
     @Environment(AppModel.self) private var model
     @State private var replyFiles: [ReplyFile] = []
     @State private var expanded = false
+    @State private var committing = false
 
     private var git: ThreadGitState? {
         guard latest, let git = state.gitStates[threadId], git.repo else { return nil }
@@ -222,7 +223,7 @@ struct CodeModeBadge: View {
                 HStack(spacing: 8) {
                     badge(count: rows.count)
                     if git != nil {
-                        Button { Task { await state.commitAndPush(model: model) } } label: {
+                        Button { if state.engineHasWorkflow(model), let bot = model.selectedBot { _ = bot; committing = true } else { Task { await state.commitAndPush(model: model) } } } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "arrow.up.circle").font(.system(size: 11, weight: .semibold))
                                 Text(tr("Commit & push")).font(.system(size: 12.5, weight: .medium))
@@ -230,12 +231,12 @@ struct CodeModeBadge: View {
                             .fixedSize()
                         }
                         .buttonStyle(ChipButtonStyle(filled: true, size: 12.5))
-                        .help(tr("Chiede all'agente di fare commit e push delle modifiche"))
+                        .help(state.engineHasWorkflow(model) ? tr("Apre la finestra di commit") : tr("Chiede all'agente di fare commit e push delle modifiche"))
                     }
                 }
                 if expanded {
                     VStack(alignment: .leading, spacing: 2) {
-                        ForEach(rows) { ChangedFileRow(row: $0, threadId: threadId) }
+                        ForEach(rows) { ChangedFileRow(row: $0, threadId: threadId, state: state) }
                     }
                     .padding(.leading, 18)
                     .transition(.opacity)
@@ -244,6 +245,9 @@ struct CodeModeBadge: View {
         }
         .task(id: message.id) {
             replyFiles = await model.replyFiles(threadId: threadId, messageId: message.id, text: message.text ?? "")
+        }
+        .sheet(isPresented: $committing) {
+            if let bot = model.selectedBot { CommitSheet(bot: bot, state: state) }
         }
     }
 
@@ -286,6 +290,7 @@ struct ChangedFile: Identifiable {
 private struct ChangedFileRow: View {
     let row: ChangedFile
     let threadId: String
+    let state: CodeState
     @Environment(AppModel.self) private var model
     @State private var hovering = false
 
@@ -315,9 +320,13 @@ private struct ChangedFileRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { if row.exists { Task { await open() } } }
+        .onDrag { row.exists && !model.isRemote ? NSItemProvider(object: URL(fileURLWithPath: row.file.path) as NSURL) : NSItemProvider() }
         .help(row.file.path)
         .contextMenu {
             if row.exists { Button(tr("Apri")) { Task { await open() } } }
+            if row.exists, state.engineHasWorkflow(model) {
+                Button(tr("Aggiungi alla chat")) { state.addReference(FileReference(path: row.file.path), threadId: threadId) }
+            }
             if row.exists, !model.isRemote {
                 Button(tr("Mostra nel Finder")) { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: row.file.path)]) }
             }
