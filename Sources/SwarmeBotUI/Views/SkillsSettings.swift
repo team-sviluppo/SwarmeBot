@@ -8,13 +8,16 @@ import SwiftUI
 /// a shared one, if the user wants several Macs to see the same skills.
 struct SkillsPane: View {
     @Environment(AppModel.self) private var model
-    @State private var selected: String?
+    /// Debug aid for screenshots: `SWARMEBOT_SKILL_SELECT=source:<id>` or a skill name opens on it.
+    @State private var selected: String? = ProcessInfo.processInfo.environment["SWARMEBOT_SKILL_SELECT"]
     @State private var newName = ""
     @State private var pendingImport: PendingImport?
     @State private var replaceImport: URL?
     @State private var error: String?
     @State private var copyingToServer = false
     private static let newId = "__new__"
+    private static let newSourceId = "__newsource__"
+    private static let sourcePrefix = "source:"
 
     /// A pick waiting for the user to accept that it ships scripts.
     struct PendingImport: Identifiable {
@@ -28,17 +31,28 @@ struct SkillsPane: View {
                 SkillsFolderRow()
                 Divider()
                 List(selection: $selected) {
-                    ForEach(model.skills) { skill in
-                        SkillRow(skill: skill).tag(skill.id)
-                    }
-                    if selected == Self.newId {
-                        Label(tr("Nuova skill"), systemImage: "plus.circle").tag(Self.newId)
+                    if !model.skillSources.isEmpty || selected == Self.newSourceId {
+                        Section(tr("Sorgenti GitHub")) {
+                            ForEach(model.skillSources) { source in
+                                SkillSourceRow(source: source).tag(Self.sourcePrefix + source.id)
+                            }
+                            if selected == Self.newSourceId {
+                                Label(tr("Nuova sorgente"), systemImage: "plus.circle").tag(Self.newSourceId)
+                            }
+                        }
+                        Section(tr("Skill")) { skillRows }
+                    } else {
+                        skillRows
                     }
                 }
                 Divider()
                 HStack {
-                    Button { selected = Self.newId } label: { Image(systemName: "plus") }
-                        .help(tr("Scrivi una nuova skill"))
+                    Menu {
+                        Button(tr("Scrivi una nuova skill")) { selected = Self.newId }
+                        Button(tr("Aggiungi una sorgente GitHub…")) { selected = Self.newSourceId }
+                    } label: { Image(systemName: "plus") }
+                        .menuStyle(.borderlessButton).fixedSize()
+                        .help(tr("Una nuova skill, o una cartella di skill da GitHub"))
                     Button(tr("Importa…"), action: pickImport)
                         .help(tr("Una cartella con SKILL.md, oppure un .zip o .skill che la contiene"))
                     Spacer()
@@ -60,6 +74,12 @@ struct SkillsPane: View {
                 if selected == Self.newId {
                     NewSkillEditor { saved in selected = saved.id }
                         .id(Self.newId)
+                } else if selected == Self.newSourceId {
+                    SkillSourceEditor(source: nil) { saved in selected = Self.sourcePrefix + saved.id }
+                        .id(Self.newSourceId)
+                } else if let id = selected, id.hasPrefix(Self.sourcePrefix),
+                          let source = model.skillSources.first(where: { $0.id == String(id.dropFirst(Self.sourcePrefix.count)) }) {
+                    SkillSourceEditor(source: source) { _ in }.id(source.id)
                 } else if let id = selected, let skill = model.skills.first(where: { $0.id == id }) {
                     SkillEditor(skill: skill).id(skill.id)
                 } else {
@@ -87,6 +107,16 @@ struct SkillsPane: View {
             Button(tr("Sostituisci"), role: .destructive) { Task { await upload(url, replace: true) } }
         } message: { _ in
             Text(tr("La cartella esistente verrà sostituita per intero."))
+        }
+    }
+
+    @ViewBuilder
+    private var skillRows: some View {
+        ForEach(model.skills) { skill in
+            SkillRow(skill: skill).tag(skill.id)
+        }
+        if selected == Self.newId {
+            Label(tr("Nuova skill"), systemImage: "plus.circle").tag(Self.newId)
         }
     }
 
@@ -206,6 +236,10 @@ private struct SkillRow: View {
                     Image(systemName: "terminal").font(.system(size: 10)).foregroundStyle(Theme.warning)
                         .help(tr("Contiene script"))
                 }
+                if let origin = skill.source {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10)).foregroundStyle(.secondary)
+                        .help(tr("Da GitHub · %@ · %@", origin.name, origin.sha))
+                }
             }
             Text(skill.description).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
         }
@@ -300,6 +334,11 @@ private struct SkillEditor: View {
                     Label(tr("Contiene script: i bot che la usano possono eseguirli."), systemImage: "exclamationmark.triangle")
                         .font(.system(size: 11)).foregroundStyle(Theme.warning)
                 }
+                if let origin = skill.source {
+                    LabeledContent(tr("Da GitHub")) { Text(verbatim: "\(origin.name) · \(origin.sha)").font(.system(size: 12, design: .monospaced)) }
+                    Text(tr("Questa skill la tiene aggiornata una sorgente GitHub: per cambiarla modifica il repository. Per una versione tua, copia il testo in una skill nuova con un altro nome."))
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
             } header: {
                 Text(verbatim: skill.name)
             }
@@ -310,7 +349,7 @@ private struct SkillEditor: View {
             }
             Section {
                 if loaded {
-                    SkillTextEditor(text: $content)
+                    SkillTextEditor(text: $content).disabled(skill.source != nil)
                 } else {
                     ProgressView().controlSize(.small)
                 }
@@ -319,9 +358,11 @@ private struct SkillEditor: View {
             }
             Section {
                 HStack {
-                    Button(tr("Salva")) { Task { await save() } }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(busy || !loaded || content == saved)
+                    if skill.source == nil {
+                        Button(tr("Salva")) { Task { await save() } }
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(busy || !loaded || content == saved)
+                    }
                     if !model.isRemote, !model.remoteEngines.isEmpty {
                         Menu(tr("Copia su server")) {
                             ForEach(model.remoteEngines) { engine in
@@ -332,7 +373,7 @@ private struct SkillEditor: View {
                         .disabled(busy)
                     }
                     Spacer()
-                    Button(tr("Elimina"), role: .destructive) { confirmDelete = true }
+                    if skill.source == nil { Button(tr("Elimina"), role: .destructive) { confirmDelete = true } }
                     if busy { ProgressView().controlSize(.small) }
                 }
                 if let error { Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger).textSelection(.enabled) }
