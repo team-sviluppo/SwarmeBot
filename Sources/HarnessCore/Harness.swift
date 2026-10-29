@@ -70,6 +70,13 @@ public final class Harness {
         skills.onChange = { [weak self] in self?.broadcast(["kind": "skills"]) }
         return skills
     }()
+    // skills kept from GitHub folders (SkillSources.swift)
+    public private(set) lazy var skillSources: SkillSources = {
+        let sources = SkillSources(paths: paths, skills: skills, vault: vault, botExists: { [weak self] in self?.store.bot($0) != nil },
+                                   connectorNames: { [weak self] in (self?.mcpConnectors.connectors ?? []).compactMap { $0["name"]?.string } })
+        sources.onChange = { [weak self] in self?.broadcast(["kind": "skill-sources"]) }
+        return sources
+    }()
     // connectors: MCP servers the user hands to bots (MCPConnectors.swift)
     public private(set) lazy var mcpConnectors = MCPConnectors(paths: paths)
     public private(set) lazy var sharedRepositories = SharedRepositories(harness: self)
@@ -188,6 +195,7 @@ public final class Harness {
         // Shared definitions are refreshed before unattended work can start.
         _ = sharedRepositories.sync()
         startAutomations()
+        skillSources.start()
         store.seedIfEmpty()
         library.resume(store.bots.compactMap { $0["id"]?.string })
         // registration order is the Node engine's: watchdog, fold, repeats,
@@ -775,8 +783,10 @@ public final class Harness {
                 let off = task?["libraryOff"]?.array?.compactMap(\.string) ?? []
                 let library = self.library.prompt(botId, off: off, mode: Library.mode(instance.driverKind), message: text)
                 // a skill called with /name goes whole into this turn; the others are an index
-                let invoked = Skills.invoked(text, bot: bot)
-                let available = Skills.active(bot: bot, task: task) { self.skills.skill($0) != nil }.filter { !invoked.contains($0) }
+                // the skills of the GitHub sources handed to this bot count as its own
+                let skillful = self.skillSources.augment(bot)
+                let invoked = Skills.invoked(text, bot: skillful)
+                let available = Skills.active(bot: skillful, task: task) { self.skills.skill($0) != nil }.filter { !invoked.contains($0) }
                 let skills = self.skills.prompt(available, mode: Library.mode(instance.driverKind))
                 let invocation = self.skills.invocation(invoked, mode: Library.mode(instance.driverKind))
                 // peer comms for a person's turn (a peer's own turn gets none: hard
@@ -929,6 +939,7 @@ public final class Harness {
     }
 
     public func shutdown() async {
+        skillSources.stop()
         plugins.stop()
         mcpPool.stopAll()
         await fleet.stopAll()

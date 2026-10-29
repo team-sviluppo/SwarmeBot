@@ -42,12 +42,18 @@ enum SkillRoutes {
         }
 
         if path == "/api/skills" {
-            if method == "GET" { return respond(200, ["skills": .array(skills.list().map(\.json))]) }
+            if method == "GET" { return respond(200, ["skills": .array(skills.list().map { withSource($0, harness) })]) }
             guard method == "POST" else { return nil }
             let body = try r.json()
             if let replace = body["replace"], replace.bool == nil { return fail(400, "replace must be true or false") }
             do {
-                let skill = try skills.add(try Skills.uploadFiles(body), replace: body["replace"]?.bool ?? false)
+                let files = try Skills.uploadFiles(body)
+                // a skill a GitHub source keeps is not replaced by hand: the next update would take it back
+                if let manifest = files.first(where: { $0.path == "SKILL.md" }),
+                   let name = (try? Skills.parse(String(decoding: manifest.data, as: UTF8.self)))?.name, let source = harness.skillSources.managed(name) {
+                    return fail(409, managedMessage(source.name))
+                }
+                let skill = try skills.add(files, replace: body["replace"]?.bool ?? false)
                 return respond(201, ["skill": skill.json])
             } catch let error as SkillInvalid {
                 return fail(error.status, error.message)
@@ -59,8 +65,9 @@ enum SkillRoutes {
         switch method {
         case "GET":
             guard let skill = skills.skill(id), let content = skills.content(id) else { return fail(404, "no such skill") }
-            return respond(200, ["skill": skill.json, "content": .string(content)])
+            return respond(200, ["skill": withSource(skill, harness), "content": .string(content)])
         case "PUT":
+            if let source = harness.skillSources.managed(id) { return fail(409, managedMessage(source.name)) }
             guard let content = try r.json()["content"]?.string else { return fail(400, "content must be the text of SKILL.md") }
             do {
                 return respond(200, ["skill": try skills.update(id, content: content).json])
@@ -68,12 +75,26 @@ enum SkillRoutes {
                 return fail(error.status, error.message)
             }
         case "DELETE":
+            if let source = harness.skillSources.managed(id) { return fail(409, managedMessage(source.name)) }
             guard skills.remove(id) else { return fail(404, "no such skill") }
             harness.store.forgetSkill(id)
             return respond(200, ["ok": true])
         default:
             return nil
         }
+    }
+
+    static func managedMessage(_ source: String) -> String {
+        "this skill comes from the GitHub source \(source): change it there, or make a copy under another name"
+    }
+
+    /// A skill's wire form; one that a GitHub source keeps says which and at what commit.
+    static func withSource(_ skill: Skill, _ harness: Harness) -> JSON {
+        var object = skill.json.object ?? JSONObject()
+        if let source = harness.skillSources.managed(skill.id) {
+            object["source"] = .object(JSONObject([("id", .string(source.sourceId)), ("name", .string(source.name)), ("sha", .string(String(source.sha.prefix(7))))]))
+        }
+        return .object(object)
     }
 
     /// The folder in use, and the default, so Settings can offer to go back.
