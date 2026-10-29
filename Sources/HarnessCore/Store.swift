@@ -158,6 +158,19 @@ public final class Store {
         for index in messages.indices {
             if messages[index]["parentId"] == nil { messages[index]["parentId"] = JSON.from(previous) }
             previous = messages[index]["id"]?.string
+            // Provider processes cannot survive an engine restart. Recover
+            // lazily with the thread, including inactive chats, rather than
+            // leaving historical subtasks looking permanently busy.
+            if var tool = messages[index]["tool"]?.object, var task = tool["subagent"]?.object,
+               task["status"]?.string == "running" {
+                task["status"] = "interrupted"
+                task["result"] = .string([task["result"]?.string, "SwarmeBot restarted before this subagent finished"].compactMap { $0 }.joined(separator: "\n"))
+                tool["subagent"] = .object(task)
+                tool["output"] = .string(JSON.object(task).serialized())
+                tool["ok"] = false
+                messages[index]["tool"] = .object(tool)
+                db.update(threadId, messages[index])
+            }
         }
         if leaf == nil { leaf = messages.last?["id"]?.string }
         threads[threadId] = (messages, leaf)
