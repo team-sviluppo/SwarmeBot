@@ -77,6 +77,9 @@ servers and also has private bots of its own.
   working folder, engine and model. Pin, hide, mark unread, search.
 - **Streaming chat** with reasoning, Markdown, and **tool calls folded** into groups that show what
   each call returned.
+- **Native subagents** in Claude and Codex: task activity keeps its own status and result in the
+  tool details. Background subagents keep the run alive until the parent can consume their results;
+  Stop interrupts the whole run. After an engine restart, unfinished tasks are marked interrupted.
 - **Permission and question cards**: when an agent asks to run a command or edit a file, or asks you
   a question (single or multiple choice), the chat shows a card. Per-bot **auto-approve** modes and
   "always allow" rules.
