@@ -2,7 +2,6 @@ import AppKit
 import SwarmeKit
 import SwiftUI
 
-@main
 struct SwarmeBotApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 

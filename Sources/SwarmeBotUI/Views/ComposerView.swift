@@ -129,19 +129,21 @@ struct ComposerView: View {
                             Task { await model.setWorkingFolder(path) }
                         }
                     }
-                    if bot.codeMode == true {
-                        GitBranchChip(bot: bot)
-                        CodeModeTerminalButton(bot: bot)
-                    }
+                    ForEach(Array(PluginHost.shared.composerAccessories(chat(for: bot)).enumerated()), id: \.offset) { $0.element }
                     LibraryChip(bot: bot)
                     ConnectorsChip(bot: bot)
                     SkillsChip(bot: bot)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 6)
-                .refreshingGit(bot: bot, folder: workingFolder(bot), model: model)
+                .pluginsFollowing(chat(for: bot))
             }
         }
+    }
+
+    /// What the plugins are asked about: this bot's chat, in the folder the chip above shows.
+    private func chat(for bot: Bot) -> ChatContext {
+        ChatContext(model: model, bot: bot, room: nil, threadId: bot.threadId, folder: workingFolder(bot), isBusy: model.isBusy(bot))
     }
 
     private var busy: Bool {

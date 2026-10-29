@@ -312,6 +312,6 @@ struct EffortPicker: View {
 
 /// Single-line chip text: long names end in an ellipsis at a fixed length,
 /// so the chip keeps its own size and its neighbours stay next to it.
-func chipText(_ text: String, _ limit: Int) -> String {
+public func chipText(_ text: String, _ limit: Int) -> String {
     text.count > limit ? String(text.prefix(limit - 1)) + "…" : text
 }

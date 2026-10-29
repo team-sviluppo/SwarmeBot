@@ -12,72 +12,72 @@ import AppKit
 import SwarmeKit
 import SwiftUI
 
-enum Theme {
+public enum Theme {
     /// AppKit views (the composer's text view) need an NSColor that stays dynamic;
     /// `NSColor(Color)` would freeze it to the appearance current at the call.
-    static let nsInk = NSColor.dynamic(dark: "#FCFCFC", light: "#18181B")
-    static let nsSecondary = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.6, light: "#18181B", lightAlpha: 0.62)
+    public static let nsInk = NSColor.dynamic(dark: "#FCFCFC", light: "#18181B")
+    public static let nsSecondary = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.6, light: "#18181B", lightAlpha: 0.62)
     /// Quotes and h6 in a bot reply, and the bar beside a quote.
-    static let nsInkSoft = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.85, light: "#18181B", lightAlpha: 0.85)
-    static let nsQuoteBar = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.45, light: "#18181B", lightAlpha: 0.45)
-    static let nsAccent = NSColor.dynamic(dark: "#1084FE", light: "#0A74E6")
+    public static let nsInkSoft = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.85, light: "#18181B", lightAlpha: 0.85)
+    public static let nsQuoteBar = NSColor.dynamic(dark: "#FCFCFC", darkAlpha: 0.45, light: "#18181B", lightAlpha: 0.45)
+    public static let nsAccent = NSColor.dynamic(dark: "#1084FE", light: "#0A74E6")
 
-    static let app = Color(dark: "#070707", light: "#FFFFFF")
-    static let panel = Color(dark: "#111111", light: "#F4F4F6")
-    static let card = Color(dark: "#262626", light: "#EAEAED")
-    static let raised = Color(dark: "#2F2F2F", light: "#E6E6EA")
-    static let raisedHover = Color(dark: "#3D3D3D", light: "#D8D8DD")
+    public static let app = Color(dark: "#070707", light: "#FFFFFF")
+    public static let panel = Color(dark: "#111111", light: "#F4F4F6")
+    public static let card = Color(dark: "#262626", light: "#EAEAED")
+    public static let raised = Color(dark: "#2F2F2F", light: "#E6E6EA")
+    public static let raisedHover = Color(dark: "#3D3D3D", light: "#D8D8DD")
     /// Old name for `raisedHover`.
-    static var hover: Color { raisedHover }
-    static let inset = Color(dark: "#191919", light: "#EFEFF2")
-    static let hairline = Color(dark: "#333333", light: "#D6D6DB")
-    static let ink = Color(nsColor: nsInk)
-    static let secondary = Color(nsColor: nsSecondary)
-    static let tertiary = Color(dark: "#FCFCFC", darkAlpha: 0.42, light: "#18181B", lightAlpha: 0.45)
-    static let accent = Color(nsColor: nsAccent)
+    public static var hover: Color { raisedHover }
+    public static let inset = Color(dark: "#191919", light: "#EFEFF2")
+    public static let hairline = Color(dark: "#333333", light: "#D6D6DB")
+    public static let ink = Color(nsColor: nsInk)
+    public static let secondary = Color(nsColor: nsSecondary)
+    public static let tertiary = Color(dark: "#FCFCFC", darkAlpha: 0.42, light: "#18181B", lightAlpha: 0.45)
+    public static let accent = Color(nsColor: nsAccent)
     /// Bubbles as in Grok Bot: the bot's a step above the window, yours a step above that.
-    static let bubbleUser = Color(dark: "#2E2E2E", light: "#E8E8EC")
-    static let bubbleBot = Color(dark: "#1C1C1C", light: "#F3F3F6")
-    static let success = Color(dark: "#38D591", light: "#12A06A")
-    static let danger = Color(dark: "#FF5667", light: "#E0334A")
-    static let warning = Color(dark: "#FF9800", light: "#D97F00")
-    static let accentBorder = Color(dark: "#459FFE", light: "#1084FE")
-    static let focus = Color(dark: "#459FFE", light: "#1084FE")
-    static let accentText = Color(dark: "#7FC0FF", light: "#0A64C8")
-    static let accentInk = Color.white
-    static let dangerInk = Color.white
-    static let scrollbar = Color(dark: "#3D3D3D", light: "#C4C4CA")
+    public static let bubbleUser = Color(dark: "#2E2E2E", light: "#E8E8EC")
+    public static let bubbleBot = Color(dark: "#1C1C1C", light: "#F3F3F6")
+    public static let success = Color(dark: "#38D591", light: "#12A06A")
+    public static let danger = Color(dark: "#FF5667", light: "#E0334A")
+    public static let warning = Color(dark: "#FF9800", light: "#D97F00")
+    public static let accentBorder = Color(dark: "#459FFE", light: "#1084FE")
+    public static let focus = Color(dark: "#459FFE", light: "#1084FE")
+    public static let accentText = Color(dark: "#7FC0FF", light: "#0A64C8")
+    public static let accentInk = Color.white
+    public static let dangerInk = Color.white
+    public static let scrollbar = Color(dark: "#3D3D3D", light: "#C4C4CA")
     /// Drop shadows: full black on the dark look, softer on the light one.
-    static let shadow = Color(dark: "#000000", light: "#000000", lightAlpha: 0.45)
+    public static let shadow = Color(dark: "#000000", light: "#000000", lightAlpha: 0.45)
     /// Behind the command palette.
-    static let scrim = Color.black.opacity(0.5)
+    public static let scrim = Color.black.opacity(0.5)
     /// The session-limit chip's yellow: orange `warning` reads as yellow on the dark header only.
-    static let caution = Color(dark: "#F5C842", light: "#B58900")
+    public static let caution = Color(dark: "#F5C842", light: "#B58900")
 
     /// Chat text, matched to Grok Bot: 14 pt regular, ~20 pt line.
-    static let bodySize: CGFloat = 14
-    static let bodyLineSpacing: CGFloat = 3
+    public static let bodySize: CGFloat = 14
+    public static let bodyLineSpacing: CGFloat = 3
     /// Sidebar name and composer chrome.
-    static let uiSize: CGFloat = 13
-    static let captionSize: CGFloat = 12
+    public static let uiSize: CGFloat = 13
+    public static let captionSize: CGFloat = 12
     /// `rounded-xl`
-    static let radius: CGFloat = 12
+    public static let radius: CGFloat = 12
     /// `rounded-lg`
-    static let smallRadius: CGFloat = 8
-    static let radiusCard: CGFloat = 16
-    static let radiusBubble: CGFloat = 14
-    static let radiusRow: CGFloat = 8
-    static let radiusIcon: CGFloat = 6
+    public static let smallRadius: CGFloat = 8
+    public static let radiusCard: CGFloat = 16
+    public static let radiusBubble: CGFloat = 14
+    public static let radiusRow: CGFloat = 8
+    public static let radiusIcon: CGFloat = 6
     /// Edit box width cap (bubbles size relative to the column: 88% / 70%).
-    static let bubbleMaxWidth: CGFloat = 620
-    static let transcriptMaxWidth: CGFloat = 900
+    public static let bubbleMaxWidth: CGFloat = 620
+    public static let transcriptMaxWidth: CGFloat = 900
 
     /// `msg-in`: 180 ms, cubic-bezier(.22,1,.36,1).
-    static let appear = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 0.18)
+    public static let appear = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 0.18)
     /// `panel-in`: 240 ms, same curve.
-    static let panelIn = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 0.24)
+    public static let panelIn = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 0.24)
     /// Tailwind's default transition: 150 ms cubic-bezier(.4,0,.2,1).
-    static let quick = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.15)
+    public static let quick = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.15)
 }
 
 /// A row that lights up under the pointer, the web's `hover:bg-hover`.
@@ -154,13 +154,19 @@ struct IconButtonStyle: ButtonStyle {
 
 /// Outlined capsule chip of the header (`+ Task`, usage, folder, Stop):
 /// border `hairline/40`, optional `raised/60` fill, 10/4 padding.
-struct ChipButtonStyle: ButtonStyle {
+public struct ChipButtonStyle: ButtonStyle {
     var filled = false
     var size: CGFloat = 12.5
     /// Solid fill with white ink, brighter on hover (Stop is `Theme.danger`).
     var tint: Color? = nil
 
-    func makeBody(configuration: Configuration) -> some View {
+    public init(filled: Bool = false, size: CGFloat = 12.5, tint: Color? = nil) {
+        self.filled = filled
+        self.size = size
+        self.tint = tint
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
         ChipBody(configuration: configuration, filled: filled, size: size, tint: tint)
     }
 

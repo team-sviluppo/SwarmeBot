@@ -10,18 +10,18 @@ import UniformTypeIdentifiers
 // MARK: - Building blocks
 
 /// A titled group: caption above, content on a rounded `inset` card.
-struct SettingsCard<Content: View, Accessory: View>: View {
+public struct SettingsCard<Content: View, Accessory: View>: View {
     let title: String
     @ViewBuilder var accessory: Accessory
     @ViewBuilder var content: Content
 
-    init(_ title: String, @ViewBuilder accessory: () -> Accessory = { EmptyView() }, @ViewBuilder content: () -> Content) {
+    public init(_ title: String, @ViewBuilder accessory: () -> Accessory = { EmptyView() }, @ViewBuilder content: () -> Content) {
         self.title = title
         self.accessory = accessory()
         self.content = content()
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary)
@@ -37,22 +37,31 @@ struct SettingsCard<Content: View, Accessory: View>: View {
 }
 
 /// Hairline between the rows of a card, inset past the icon.
-struct CardDivider: View {
+public struct CardDivider: View {
     var leading: CGFloat = 12
-    var body: some View {
+    public init(leading: CGFloat = 12) { self.leading = leading }
+    public var body: some View {
         Rectangle().fill(Theme.hairline.opacity(0.6)).frame(height: 1).padding(.leading, leading)
     }
 }
 
 /// Icon in a tinted square, title, optional explanation, then the control.
-struct SettingRow<Control: View>: View {
+public struct SettingRow<Control: View>: View {
     let icon: String
     var tint: Color = Theme.accent
     let title: String
     var subtitle: String? = nil
     @ViewBuilder var control: Control
 
-    var body: some View {
+    public init(icon: String, tint: Color = Theme.accent, title: String, subtitle: String? = nil, @ViewBuilder control: () -> Control) {
+        self.icon = icon
+        self.tint = tint
+        self.title = title
+        self.subtitle = subtitle
+        self.control = control()
+    }
+
+    public var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
@@ -123,6 +132,7 @@ struct BotDetails: View {
             AppearanceCard(bot: bot)
             profile
             behaviour
+            ForEach(Array(PluginHost.shared.settingsSections(.bot(bot), on: model).enumerated()), id: \.offset) { $0.element }
             BotConnectorsCard(bot: bot)
             BotSkillsCard(bot: bot)
             BotSecretsCard(bot: bot)
@@ -218,10 +228,6 @@ struct BotDetails: View {
         SettingsCard(tr("Comportamento")) {
             toggle("checkmark.shield", tint: Theme.success, tr("Approva da solo"),
                    tr("Esegue gli strumenti senza chiederti conferma."), value: bot.autoApprove ?? false) { BotPatch(autoApprove: $0) }
-            CardDivider(leading: 48)
-            toggle("chevron.left.forwardslash.chevron.right", tint: Theme.accent, tr("Code mode"),
-                   tr("Mostra il branch git accanto alla cartella e raccoglie i file modificati a fine turno in un badge."),
-                   value: bot.codeMode ?? false) { BotPatch(codeMode: $0) }
             CardDivider(leading: 48)
             toggle("wrench.and.screwdriver", tint: Theme.accent, tr("Mostra gli strumenti in chat"),
                    tr("Mostra le chiamate agli strumenti e i relativi risultati nella conversazione."),

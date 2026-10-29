@@ -23,6 +23,7 @@ struct SettingsView: View {
             ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
             SharedRepositoriesPane().tabItem { Label(tr("Condivisione"), systemImage: "folder.badge.person.crop") }.tag("sharing")
             SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
+            PluginsPane().tabItem { Label(tr("Plugin"), systemImage: "shippingbox") }.tag("plugins")
             VaultPane().tabItem { Label(tr("Vault"), systemImage: "lock.shield") }.tag("vault")
             PhonePane().tabItem { Label(tr("Telefono"), systemImage: "iphone") }.tag("phone")
             MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }.tag("mac")
@@ -49,7 +50,8 @@ struct RemoteSettingsView: View {
                 EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
                 ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
                 SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
-            VaultPane().tabItem { Label(tr("Vault"), systemImage: "lock.shield") }.tag("vault")
+                PluginsPane().tabItem { Label(tr("Plugin"), systemImage: "shippingbox") }.tag("plugins")
+                VaultPane().tabItem { Label(tr("Vault"), systemImage: "lock.shield") }.tag("vault")
                 KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
                 DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
             }
@@ -312,10 +314,10 @@ private struct CommandRow: View {
     }
 }
 
-enum TerminalLauncher {
+public enum TerminalLauncher {
     /// A `.command` file opened with Terminal: no Apple Events permission
     /// needed, and the user sees exactly what runs.
-    static func run(_ command: String) {
+    public static func run(_ command: String) {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("swarmebot-\(UUID().uuidString).command")
         let done = tr("Fatto. Puoi chiudere questa finestra.")
         let script = "#!/bin/zsh -l\n\(command)\necho\necho '\(done)'\n"

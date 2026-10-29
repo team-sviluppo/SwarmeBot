@@ -4,7 +4,7 @@ import XCTest
 /// Every UI string goes through `tr` and has an English entry.
 final class LocalizationTests: XCTestCase {
     private static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    private static let folders = ["Sources/SwarmeBot", "Sources/SwarmeKit", "iOS/SwarmeBot"]
+    private static let folders = ["Sources/SwarmeBotUI", "Sources/SwarmeKit", "Plugins", "iOS/SwarmeBot"]
 
     private func sources() throws -> [(path: String, lines: [String])] {
         var out: [(String, [String])] = []

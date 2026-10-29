@@ -699,17 +699,20 @@ x86_64 on Apple silicon runs under emulation: enable Rosetta in Docker Desktop, 
 
 | Path | Contents |
 |---|---|
-| `Sources/SwarmeBot` | the SwiftUI app: views, mascot, notifications, Sparkle updater |
+| `Sources/SwarmeBotUI` | the SwiftUI app as a library: views, mascot, notifications, Sparkle updater, the plugin host |
+| `Sources/SwarmeBot` | the app executable: a thin shell that names its plugins and starts `SwarmeBotUI` |
+| `Plugins/Code` | the Code plugin (git branch, terminal, changed files in a chat): `Engine/` runs in the engine, also on Linux; `App/` is the Mac app's half |
 | `Sources/SwarmeKit` | app logic that is not UI: engine launcher and supervision, observable app model, Keychain, paths; `Remote/` for ssh identities, host keys, server setup, engine updates, Linux engine download |
 | `Sources/CompanionCore` | wire types, SSE parser with resume, HTTP client, pure fold of events into state (Mac and iOS) |
 | `Sources/AgentCore` | shared by the engine and the iOS app: ordered JSON, streaming, MCP client over HTTP, OAuth, OpenAI-compatible chat with Hermes continuity |
 | `Sources/SwarmeL10n` | UI languages and the Italian → English tables, for the Mac and iOS apps |
 | `Sources/HarnessCore` | the engine: JSON with stable key order, store and SQLite, turns, routes, HTTP server and SSE hub, channels, bot-to-bot comms, routines, webhooks, library, team packages, computers, MCP connectors and OAuth, permission broker, remote access |
 | `Sources/HarnessDrivers` | one driver per agent; `ACP/` (protocol runtime + agents), `DeepSeek/` |
-| `Sources/swarme-harness` | the engine executable and its subcommands |
+| `Sources/HarnessRunner` | the engine's startup and subcommands as a library, so an executable can pass its plugins |
+| `Sources/swarme-harness` | the engine executable: a thin shell that names its plugins |
 | `Sources/swarme-push-relay` | the push notification relay (Amazon SNS) for the iOS app |
 | `iOS/` | the iOS app: `project.yml` (XcodeGen), `SwarmeBot/`, tests |
-| `Tests/` | `HarnessCoreTests`, `CompanionCoreTests`, `SwarmeKitTests` |
+| `Tests/` | `HarnessCoreTests`, `CompanionCoreTests`, `SwarmeKitTests`, `SwarmeBotUITests`, and one test target per plugin |
 | `parity/` | fake agents and services, scenario runner, trace comparison |
 | `scripts/` | bundling, release, Linux engine build, integration tests |
 | `docs/` | HTTP/SSE contract, architecture and plans, benchmarks, design notes |

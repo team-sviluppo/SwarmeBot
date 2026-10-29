@@ -1,15 +1,17 @@
-// Code mode: the git branch next to the folder chip, and at the end of a turn
-// one "N files modified" badge in place of a card per file.
+// Code mode, as the plugin shows it: the git branch next to the folder chip, and
+// at the end of a turn one "N files modified" badge in place of a card per file.
 import AppKit
 import CompanionCore
+import SwarmeBotUI
 import SwarmeKit
 import SwiftUI
 
 /// The folder's active git branch, under the composer. Nothing for a folder
 /// that is not a repo, which is also what an engine without the route gives.
-/// The state it reads is kept fresh by `refreshingGit`.
+/// The state it reads is kept fresh by the plugin's `chatChanged`.
 struct GitBranchChip: View {
     let bot: Bot
+    let state: CodeState
     @Environment(AppModel.self) private var model
 
     @State private var choosing = false
@@ -21,7 +23,7 @@ struct GitBranchChip: View {
 
     var body: some View {
         Group {
-            if let git = model.gitStates[bot.threadId], git.repo, let branch = git.branch, !branch.isEmpty {
+            if let git = state.gitStates[bot.threadId], git.repo, let branch = git.branch, !branch.isEmpty {
                 Button { search = ""; choosing = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: git.detached == true ? "smallcircle.filled.circle" : "arrow.triangle.branch")
@@ -70,7 +72,7 @@ struct GitBranchChip: View {
                         error = nil
                         branches = []
                         defer { loading = false }
-                        do { branches = try await model.gitBranches(threadId: bot.threadId) }
+                        do { branches = try await state.gitBranches(model: model, threadId: bot.threadId) }
                         catch { self.error = error.localizedDescription }
                     }
                 }
@@ -83,7 +85,7 @@ struct GitBranchChip: View {
         error = nil
         defer { switching = false }
         do {
-            try await model.checkoutBranch(threadId: bot.threadId, ref: branch.ref)
+            try await state.checkoutBranch(model: model, threadId: bot.threadId, ref: branch.ref)
             choosing = false
         } catch { self.error = error.localizedDescription }
     }
@@ -91,6 +93,7 @@ struct GitBranchChip: View {
 
 struct CodeModeTerminalButton: View {
     let bot: Bot
+    let state: CodeState
     @Environment(AppModel.self) private var model
     @State private var opening = false
     @State private var error: String?
@@ -103,7 +106,7 @@ struct CodeModeTerminalButton: View {
                 do {
                     let remote = model.isRemote
                     let identity = model.activeRemoteEngine.flatMap { model.identity(for: $0) }
-                    let folder = try await model.codeModeFolder(threadId: bot.threadId)
+                    let folder = try await state.folder(model: model, threadId: bot.threadId)
                     let command = "cd -- " + RemoteScripts.quote(folder) + " && exec \"${SHELL:-/bin/sh}\" -l"
                     if remote {
                         guard let identity else {
@@ -127,49 +130,6 @@ struct CodeModeTerminalButton: View {
     }
 }
 
-private struct GitRefreshKey: Equatable {
-    var threadId: String
-    var folder: String
-    var busy: Bool
-    var codeMode: Bool
-}
-
-extension View {
-    /// Keeps a Code mode chat's git state current: when the chat, its folder
-    /// or Code mode itself changes, and when a turn starts or ends (the agent
-    /// may have switched branch or edited files). It goes on a view that is
-    /// always there: SwiftUI never runs a task on one that is empty.
-    func refreshingGit(bot: Bot, folder: String, model: AppModel) -> some View {
-        task(id: GitRefreshKey(threadId: bot.threadId, folder: folder, busy: model.isBusy(bot), codeMode: bot.codeMode == true)) {
-            if bot.codeMode == true { await model.refreshGit(threadId: bot.threadId) }
-        }
-    }
-}
-
-/// What ends a turn in Code mode: the messages that close a turn (a bot text
-/// followed by the next user message or by nothing), and the newest of them.
-struct TurnEnds {
-    var ids: Set<String> = []
-    var latest: String?
-
-    init(_ messages: [Message]) {
-        var pending: String?
-        for message in messages {
-            guard message.kind == .text else { continue }
-            if message.role == .user {
-                if let pending { ids.insert(pending) }
-                pending = nil
-            } else {
-                pending = message.id
-            }
-        }
-        if let pending {
-            ids.insert(pending)
-            latest = pending
-        }
-    }
-}
-
 /// "N files modified" in place of the file cards of a reply. Click to list
 /// them. On the newest turn of a git folder the files are what git says is
 /// changed — what a commit would take — and "Commit & push" asks the agent
@@ -179,13 +139,14 @@ struct CodeModeBadge: View {
     let threadId: String
     /// The newest turn's last message, once the bot is idle.
     let latest: Bool
+    let state: CodeState
     @Environment(AppModel.self) private var model
     @State private var replyFiles: [ReplyFile] = []
     @State private var expanded = false
 
     private var git: ThreadGitState? {
-        guard latest, let state = model.gitStates[threadId], state.repo else { return nil }
-        return state
+        guard latest, let git = state.gitStates[threadId], git.repo else { return nil }
+        return git
     }
 
     private var rows: [ChangedFile] {
@@ -200,7 +161,7 @@ struct CodeModeBadge: View {
                 HStack(spacing: 8) {
                     badge(count: rows.count)
                     if git != nil {
-                        Button { Task { await model.commitAndPush() } } label: {
+                        Button { Task { await state.commitAndPush(model: model) } } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "arrow.up.circle").font(.system(size: 11, weight: .semibold))
                                 Text(tr("Commit & push")).font(.system(size: 12.5, weight: .medium))

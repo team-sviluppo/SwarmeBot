@@ -44,12 +44,17 @@ struct TranscriptView: View {
     /// Tool groups the user opened, by their first call's id.
     @State private var openToolGroups: Set<String> = []
 
+    /// Whether a plugin is on for the open chat, so its turns are worked out.
+    private var transcriptPlugins: Bool {
+        PluginHost.shared.hasActive(for: ChatContext(model: model, bot: model.selectedBot, room: model.selectedRoom, threadId: threadId, isBusy: false))
+    }
+
     var body: some View {
         let all = model.state.chatMessages(model.visibleTranscript(threadId), forThread: threadId)
         let messages = Array(all.suffix(window))
         let hiddenLocally = all.count - messages.count
-        // Code mode: a badge, not a card per file, where a turn ends
-        let turnEnds = model.selectedBot?.codeMode == true ? TurnEnds(messages) : nil
+        // a plugin may put its own footer, not a card per file, where a turn ends
+        let turnEnds = transcriptPlugins ? TurnEnds(messages) : nil
         GeometryReader { geo in
         let column = min(geo.size.width - 40, Theme.transcriptMaxWidth)
         ScrollViewReader { proxy in
@@ -91,7 +96,7 @@ struct TranscriptView: View {
                     } else {
                     let message = row.first
                     MessageRow(message: message, threadId: threadId, isRoom: model.selectedRoom != nil,
-                               codeMode: turnEnds.map { .init(isTurnEnd: $0.ids.contains(message.id), isLatest: $0.latest == message.id) })
+                               turn: turnEnds.map { .init(isTurnEnd: $0.ids.contains(message.id), isLatest: $0.latest == message.id) })
                         .id(message.id)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
@@ -258,18 +263,17 @@ struct HoverActions<Content: View>: View {
 }
 
 struct MessageRow: View {
-    /// Where a reply stands in a Code mode chat; nil outside it.
-    struct CodeModeContext {
-        var isTurnEnd: Bool
-        /// The newest turn's last reply.
-        var isLatest: Bool
-    }
-
     let message: Message
     let threadId: String
     let isRoom: Bool
-    var codeMode: CodeModeContext? = nil
+    /// Where a reply stands in its turn; nil when no plugin is on for this chat.
+    var turn: TurnPosition? = nil
     @Environment(AppModel.self) private var model
+
+    private var chatContext: ChatContext {
+        ChatContext(model: model, bot: model.selectedBot, room: model.selectedRoom, threadId: threadId,
+                    isBusy: model.selectedBot.map(model.isBusy) ?? (model.selectedRoom?.busyBotId != nil))
+    }
 
     var body: some View {
         switch message.kind {
@@ -295,11 +299,8 @@ struct MessageRow: View {
                             .contextMenu { messageMenu }
                     }
                     .replyFileLinks(threadId: threadId, model: model)
-                    if let codeMode {
-                        // mid-turn replies show nothing; the newest turn waits for the bot to be idle
-                        if codeMode.isTurnEnd, !(codeMode.isLatest && model.selectedBot.map(model.isBusy) == true) {
-                            CodeModeBadge(message: message, threadId: threadId, latest: codeMode.isLatest)
-                        }
+                    if let turn, let footer = PluginHost.shared.replyFooter(message, chatContext, turn) {
+                        footer
                     } else {
                         ReplyFileCards(message: message, threadId: threadId)
                     }

@@ -30,7 +30,7 @@ The app is localized in English (default) and Italian, chosen in Settings › Ge
 Italian text is the key and its English goes in `SwarmeL10n/Translations/Translations+<Area>.swift`.
 Interpolations become `%@` (`tr("Eliminare %@?", name)`), SwiftUI titles take the `tr` String
 (`Button(tr("Salva"))`), words not to translate use `Text(verbatim:)`, dates use `appFormatted`.
-`LocalizationTests` fails on a missing English entry or a bare literal title (it also reads `iOS/SwarmeBot`,
+`LocalizationTests` fails on a missing English entry or a bare literal title (it also reads `Plugins/` and `iOS/SwarmeBot`,
 whose English goes in `Translations+iOS.swift`). Engine text is English
 and stays untranslated.
 
@@ -42,10 +42,13 @@ and stays untranslated.
 | `AgentCore` | Shared by the engine and the iOS app, no processes (macOS, iOS, Linux): ordered `JSON`, `StreamingBytes`, `Redact`, `MCPClient` over HTTP, `OAuthFlow`, `OpenAIChatEndpoint` (OpenAI-compatible streaming, tool loop, Hermes continuity). `HarnessCore` re-exports it. |
 | `SwarmeL10n` | UI languages, `translate` and the Italian → English tables, for the Mac and iOS apps. |
 | `SwarmeKit` | Desktop logic that is not a view: `HarnessLauncher` (start/supervise/stop the engine), observable `AppModel` (+`Desktop`, +`Remote`), `AppPaths`, Keychain credentials, `Remote/` (ssh identities, host keys, remote scripts, server setup flow, Linux engine download). |
-| `SwarmeBot` | The SwiftUI app (`Views/`, `Mascot/`, Sparkle `Updater`, notifications). |
+| `SwarmeBotUI` | The SwiftUI app as a library (`Views/`, `Mascot/`, Sparkle `Updater`, notifications) and the app plugin host (`Plugins/`: `AppPlugin`, `PluginHost`, `SwarmeApp.run(plugins:)`). |
+| `SwarmeBot` | The app executable: a thin shell, `SwarmeApp.run(plugins: [CodeAppPlugin()])`. |
+| `Plugins/Code` | The Code plugin (`docs/plans/2026-10-28-code-mode-t3.md`): `CodePluginEngine` (git routes on the engine, builds on Linux) and `CodePluginApp` (the Mac app's half). Plugins are linked at build time; the core never imports one. |
 | `HarnessCore` | The engine: contracts (`RuntimeEvent`, drivers), `Store` + `MessageDB` (SQLite), `Harness` (turns), `Routes`, `HTTPServer`/`HTTPTransport`/`SSEHub`, rooms, comms between bots, routines, webhooks, library, team, computers (Box, local VM, VPS), MCP connectors + OAuth, permission broker, remote access (devices, pairing, rate limits). |
 | `HarnessDrivers` | One file per provider driver; `ACP/ACPCore` (JSON-RPC runtime) + `ACP/ACPDrivers`; `DeepSeek/`. |
-| `swarme-harness` | Engine executable. Subcommands: `serve [--remote …]`, `device add|list|revoke`, `secret set|unset`, and MCP stdio helpers spawned by the engine itself (`mcp-permission`, `mcp-agents`, `mcp-connector`, `mcp-container`, `mcp-vps`). New MCP helpers go here as subcommands, not as separate binaries. |
+| `HarnessRunner` | The engine's startup and subcommands as a library (`HarnessMain.run(plugins:)`); it needs the drivers, so it sits next to `HarnessDrivers`, not in `HarnessCore`. |
+| `swarme-harness` | Engine executable, a thin shell that names its plugins. Subcommands: `serve [--remote …]`, `device add|list|revoke`, `secret set|unset`, and MCP stdio helpers spawned by the engine itself (`mcp-permission`, `mcp-agents`, `mcp-connector`, `mcp-container`, `mcp-vps`). New MCP helpers go here as subcommands, not as separate binaries. |
 | `CSQLite3` | System libsqlite3 module, Linux only (macOS uses the built-in `SQLite3`). |
 
 `iOS/` is the iOS app (`docs/plans/2026-10-22-app-ios.md`): an XcodeGen `project.yml` using the local
@@ -140,7 +143,7 @@ codes identical to what clients expect. The wire distinguishes a missing key fro
 with `POSIX_SPAWN_SETSIGDEF` — ignored signals survive `exec`, and a CLI that inherited them could
 not be interrupted).
 
-**Linux.** `HarnessCore`, `HarnessDrivers` and `swarme-harness` must keep building on Linux. Use
+**Linux.** `HarnessCore`, `HarnessDrivers`, `HarnessRunner`, `CodePluginEngine` and `swarme-harness` must keep building on Linux. Use
 `POSIXCompat` (`Sys.*`), `StreamingBytes` instead of `URLSession.bytes`, and `#if canImport(...)`
 for CryptoKit, SQLite3, FoundationNetworking, PDFKit/Vision/NaturalLanguage. `SwarmeKit`,
 `CompanionCore` and the app are macOS 14+ only.

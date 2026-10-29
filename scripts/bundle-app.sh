@@ -84,8 +84,8 @@ fi
 
 # SwiftPM resources (provider icons); read through Bundle.resources, which
 # looks in Contents/Resources — without it the app traps on the first logo
-[[ -d "$BIN_DIR/SwarmeBot_SwarmeBot.bundle" ]] || { echo "SwarmeBot_SwarmeBot.bundle not found in $BIN_DIR"; exit 1; }
-cp -R "$BIN_DIR/SwarmeBot_SwarmeBot.bundle" "$APP/Contents/Resources/"
+[[ -d "$BIN_DIR/SwarmeBot_SwarmeBotUI.bundle" ]] || { echo "SwarmeBot_SwarmeBotUI.bundle not found in $BIN_DIR"; exit 1; }
+cp -R "$BIN_DIR/SwarmeBot_SwarmeBotUI.bundle" "$APP/Contents/Resources/"
 
 if [[ $WITH_HARNESS == 1 ]]; then
   [[ -d "$REPO/skills" ]] || { echo "skills not found at $REPO (set SWARMEBOT_REPO)"; exit 1; }

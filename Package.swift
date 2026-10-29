@@ -23,6 +23,7 @@ let package = Package(
     platforms: [.macOS(.v14), .iOS("26.0")],
     products: [
         .executable(name: "SwarmeBot", targets: ["SwarmeBot"]),
+        .library(name: "SwarmeBotUI", targets: ["SwarmeBotUI"]),
         .library(name: "CompanionCore", targets: ["CompanionCore"]),
         .library(name: "SwarmeKit", targets: ["SwarmeKit"]),
         .library(name: "SwarmeL10n", targets: ["SwarmeL10n"]),
@@ -53,10 +54,25 @@ let package = Package(
             dependencies: ["CompanionCore", "SwarmeL10n"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
-        .executableTarget(
-            name: "SwarmeBot",
+        // The app itself, as a library, so that an executable can pass the plugins
+        // it is linked with (Plugins/AppPlugin.swift).
+        .target(
+            name: "SwarmeBotUI",
             dependencies: ["CompanionCore", "SwarmeKit", .product(name: "Sparkle", package: "Sparkle")],
             resources: [.process("Resources")],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // The Code plugin, app side (macOS only: the iOS app has no Code mode). The core never imports it.
+        .target(
+            name: "CodePluginApp",
+            dependencies: ["CompanionCore", "SwarmeKit", "SwarmeBotUI"],
+            path: "Plugins/Code/App",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // A thin shell: names the plugins and starts SwarmeBotUI.
+        .executableTarget(
+            name: "SwarmeBot",
+            dependencies: ["SwarmeBotUI", "CodePluginApp"],
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
@@ -123,6 +139,16 @@ let package = Package(
         .testTarget(
             name: "CodePluginEngineTests",
             dependencies: ["CodePluginEngine", "HarnessCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "CodePluginAppTests",
+            dependencies: ["CodePluginApp", "SwarmeBotUI", "CompanionCore", "SwarmeKit"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "SwarmeBotUITests",
+            dependencies: ["SwarmeBotUI", "CompanionCore", "SwarmeKit"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

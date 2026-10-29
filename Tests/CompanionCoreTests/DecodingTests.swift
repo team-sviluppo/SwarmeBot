@@ -322,3 +322,23 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(message.text, "ran")
     }
 }
+
+// The plugins an engine declares (`GET /api/plugins`).
+final class EnginePluginInfoTests: XCTestCase {
+    func testDecodesWhatTheEngineSays() throws {
+        let json = #"{"plugins":[{"id":"code","name":"Code","version":"1.0.0","enabled":true},{"id":"cylon","name":"Cylon","version":"0.1","enabled":false,"requires":["code"]}]}"#
+        struct List: Decodable { var plugins: [EnginePluginInfo] }
+        let list = try JSONDecoder().decode(List.self, from: Data(json.utf8)).plugins
+        XCTAssertEqual(list.map(\.id), ["code", "cylon"])
+        XCTAssertEqual(list.map(\.enabled), [true, false])
+        XCTAssertEqual(list[0].requires, [])
+        XCTAssertEqual(list[1].requires, ["code"])
+    }
+
+    func testAnEntryMissingFieldsStillDecodes() throws {
+        let plugin = try JSONDecoder().decode(EnginePluginInfo.self, from: Data(#"{"id":"future"}"#.utf8))
+        XCTAssertEqual(plugin.name, "future")
+        XCTAssertEqual(plugin.version, "")
+        XCTAssertTrue(plugin.enabled, "a plugin the engine lists without saying is taken as on")
+    }
+}

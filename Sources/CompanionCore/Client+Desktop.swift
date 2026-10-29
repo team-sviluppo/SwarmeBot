@@ -294,21 +294,6 @@ extension CompanionClient {
         return try await send(request, as: Answer.self).files
     }
 
-    /// `GET /api/threads/:tid/git`: the branch and the uncommitted files of
-    /// the chat's folder.
-    public func threadGit(threadId: String) async throws -> ThreadGitState {
-        try await send(try makeRequest("GET", "/api/threads/\(threadId)/git"), as: ThreadGitState.self)
-    }
-
-    public func gitBranches(threadId: String) async throws -> [GitBranch] {
-        struct Answer: Decodable { var branches: [GitBranch] }
-        return try await send(try makeRequest("GET", "/api/threads/\(threadId)/git/branches"), as: Answer.self).branches
-    }
-
-    public func checkoutBranch(threadId: String, ref: String) async throws -> ThreadGitState {
-        try await send(try makeRequest("POST", "/api/threads/\(threadId)/git/checkout", body: ["ref": ref]), as: ThreadGitState.self)
-    }
-
     /// `GET /api/threads/:tid/files/content`: the bytes of one of those files.
     public func replyFileContent(threadId: String, path: String) async throws -> Data {
         var request = try makeRequest("GET", "/api/threads/\(threadId)/files/content", query: [URLQueryItem(name: "path", value: path)])
