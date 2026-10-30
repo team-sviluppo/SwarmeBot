@@ -27,7 +27,6 @@ public final class CodeAppPlugin: AppPlugin {
         if code.kind == .room { chips.insert(PluginView(CodeContextMeter(chat: code)), at: 0) }
         if state.engineHasGitSync(chat.model) { chips.append(PluginView(CodeSyncChip(chat: code, state: state))) }
         if state.engineHasPhase4(chat.model) {
-            chips.append(PluginView(CodePlanToggle(chat: code, state: state)))
             chips.append(PluginView(CodePullRequestChip(chat: code, state: state)))
         }
         chips += [PluginView(CodeModeTerminalButton(chat: code, state: state)), PluginView(CodeOpenMenu(chat: code, state: state))]
@@ -74,7 +73,14 @@ public final class CodeAppPlugin: AppPlugin {
 
     public func chatColumn(_ chat: ChatContext) -> PluginView? {
         guard let bot = chat.bot, state.engineHasPhase3(chat.model) else { return nil }
-        return PluginView(CodeChatColumn(bot: bot, state: state, preferenceKey: (chat.model.activeRemoteEngine?.id ?? "local") + "." + bot.id).id(bot.id))
+        let key = (chat.model.activeRemoteEngine?.id ?? "local") + "." + bot.id
+        return PluginView(CodeChatColumn(bot: bot, state: state, preferenceKey: key).id(key))
+    }
+
+    public func chatNavigation(_ chat: ChatContext) -> PluginView? {
+        guard let bot = chat.bot, state.engineHasPhase3(chat.model) else { return nil }
+        let key = (chat.model.activeRemoteEngine?.id ?? "local") + "." + bot.id
+        return PluginView(CodeChatToggle(preferenceKey: key).id(key))
     }
 
     public func commands(_ model: AppModel) async -> [PluginCommand] {

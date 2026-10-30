@@ -2,6 +2,8 @@
 extension Translations {
     static let chat: [String: String] = [
         "Altro": "Other",
+        "Mostra tutte le opzioni": "Show all options",
+        "Riduci le opzioni": "Collapse options",
         "Cartella di lavoro non disponibile": "Working folder unavailable",
         "Configura una connessione SSH per aprire il terminale sul server": "Configure an SSH connection to open the server terminal",
         "server": "server",
