@@ -196,8 +196,9 @@ public final class CylonEnginePlugin: EnginePlugin {
         let botName = bot["name"]?.string ?? botId
         guard group["memberIds"]?.array?.contains(.string(botId)) == true else { throw HTTPError(409, "@\(botName) plays \(phase.rawValue) but is not a member of this channel") }
         try ensureSkill(phase, for: bot, harness: harness)
-        // A channel turn for a bot that cannot take it is skipped without a word and never ends: the phase would be left
-        // "running" with no turn behind it, and could not be sent again. So the cases the room skips are refused here.
+        // A channel turn that is skipped never ends: the phase would be left "running" with no turn behind it, and could not be
+        // sent again. The room waits for a bot that is busy elsewhere, but only for a few minutes and then skips it, and it skips at
+        // once one whose model is gone: so these are refused here, where the person can see why.
         guard harness.fleet.get(ModelSelection(json: bot["modelSelection"]).instanceId) != nil else {
             throw HTTPError(409, "the model of @\(botName) is not available: choose another in the bot's settings")
         }
