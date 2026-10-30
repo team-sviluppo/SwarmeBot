@@ -44,7 +44,10 @@ extension Harness {
             if let id = sent["id"]?.string { _ = store.patchMessage(threadId, id, ["queued": .null]) }
             return
         }
-        let ids = responders.compactMap { $0["id"]?.string }
+        // a member that is working in another conversation goes last: the others answer meanwhile, and it is waited for
+        // (`waitForMember`) rather than skipped
+        let named = responders.compactMap { $0["id"]?.string }
+        let ids = named.filter { !Store.isBusy(store.bot($0)) } + named.filter { Store.isBusy(store.bot($0)) }
         let previous = groupQueues[groupId]
         let queueId = UUID()
         let interruptEpoch = roomInterruptEpochs[groupId, default: 0]
@@ -78,7 +81,7 @@ extension Harness {
     /// stopping (timed out or stalled): nobody else may start on its thread.
     func runGroupMemberTurn(groupId: String, botId: String, hop: Int, spoken: inout Set<String>) async -> Bool {
         if GuestId.parse(botId) != nil { return await runPeerMemberTurn(groupId: groupId, memberId: botId, hop: hop, spoken: &spoken) }
-        guard let group = store.group(groupId), let bot = store.bot(botId), let threadId = group["threadId"]?.string else { return false }
+        guard let group = store.group(groupId), var bot = store.bot(botId), let threadId = group["threadId"]?.string else { return false }
         let interruptEpoch = roomInterruptEpochs[groupId, default: 0]
         spoken.insert(botId)
         let name = bot["name"]?.string ?? ""
@@ -86,15 +89,29 @@ extension Harness {
         let chip = { (text: String) -> Void in
             _ = self.store.appendMessage(threadId, ["role": "bot", "kind": "activity", "from": from, "tool": ["name": .string(text), "ok": false]])
         }
-        let selection = ModelSelection(json: bot["modelSelection"])
-        guard let instance = fleet.get(selection.instanceId) else {
+        var selection = ModelSelection(json: bot["modelSelection"])
+        guard var instance = fleet.get(selection.instanceId) else {
             chip("error: \(name)'s model is unavailable")
             return true
         }
-        // one turn per bot at a time, across 1:1 and rooms
+        // one turn per bot at a time, across 1:1 and rooms: a member working elsewhere is waited for, a few minutes at most
         if Store.isBusy(bot) {
-            chip("\(name) is busy in another conversation — skipped this round")
-            return true
+            switch await waitForMember(groupId: groupId, botId: botId, name: name, interruptEpoch: interruptEpoch, chip: chip) {
+            case .interrupted: return true
+            case .gaveUp:
+                chip("\(name) is busy in another conversation — skipped this round")
+                return true
+            case .free:
+                // what it is, and which model, may have changed while it was worked on elsewhere
+                guard let fresh = store.bot(botId) else { return true }
+                bot = fresh
+                selection = ModelSelection(json: bot["modelSelection"])
+                guard let again = fleet.get(selection.instanceId) else {
+                    chip("error: \(name)'s model is unavailable")
+                    return true
+                }
+                instance = again
+            }
         }
         if instance.driverKind == "deepseekHarness", !instance.models.options.contains(where: { $0.id == selection.model }) {
             chip("error: \(name)'s selected DeepSeek Harness model is no longer available. Refresh the catalog or choose another model")
@@ -218,6 +235,28 @@ extension Harness {
         // (in a mirror room the host does that)
         guard roomInterruptEpochs[groupId, default: 0] == interruptEpoch else { return true }
         return await chainMentions(groupId: groupId, speakerId: botId, reply: replyText, hop: hop, spoken: &spoken)
+    }
+
+    enum MemberWait { case free, gaveUp, interrupted }
+
+    /// How long a member working in another conversation is waited for: as long as a turn of the room may last.
+    var roomBusyWait: TimeInterval { roomBusyWaitOverride ?? Double(config.roomTurnTimeoutMinutes) * 60 }
+
+    /// The room waits for a member that is busy elsewhere instead of skipping it. It says so, shows as working (so Stop is
+    /// there), and ends on the member being free, on Stop, or after `roomBusyWait`: then the member is skipped, as it used
+    /// to be at once. A guest from another engine is not waited for here: that engine answers busy and is skipped.
+    func waitForMember(groupId: String, botId: String, name: String, interruptEpoch: Int, chip: (String) -> Void) async -> MemberWait {
+        guard store.group(groupId) != nil else { return .interrupted }
+        chip("\(name) is busy in another conversation — waiting for them")
+        store.patchGroup(groupId, ["busyBotId": .string(botId)])
+        defer { if store.group(groupId)?["busyBotId"]?.string == botId { store.patchGroup(groupId, ["busyBotId": .null]) } }
+        let deadline = Date().addingTimeInterval(roomBusyWait)
+        while Store.isBusy(store.bot(botId)) {
+            guard roomInterruptEpochs[groupId, default: 0] == interruptEpoch, store.group(groupId) != nil else { return .interrupted }
+            if Date() >= deadline { return .gaveUp }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        return roomInterruptEpochs[groupId, default: 0] == interruptEpoch && store.group(groupId) != nil ? .free : .interrupted
     }
 
     public func interruptGroup(_ groupId: String) async -> Bool {

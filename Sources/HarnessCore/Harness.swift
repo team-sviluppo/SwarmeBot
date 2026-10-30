@@ -30,6 +30,8 @@ public final class Harness {
     public private(set) lazy var plugins = PluginRegistry(harness: self, plugins: enginePlugins)
     /// Folders each chat's current turn may read and not change (ReadOnlyGuard.swift), by thread.
     var readOnlyFolders: [String: [String]] = [:]
+    /// Tests shorten how long a room waits for a member that is busy elsewhere (Rooms.swift).
+    var roomBusyWaitOverride: TimeInterval?
     /// Secrets bots use in shell commands (Vault.swift, VaultTurns.swift).
     public let vault: Vault
     /// Turn grant token → what its `mcp-secrets` helper may run with.
