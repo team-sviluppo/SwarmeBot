@@ -111,6 +111,7 @@ filtering, working/unread filters and a branch filter. Enter searches the bot's 
 The chat icon in the header opens and closes the column completely; new chats are created with its **+** button.
 Code uses this navigation in place of the header's new-chat button and task menu. Older engines without the column
 keep the core navigation. The header's context indicator stays legible and read-only while a turn runs.
+The header's cost and response-speed chip is temporarily hidden.
 The context menu renames, pins, archives, opens a terminal/editor, copies the path or deletes a chat; archived chats
 stay in a collapsed group. Read/archive markers live on the engine. ⌘K includes Code chats and branch/script actions.
 The branch and diff counts in the column describe the **current shared working folder**, rather than a separate

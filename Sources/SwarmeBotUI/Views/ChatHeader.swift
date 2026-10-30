@@ -6,6 +6,8 @@ import SwiftUI
 /// + Chief of Staff badge on the left; on the right Stop, the task picker,
 /// pin, export, usage, folder, the model pill, computer and inspector.
 struct ChatHeader: View {
+    // Keep cost/speed presentation available, but hidden for now.
+    private static let showsUsageMetrics = false
     @Environment(AppModel.self) private var model
     @State private var renaming: BotTask?
     @State private var title = ""
@@ -67,7 +69,7 @@ struct ChatHeader: View {
                     .buttonStyle(IconButtonStyle(size: 28, iconSize: 14, active: bot.pinned == true))
                     .help(bot.pinned == true ? tr("Rimuovi dai fissati") : tr("Fissa in alto"))
                 exportButton(bot.threadId)
-                if let chip = usageChip(currentTask(bot)?.usage) {
+                if Self.showsUsageMetrics, let chip = usageChip(currentTask(bot)?.usage) {
                     Text(chip.text)
                         .font(.system(size: 12).monospacedDigit())
                         .foregroundStyle(Theme.secondary)
