@@ -54,8 +54,11 @@ struct CodeScriptButton: View {
             }
             Divider()
             Button(tr("Mostra output")) { state.scriptPanels.insert(thread) }
-        } label: { Label(tr("Script"), systemImage: "play.rectangle") }
-        .menuStyle(.borderlessButton).fixedSize()
+        } label: { Label(tr("Script"), systemImage: "play.rectangle").fixedSize() }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(ChipButtonStyle(filled: true, size: Theme.uiSize))
+        .fixedSize()
         .task(id: thread) { await state.refreshScripts(model: model, thread: thread) }
     }
 }
