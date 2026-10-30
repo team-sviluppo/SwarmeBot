@@ -459,6 +459,27 @@ def main():
                 current = request(port, "GET", "/api/bots")[1]["bots"][0]
                 assert current["showToolCalls"] is value
                 assert current["messages"] == original, "visibility must not remove recorded tool results"
+        if os.environ.get("SCENARIO") == "interactions":
+            assert DRIVER == "codex"
+            bot_id = bot["id"]
+            before = len([f for f in frames if f.get("kind") == "message" and f["message"].get("card", {}).get("requestId")])
+            completed = sum(f.get("kind") == "runtime" and f["event"]["type"] == "turn.completed" for f in frames)
+            assert request(port, "POST", f"/api/bots/{bot_id}/messages", {"text": "DOMANDE_MULTIPLE"})[0] == 202
+            answer_card({"behavior": "answer", "message": "Blu"}, before + 1)
+            current = request(port, "GET", "/api/bots")[1]["bots"][0]
+            assert current["activity"] == "waiting-on-you", current
+            answer_card({"behavior": "answer", "message": "Su misura"}, before + 2)
+            settle(completed + 1)
+            current = request(port, "GET", "/api/bots")[1]["bots"][0]
+            reply = next(m["text"] for m in reversed(current["messages"]) if m.get("role") == "bot" and m.get("kind") == "text")
+            answers = json.loads(reply)
+            assert answers == {"color": {"answers": ["Blu"]}, "size": {"answers": ["Su misura"]}}, answers
+            task = next(t for t in current["tasks"] if t["threadId"] == current["threadId"])
+            assert task["context"] == {"used": 26, "window": 1000}, task
+            assert request(port, "POST", f"/api/bots/{bot_id}/messages", {"text": "MCP_FAILURE"})[0] == 202
+            settle(completed + 2)
+            messages = request(port, "GET", "/api/bots")[1]["bots"][0]["messages"]
+            assert any("MCP fake: tools/list timed out" in m.get("tool", {}).get("name", "") for m in messages)
         if os.environ.get("SCENARIO") == "usage":
             assert DRIVER == "codex"
             bot_id = bot["id"]

@@ -206,7 +206,11 @@ public final class Harness {
             guard let self else { return }
             switch event.body {
             case .requestOpened: self.watchdog.setWaitingOnHuman(event.threadId, true)
-            case .requestResolved: self.watchdog.setWaitingOnHuman(event.threadId, false)
+            case .requestResolved:
+                let prefix = event.threadId + ":"
+                let resolved = event.requestId.map { prefix + $0 }
+                let stillWaiting = self.askMessageByRequest.keys.contains { $0.hasPrefix(prefix) && $0 != resolved }
+                self.watchdog.setWaitingOnHuman(event.threadId, stillWaiting)
             case .turnCompleted:
                 self.watchdog.settle(event.threadId)
                 self.revokeConnectorGrants(threadId: event.threadId)
@@ -382,8 +386,8 @@ public final class Harness {
     func notify(_ kind: String, bot: JSONObject, threadId: String, detail: String, requestId: String? = nil) {
         guard bot["notifications"]?.bool != false else { return }
         let name = bot["name"]?.string ?? "Bot"
-        let body = Self.summarize(detail)
-        if kind == "done", body.isEmpty { return }
+        let summary = Self.summarize(detail)
+        let body = kind == "done" && summary.isEmpty ? "The turn has finished." : summary
         let title: String
         switch kind {
         case "approval": title = "\(name) needs approval"
@@ -507,7 +511,6 @@ public final class Harness {
 
         case let .requestResolved(behavior, source, _):
             let waiting = bot ?? speaker?["botId"]?.string.flatMap { store.bot($0) }
-            if let waiting, waiting["activity"]?.string == "waiting-on-you", let id = waiting["id"]?.string { store.setActivity(id, "working") }
             if let requestId = event.requestId, let messageId = askMessageByRequest[key(requestId)] {
                 if let existing = store.messages(threadId).first(where: { $0["id"]?.string == messageId }),
                    var card = existing["card"]?.object, card["answered"] == nil {
@@ -516,6 +519,10 @@ public final class Harness {
                     store.patchMessage(threadId, messageId, ["card": .object(card)])
                 }
                 askMessageByRequest[key(requestId)] = nil
+            }
+            let stillWaiting = askMessageByRequest.keys.contains { $0.hasPrefix(threadId + ":") }
+            if !stillWaiting, let waiting, waiting["activity"]?.string == "waiting-on-you", let id = waiting["id"]?.string {
+                store.setActivity(id, "working")
             }
 
         case let .runtimeError(message, setup):
@@ -563,6 +570,7 @@ public final class Harness {
             }
             if let member = groupSpeakers[threadId], let room = store.groupByThread(threadId),
                room["busyBotId"]?.string == member["botId"]?.string, let memberId = member["botId"]?.string {
+                if let memberBot = store.bot(memberId) { notify("done", bot: memberBot, threadId: threadId, detail: reply) }
                 groupSpeakers[threadId] = nil
                 // a mirror room is read on its host (MixedRooms.swift)
                 store.patchGroup(room["id"]?.string ?? "", room["guest"] == nil ? ["busyBotId": .null, "unread": true] : ["busyBotId": .null])

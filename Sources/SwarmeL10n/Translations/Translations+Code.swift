@@ -2,6 +2,9 @@
 // tables so that they can move with the plugin.
 extension Translations {
     static let code: [String: String] = [
+        "Contesto %@": "Context %@",
+        "Contesto della sessione": "Session context",
+        "Percentuale non disponibile: il motore non ha ancora comunicato il limite del contesto": "Percentage unavailable: the engine has not reported the context limit yet",
         "Scegli prima una cartella condivisa per il canale.": "Choose a shared folder for the channel first.",
         "Nessuna modifica": "No changes",
         "Cerca chat": "Search chats",

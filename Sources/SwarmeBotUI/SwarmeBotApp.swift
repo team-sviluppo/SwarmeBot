@@ -88,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.terminalRunner = { TerminalLauncher.run($0) }
         trapTerminationSignals()
         NotificationCenterBridge.shared.install(on: model)
+        NotificationCenterBridge.shared.showMainWindow = { [weak self] in self?.showMainWindow() }
         _ = Updater.shared
         if let raw = ProcessInfo.processInfo.environment["SWARMEBOT_BENCH"], let count = Int(raw) {
             bench = BenchRunner(model: model, count: count)

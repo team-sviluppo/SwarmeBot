@@ -1,6 +1,7 @@
 // English for the chat window: sidebar, header, transcript, composer, inspector, palette, menus, notifications.
 extension Translations {
     static let chat: [String: String] = [
+        "Altro": "Other",
         "Cartella di lavoro non disponibile": "Working folder unavailable",
         "Configura una connessione SSH per aprire il terminale sul server": "Configure an SSH connection to open the server terminal",
         "server": "server",

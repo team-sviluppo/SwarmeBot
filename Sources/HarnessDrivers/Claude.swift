@@ -311,6 +311,13 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         var errorDescription: String? { message }
     }
 
+    static func contextWindow(_ result: JSON, model: String?) -> Double? {
+        let models = result["modelUsage"]?.object
+        let usage = model.flatMap { models?[$0] } ?? (models?.count == 1 ? models?.keys.first.flatMap { models?[$0] } : nil)
+        guard let window = usage?["contextWindow"]?.double, window.isFinite, window > 0 else { return nil }
+        return window
+    }
+
     func sendTurn(_ turn: SendTurnInput) async throws -> String {
         let threadId = turn.threadId
         guard active[threadId] == nil else { throw TurnError(message: "a turn is already running on this thread") }
@@ -438,8 +445,17 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         // whole-message frame does not repeat it as one big delta
         var sawStreamDelta = false
         var pendingResult: JSON?
+        var lastContext: RuntimeEvent.Context?
+        var sessionModel: String?
         var sessionState: String?
-        let finishResult: (JSON) -> Void = { o in
+        let finishResult: (JSON) -> Void = { [weak self] o in
+            guard let self else { return }
+            // Result usage is cumulative billing; only its model metadata gives
+            // the window. Keep the latest request's token count as the numerator.
+            if var context = lastContext, let window = Self.contextWindow(o, model: sessionModel ?? turn.model) {
+                context.window = window
+                self.emit(threadId, turnId, context: context, .itemUpdated(itemType: "context", tokens: nil))
+            }
             let usage = o["usage"].flatMap { u -> RuntimeEvent.TokenUsage? in
                 guard u.object != nil else { return nil }
                 return .init(input: (u["input_tokens"]?.double ?? 0) + (u["cache_read_input_tokens"]?.double ?? 0)
@@ -456,6 +472,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
             switch o["type"]?.string {
             case "system":
                 if o["subtype"]?.string == "init" {
+                    sessionModel = o["model"]?.string
                     self.emit(threadId, turnId, .sessionStarted(sessionId: o["session_id"]?.string, model: o["model"]?.string, resumeCursor: nil))
                 } else if o["subtype"]?.string == "thinking_tokens" {
                     self.emit(threadId, turnId, .itemUpdated(itemType: "reasoning", tokens: o["estimated_tokens"]))
@@ -489,7 +506,8 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
                 if let usage = message["usage"], usage.object != nil {
                     let used = (usage["input_tokens"]?.double ?? 0) + (usage["cache_creation_input_tokens"]?.double ?? 0)
                         + (usage["cache_read_input_tokens"]?.double ?? 0) + (usage["output_tokens"]?.double ?? 0)
-                    self.emit(threadId, turnId, context: .init(used: used), .tokenUsage(
+                    lastContext = .init(used: used)
+                    self.emit(threadId, turnId, context: lastContext, .tokenUsage(
                         input: (usage["input_tokens"]?.double ?? 0) + (usage["cache_read_input_tokens"]?.double ?? 0),
                         output: usage["output_tokens"]?.double ?? 0
                     ))

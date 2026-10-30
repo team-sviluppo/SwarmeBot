@@ -101,7 +101,8 @@ def finish(text, tool=True):
     if tool:
         out({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "tu-1", "is_error": False}]}})
     out({"type": "result", "is_error": False, "stop_reason": "end_turn", "total_cost_usd": 0.01,
-         "usage": {"input_tokens": 10, "cache_read_input_tokens": 2, "cache_creation_input_tokens": 3, "output_tokens": 5}})
+         "usage": {"input_tokens": 10, "cache_read_input_tokens": 2, "cache_creation_input_tokens": 3, "output_tokens": 5},
+         **({"modelUsage": {"claude-test": {"contextWindow": 200000}}} if os.environ.get("FAKE_CLAUDE_CONTEXT") else {})})
 
 
 def peer_id(name):

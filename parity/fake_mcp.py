@@ -78,6 +78,7 @@ def handle(message, seen_headers=None):
     rid = message["id"]
     params = message.get("params") or {}
     if method == "initialize":
+        time.sleep(float(os.environ.get("FAKE_MCP_STARTUP_DELAY", "0")))
         result = {"protocolVersion": params.get("protocolVersion", "2025-06-18"),
                   "capabilities": {"tools": {"listChanged": True}},
                   "serverInfo": {"name": "fake-mcp", "version": "0.1"},

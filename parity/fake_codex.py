@@ -75,7 +75,7 @@ def mcp_servers():
 def mcp_echo(server, text):
     # env_vars name variables codex passes through from its own env
     proc = subprocess.Popen([server["command"], *server["args"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-                            env={k: v for k, v in os.environ.items()})
+                            env={k: v for k, v in os.environ.items() if k in server.get("env_vars", []) or k in ["PATH", "HOME", "TMPDIR"]})
 
     def rpc(message):
         proc.stdin.write(json.dumps(message) + "\n")
@@ -126,6 +126,7 @@ def run_turn(params):
         name, _, said = text.split("CONNETTORE ", 1)[1].strip().partition(" ")
         servers = mcp_servers()
         answer = mcp_echo(servers[name], said) if name in servers else f"nessun server {name}"
+        assert not servers or record.get("mcpPrepared"), "tools must be discovered before turn/start"
         modes = sorted({s.get("default_tools_approval_mode", "") for s in servers.values()})
         message(f"{answer} | server: {','.join(sorted(servers))} | approval: {','.join(modes)}", [])
     elif "PERMESSO" in text:
@@ -134,6 +135,16 @@ def run_turn(params):
     elif "VECCHIO" in text:
         decision = ask("execCommandApproval", {"command": "git push --force"})["decision"]
         message(f"legacy: {decision}", ["legacy: ", decision])
+    elif "DOMANDE_MULTIPLE" in text:
+        answers = ask("item/tool/requestUserInput", {"questions": [
+            {"id": "color", "question": "Quale colore?", "options": [{"label": "Rosso"}, {"label": "Blu"}]},
+            {"id": "size", "question": "Quale dimensione?", "options": [{"label": "Piccolo"}, {"label": "Grande"}]}]})["answers"]
+        message(json.dumps(answers, sort_keys=True), [])
+    elif "MCP_FAILURE" in text:
+        note("mcpServer/startupStatus/updated", {"threadId": params["threadId"], "name": "fake", "status": "failed", "error": "tools/list timed out"})
+        message("Connector startup failed", [])
+    elif "SCELTA_TESTO" in text:
+        message("Quale soluzione preferisci?\nA) Correggere il problema\nB) Aggiungere una funzione\nC) Approfondire prima", [])
     elif "DOMANDA" in text:
         answers = ask("item/tool/requestUserInput", {"questions": [
             {"id": "q1", "header": "Colore", "question": "Quale colore?", "options": [{"label": "Rosso"}, {"label": "Blu"}]}]})["answers"]
@@ -153,7 +164,7 @@ def run_turn(params):
         message("Ciao dal finto codex", ["Ciao ", "dal finto codex"])
         note("error", {"error": {"message": "avviso di prova"}})
     note("thread/tokenUsage/updated", {"tokenUsage": {"total": {"inputTokens": 120, "cachedInputTokens": 5, "outputTokens": 30},
-                                                      "last": {"inputTokens": 20, "cachedInputTokens": 5, "outputTokens": 6}}})
+                                                      "last": {"inputTokens": 20, "cachedInputTokens": 5, "outputTokens": 6}, "modelContextWindow": 1000}})
     note("turn/completed", {"turn": {"status": "completed"}})
 
 
@@ -181,6 +192,9 @@ def handle(msg):
             result = {"data": [{"id": "gpt-fake-1", "displayName": "GPT Fake 1"}, {"id": "gpt-hidden", "hidden": True}], "nextCursor": "p2"}
         else:
             result = {"data": [{"id": "gpt-fake-2", "displayName": "GPT Fake 2", "isDefault": True}], "nextCursor": None}
+    elif method == "mcpServerStatus/list":
+        result = {"data": [{"name": name, "tools": {"echo": {"name": "echo"}}, "toolsError": None} for name in mcp_servers()], "nextCursor": None}
+        record["mcpPrepared"] = True
     elif method == "thread/start":
         tid = f"th-{len(os.listdir(state_dir)) + 1}"
         open(os.path.join(state_dir, tid), "w").close()
