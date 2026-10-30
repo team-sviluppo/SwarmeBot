@@ -375,7 +375,20 @@ extension Translations {
         "Telefono": "Phone",
         "Tempo scaduto: il Mac non offre più la configurazione.": "Time is up: the Mac no longer offers the settings.",
         "senza chiave: non è salvata su questo Mac": "without a key: it is not saved on this Mac",
-        "Code mode": "Code mode",
-        "Mostra il branch git accanto alla cartella e raccoglie i file modificati a fine turno in un badge.": "Shows the git branch next to the folder and gathers the files changed at the end of a turn into one badge.",
+    ]
+}
+
+extension Translations {
+    static let plugins: [String: String] = [
+        "Terminale": "Terminal",
+        "App del terminale": "Terminal app",
+        "Dove si aprono Apri terminale, la shell di un server e Continua nel terminale.": "Where Open terminal, a server's shell and Continue in terminal open.",
+        "Plugin": "Plugins",
+        "Plugin del motore": "Engine plugins",
+        "Questo motore non ha plugin.": "This engine has no plugins.",
+        "Un plugin acceso aggiunge funzioni a bot e canali; spento, smette di rispondere e di essere ascoltato, ma non perde i suoi dati.":
+            "A plugin that is on adds features to bots and channels; off, it stops answering and being listened to, but keeps its data.",
+        "Richiede %@": "Requires %@",
+        "Questa app non ha l'interfaccia di questo plugin.": "This app does not have this plugin's interface.",
     ]
 }

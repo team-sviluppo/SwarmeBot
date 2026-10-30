@@ -70,6 +70,14 @@ public final class Routes {
             return ok(["app": "swarmebot", "pid": .number(Double(ProcessInfo.processInfo.processIdentifier)), "static": false, "engine": "swift"])
         }
         if method == "GET", path == "/api/events" { return harness.hub.route(r) }
+        // the plugins linked into this engine, and which of them are on (Plugins.swift)
+        if method == "GET", path == "/api/plugins" { return ok(["plugins": harness.plugins.wire]) }
+        if method == "PUT", let id = match(#"^/api/plugins/([\w.-]+)$"#, path)?.first {
+            guard r.isJSON else { return fail(415, "content-type must be application/json") }
+            guard let enabled = try r.json()["enabled"]?.bool else { return fail(400, "enabled must be true or false") }
+            try harness.plugins.setEnabled(id, enabled)
+            return ok(["plugins": harness.plugins.wire])
+        }
         // peer comms for the agents MCP helper: loopback and the boot token only
         if let response = await harness.internalRoute(r) { return .response(response) }
 
@@ -174,11 +182,17 @@ public final class Routes {
             return ok(["text": .string(text)])
         }
         if let m = match(#"^/api/bots/([\w-]+)/messages$"#, path), method == "POST" {
-            let text = try r.json()["text"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let body = try r.json()
+            let text = body["text"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !text.isEmpty else { return fail(400, "text required") }
             guard let bot = store.bot(m[0]) else { return fail(404, "no such bot") }
             if Store.isBusy(bot) {
                 let message = harness.queueSteeredMessage(botId: m[0], text: text)
+                if body["interrupt"]?.bool == true {
+                    if let group = store.groups.first(where: { $0["busyBotId"]?.string == m[0] }), let id = group["id"]?.string {
+                        _ = await harness.interruptGroup(id)
+                    } else { await harness.interrupt(botId: m[0]) }
+                }
                 return ok(["ok": true, "queued": true, "messageId": message?["id"] ?? .null], 202)
             }
             try harness.startTurn(botId: m[0], text: text)
@@ -242,6 +256,10 @@ public final class Routes {
         }
 
         // MARK: tasks
+        if let m = match(#"^/api/bots/([\w-]+)/tasks/([\w-]+)/compact$"#, path), method == "POST" {
+            try await harness.compactTask(botId: m[0], thread: m[1])
+            return ok(["ok": true])
+        }
         if let m = match(#"^/api/bots/([\w-]+)/tasks$"#, path), method == "POST" {
             guard let bot = store.bot(m[0]) else { return fail(404, "no such bot") }
             if Store.isBusy(bot) { return fail(409, "this bot is working — let it finish before starting a task") }
@@ -360,8 +378,16 @@ public final class Routes {
         if path == "/api/guest-turns", method == "POST" {
             return .response(await harness.guestTurn(try r.json(), deviceId: r.deviceId ?? "local"))
         }
+        if path == "/api/guest-turns/summary", method == "POST" {
+            var body = try r.json()
+            body["summaryOnly"] = true
+            return .response(await harness.guestTurn(body, deviceId: r.deviceId ?? "local"))
+        }
         if path == "/api/guest-turns/interrupt", method == "POST" {
             return .response(await harness.interruptGuestTurn(try r.json(), deviceId: r.deviceId ?? "local"))
+        }
+        if path == "/api/guest-turns/session", method == "POST" {
+            return .response(harness.resetGuestSession(try r.json(), deviceId: r.deviceId ?? "local"))
         }
 
         // MARK: rooms
@@ -392,8 +418,14 @@ public final class Routes {
             }
             if method == "PATCH" {
                 let body = try r.json()
+                try harness.plugins.validatePatch(body, for: .group(m[0]), existing: existing)
                 var patch = JSONObject()
                 for key in ["name", "bulletin", "unread"] { if let value = body[key] { patch[key] = value } }
+                for flag in harness.plugins.groupFlags {
+                    guard let value = body[flag] else { continue }
+                    guard value.bool != nil else { return fail(400, "\(flag) must be true or false") }
+                    patch[flag] = value
+                }
                 if let ids = body["memberIds"]?.array?.compactMap(\.string).filter({ store.bot($0) != nil }), !ids.isEmpty {
                     patch["memberIds"] = .strings(ids)
                 }
@@ -421,9 +453,19 @@ public final class Routes {
                         patch["cwd"] = .string(path)
                     }
                 }
-                guard let group = store.patchGroup(m[0], patch) else { return fail(404, "no such room") }
+                if let data = try harness.plugins.mergedData(body, existing: existing, owner: .group(m[0])) { patch["plugins"] = data }
+                guard var group = store.patchGroup(m[0], patch) else { return fail(404, "no such room") }
+                if patch["plugins"] != nil {
+                    harness.plugins.dataChanged(for: .group(m[0]))
+                    group = store.group(m[0]) ?? group
+                }
                 return ok(["group": .object(harness.wireGroup(group))])
             }
+        }
+        if let m = match(#"^/api/groups/([\w-]+)/session$"#, path), method == "POST" {
+            let body = try r.json()
+            if let summarize = body["summarize"], summarize.bool == nil { return fail(400, "summarize must be true or false") }
+            return ok(.object(try await harness.newRoomSession(m[0], summarize: body["summarize"]?.bool ?? false)))
         }
         if let m = match(#"^/api/groups/([\w-]+)/read$"#, path), method == "POST" {
             guard let group = store.patchGroup(m[0], ["unread": false]) else { return fail(404, "no such room") }
@@ -431,8 +473,10 @@ public final class Routes {
         }
         if let m = match(#"^/api/groups/([\w-]+)/messages$"#, path), method == "POST" {
             if store.group(m[0])?["guest"] != nil { return fail(409, "this channel is written from where it lives") }
-            let text = (try r.json()["text"].flatMap(Harness.text) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let body = try r.json()
+            let text = (body["text"].flatMap(Harness.text) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if text.isEmpty { return fail(400, "text required") }
+            if body["interrupt"]?.bool == true { _ = await harness.interruptGroup(m[0]) }
             try harness.startGroupTurn(groupId: m[0], text: text)
             return ok(["ok": true], 202)
         }
@@ -549,36 +593,12 @@ public final class Routes {
                 ], body: data))
             }
         }
-        if method == "GET", let threadId = match(#"^/api/threads/([\w-]+)/git$"#, path)?.first {
-            guard let roots = ThreadFiles.roots(store, harness.paths, threadId: threadId) else { return fail(404, "no such thread") }
-            return ok(await ThreadGit.wire(folder: roots.first))
-        }
-        if let threadId = match(#"^/api/threads/([\w-]+)/git/(?:branches|checkout)$"#, path)?.first {
-            guard let folder = ThreadFiles.roots(store, harness.paths, threadId: threadId)?.first else { return fail(404, "no such thread") }
-            if method == "GET", path.hasSuffix("/branches") {
-                return ok(["branches": .array(try await ThreadGit.branches(folder: folder))])
-            }
-            if method == "POST", path.hasSuffix("/checkout") {
-                guard let repo = await ThreadGit.inspect(folder: folder) else { return fail(400, "not a git repository") }
-                let busyInRepo = store.bots.contains { bot in
-                    guard Store.isBusy(bot), let tid = bot["threadId"]?.string,
-                          let cwd = ThreadFiles.roots(store, harness.paths, threadId: tid)?.first else { return false }
-                    let resolved = URL(fileURLWithPath: cwd).standardizedFileURL.resolvingSymlinksInPath().path
-                    return resolved == repo.root || resolved.hasPrefix(repo.root + "/")
-                }
-                guard !busyInRepo, harness.routines?.isActiveThread(threadId) != true else {
-                    return fail(409, "a bot is working — let it finish before switching branches")
-                }
-                let body = try r.json()
-                guard let ref = body["ref"]?.string else { return fail(400, "ref is required") }
-                try await ThreadGit.checkout(folder: folder, ref: ref)
-                return ok(await ThreadGit.wire(folder: folder))
-            }
-        }
         if method == "GET", path == "/api/decisions" {
             return ok(["decisions": .array(DecisionLog.read(harness.paths, limit: Int(r.query["limit"] ?? "") ?? 200))])
         }
 
+        // after the core's own routes: a plugin adds routes, it does not replace one
+        if let routed = try await harness.plugins.route(r) { return routed }
         if let routed = try await automationRoute(r) { return routed }
 
         // MARK: not ported yet — read routes answer empty, writes say so
@@ -630,6 +650,7 @@ public final class Routes {
 
     private func patchBot(_ bot: JSONObject, _ body: JSONObject) async throws -> RouteResult {
         let id = bot["id"]?.string ?? ""
+        try harness.plugins.validatePatch(body, for: .bot(id), existing: bot)
         if let selection = body["modelSelection"], let effort = selection["effort"]?.string {
             guard isEffortLevel(effort) else { return fail(400, "effort \"\(effort)\" is not recognized") }
             let current = ModelSelection(json: bot["modelSelection"])
@@ -662,7 +683,7 @@ public final class Routes {
             guard ["local", "vm", "off"].contains(computer.string ?? "") else { return fail(400, "computer must be local, vm, or off") }
             patch["computer"] = computer
         }
-        for flag in ["autoApprove", "approvePeerComms", "chiefOfStaff", "composio", "codeMode", "showToolCalls"] {
+        for flag in ["autoApprove", "approvePeerComms", "chiefOfStaff", "composio", "showToolCalls"] + harness.plugins.botFlags {
             guard let value = body[flag] else { continue }
             guard value.bool != nil else { return fail(400, "\(flag) must be true or false") }
             patch[flag] = value
@@ -744,7 +765,12 @@ public final class Routes {
         if bot["sharedSource"] != nil, ["name", "title", "description"].contains(where: { body[$0] != nil && body[$0] != bot[$0] }) {
             try harness.sharedRepositories.updateBot(bot, patch: body)
         }
-        guard let updated = store.patchBot(id, patch, keepingNulls: AvatarSVG.fields) else { return fail(404, "no such bot") }
+        if let data = try harness.plugins.mergedData(body, existing: bot, owner: .bot(id)) { patch["plugins"] = data }
+        guard var updated = store.patchBot(id, patch, keepingNulls: AvatarSVG.fields) else { return fail(404, "no such bot") }
+        if patch["plugins"] != nil {
+            harness.plugins.dataChanged(for: .bot(id))
+            updated = store.bot(id) ?? updated
+        }
         return ok(["bot": .object(harness.wireBot(updated))])
     }
 

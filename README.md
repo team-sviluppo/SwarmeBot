@@ -87,8 +87,8 @@ servers and also has private bots of its own.
   a question (single or multiple choice), the chat shows a card. Per-bot **auto-approve** modes and
   "always allow" rules.
 - **Edit and resend** a message and move between versions of the conversation (‹ 1/3 ›).
-- **Queued messages**: write while the bot is working; messages run in order. **Stop** keeps the
-  partial reply.
+- **Queued messages**: write while a bot or channel is working; **Steer now** interrupts the turn and sends the new direction. **Stop** keeps the partial reply.
+- **Session context** from Claude and Codex, separate from billable usage. Compact a bot chat with a summary; start a new session in a channel, optionally with its default member’s summary. History stays searchable.
 - **Tasks**: a bot's work is split into tasks (threads) you can create, switch, rename, pin, delete,
   each with its cost and token usage.
 - **Attachments**: paste images, drop files, attach long text as a chip; reactions on messages.
@@ -97,6 +97,10 @@ servers and also has private bots of its own.
   task cost at Standard API token prices, including prompt-cache discounts. The estimate is not
   a subscription charge; unknown or custom model prices are left unavailable.
 - **Memory** and a **decision log** per bot.
+
+### Code projects
+
+The Code plugin adds projects with a working repo and linked read-only folders, a Chat column (⌘⇧L), branch and diff status, file references (⌘P), inline review comments and a commit window. Code channels share one folder across their local members. Project scripts run on the engine with output, Stop and a button to send failures to the bot. See [the Code plugin](Plugins/Code/README.md).
 
 ### Channels (multi-bot)
 - Channels with several bots and a **board** (shared notes for the room).
@@ -699,17 +703,20 @@ x86_64 on Apple silicon runs under emulation: enable Rosetta in Docker Desktop, 
 
 | Path | Contents |
 |---|---|
-| `Sources/SwarmeBot` | the SwiftUI app: views, mascot, notifications, Sparkle updater |
+| `Sources/SwarmeBotUI` | the SwiftUI app as a library: views, mascot, notifications, Sparkle updater, the plugin host |
+| `Sources/SwarmeBot` | the app executable: a thin shell that names its plugins and starts `SwarmeBotUI` |
+| `Plugins/Code` | the Code plugin (git branch, terminal, changed files in a chat): `Engine/` runs in the engine, also on Linux; `App/` is the Mac app's half |
 | `Sources/SwarmeKit` | app logic that is not UI: engine launcher and supervision, observable app model, Keychain, paths; `Remote/` for ssh identities, host keys, server setup, engine updates, Linux engine download |
 | `Sources/CompanionCore` | wire types, SSE parser with resume, HTTP client, pure fold of events into state (Mac and iOS) |
 | `Sources/AgentCore` | shared by the engine and the iOS app: ordered JSON, streaming, MCP client over HTTP, OAuth, OpenAI-compatible chat with Hermes continuity |
 | `Sources/SwarmeL10n` | UI languages and the Italian → English tables, for the Mac and iOS apps |
 | `Sources/HarnessCore` | the engine: JSON with stable key order, store and SQLite, turns, routes, HTTP server and SSE hub, channels, bot-to-bot comms, routines, webhooks, library, team packages, computers, MCP connectors and OAuth, permission broker, remote access |
 | `Sources/HarnessDrivers` | one driver per agent; `ACP/` (protocol runtime + agents), `DeepSeek/` |
-| `Sources/swarme-harness` | the engine executable and its subcommands |
+| `Sources/HarnessRunner` | the engine's startup and subcommands as a library, so an executable can pass its plugins |
+| `Sources/swarme-harness` | the engine executable: a thin shell that names its plugins |
 | `Sources/swarme-push-relay` | the push notification relay (Amazon SNS) for the iOS app |
 | `iOS/` | the iOS app: `project.yml` (XcodeGen), `SwarmeBot/`, tests |
-| `Tests/` | `HarnessCoreTests`, `CompanionCoreTests`, `SwarmeKitTests` |
+| `Tests/` | `HarnessCoreTests`, `CompanionCoreTests`, `SwarmeKitTests`, `SwarmeBotUITests`, and one test target per plugin |
 | `parity/` | fake agents and services, scenario runner, trace comparison |
 | `scripts/` | bundling, release, Linux engine build, integration tests |
 | `docs/` | HTTP/SSE contract, architecture and plans, benchmarks, design notes |

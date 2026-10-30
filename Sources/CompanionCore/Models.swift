@@ -140,6 +140,8 @@ public struct Message: Codable, Hashable, Identifiable, Sendable {
     public var queued: Bool?
     /// Desktop: the reply a stopped turn left behind.
     public var interrupted: Bool?
+    /// A channel keeps its history, but a new agent session starts here.
+    public var sessionDivider: Bool?
 
     public var date: Date { Date(timeIntervalSince1970: at / 1000) }
 }
@@ -181,6 +183,16 @@ public struct TaskUsage: Codable, Hashable, Sendable {
     }
 }
 
+public struct ContextUsage: Codable, Hashable, Sendable {
+    public var used: Double
+    public var window: Double?
+    public var fraction: Double? {
+        guard used.isFinite, used >= 0, let window, window.isFinite, window > 0 else { return nil }
+        let value = used / window
+        return value.isFinite ? value : nil
+    }
+}
+
 public struct BotTask: Codable, Hashable, Sendable {
     public var threadId: String
     public var title: String
@@ -188,6 +200,7 @@ public struct BotTask: Codable, Hashable, Sendable {
     /// Desktop fields.
     public var pinned: Bool?
     public var usage: TaskUsage?
+    public var context: ContextUsage?
     public var cwd: String?
     /// Library documents switched off in this chat.
     public var libraryOff: [String]?
@@ -255,6 +268,8 @@ public struct Bot: Codable, Hashable, Identifiable, Sendable {
     public var activity: String?
     public var pinnedMessageId: String?
     public var cwd: String?
+    /// What each plugin of the engine keeps on this bot (`plugins.<id>`); a plugin's own client reads its part.
+    public var plugins: [String: JSONValue]?
     /// Desktop appearance: body shape id (`SwarmeSilhouetteData`); unknown or
     /// absent renders the default.
     public var mascotSilhouette: String?
@@ -274,6 +289,21 @@ public struct GroupResponder: Codable, Hashable, Sendable {
     public var botId: String?
 }
 
+public extension Dictionary where Key == String, Value == JSONValue {
+    /// One plugin's part of `plugins`, for a plugin's own client to read.
+    func pluginData(_ id: String) -> [String: JSONValue] {
+        if case let .object(data)? = self[id] { return data }
+        return [:]
+    }
+}
+
+public extension JSONValue {
+    var string: String? {
+        if case let .string(value) = self { return value }
+        return nil
+    }
+}
+
 public struct Room: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var threadId: String
@@ -285,12 +315,17 @@ public struct Room: Codable, Hashable, Identifiable, Sendable {
     public var createdAt: Double
     public var dm: Bool?
     public var busyBotId: String?
+    public var context: ContextUsage?
     public var messages: [Message]?
     public var hasMore: Bool?
     /// Desktop fields.
     public var cwd: String?
     public var pinnedCwd: String?
     public var pinnedMessageId: String?
+    /// What each plugin of the engine keeps on this channel (`plugins.<id>`).
+    public var plugins: [String: JSONValue]?
+    /// Desktop: Code mode for the whole channel (the Code plugin's flag), as it is for a bot.
+    public var codeMode: Bool?
     /// Members from other engines (a mixed channel hosted here).
     public var guests: [RoomGuest]?
     /// Set on a mirror: a mixed channel hosted elsewhere, written only there.

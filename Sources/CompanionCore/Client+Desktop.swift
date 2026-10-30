@@ -27,6 +27,8 @@ public struct BotPatch: Sendable {
     /// "vm" or "off" — the only values the PATCH accepts.
     public var computer: String?
     public var cwd: String?
+    /// A plugin's data on the bot: `plugins.<id>`, merged by the engine; `.null` removes a key.
+    public var pluginData: [String: [String: JSONValue]]?
     /// Appearance. "" clears the field, so the bot falls back to its default.
     public var mascotSilhouette: String?
     public var mascotExpression: String?
@@ -79,6 +81,7 @@ public struct BotPatch: Sendable {
         if let color { out["color"] = color }
         if let computer { out["computer"] = computer }
         if let cwd { out["cwd"] = cwd }
+        if let pluginData { out["plugins"] = pluginData.mapValues { $0.mapValues(\.foundationValue) } }
         if let mascotSilhouette { out["mascotSilhouette"] = mascotSilhouette.isEmpty ? NSNull() : mascotSilhouette }
         if let mascotExpression { out["mascotExpression"] = mascotExpression.isEmpty ? NSNull() : mascotExpression }
         if clearPicture {
@@ -111,6 +114,10 @@ public struct RoomPatch: Sendable {
     public var cwd: String?
     /// Members from other engines; an empty list removes them all.
     public var guests: [RoomGuest]?
+    /// A plugin's data on the channel: `plugins.<id>`, merged by the engine; `.null` removes a key.
+    public var pluginData: [String: [String: JSONValue]]?
+    /// Code mode for the whole channel.
+    public var codeMode: Bool?
 
     public init(name: String? = nil, bulletin: String? = nil, memberIds: [String]? = nil, responder: String? = nil, responderBotId: String? = nil,
                 cwd: String? = nil, guests: [RoomGuest]? = nil) {
@@ -129,6 +136,8 @@ public struct RoomPatch: Sendable {
         if let bulletin { out["bulletin"] = bulletin }
         if let memberIds { out["memberIds"] = memberIds }
         if let cwd { out["cwd"] = cwd }
+        if let pluginData { out["plugins"] = pluginData.mapValues { $0.mapValues(\.foundationValue) } }
+        if let codeMode { out["codeMode"] = codeMode }
         if let guests { out["guests"] = guests.map(\.body) }
         if let responder {
             var value: [String: Any] = ["kind": responder]
@@ -137,6 +146,8 @@ public struct RoomPatch: Sendable {
         }
         return out
     }
+
+    public var bodyForTesting: [String: Any] { body }
 }
 
 public struct SavedAttachment: Codable, Sendable {
@@ -292,21 +303,6 @@ extension CompanionClient {
         struct Answer: Decodable { var files: [ReplyFile] }
         let request = try makeRequest("POST", "/api/threads/\(threadId)/files", body: ["paths": references])
         return try await send(request, as: Answer.self).files
-    }
-
-    /// `GET /api/threads/:tid/git`: the branch and the uncommitted files of
-    /// the chat's folder.
-    public func threadGit(threadId: String) async throws -> ThreadGitState {
-        try await send(try makeRequest("GET", "/api/threads/\(threadId)/git"), as: ThreadGitState.self)
-    }
-
-    public func gitBranches(threadId: String) async throws -> [GitBranch] {
-        struct Answer: Decodable { var branches: [GitBranch] }
-        return try await send(try makeRequest("GET", "/api/threads/\(threadId)/git/branches"), as: Answer.self).branches
-    }
-
-    public func checkoutBranch(threadId: String, ref: String) async throws -> ThreadGitState {
-        try await send(try makeRequest("POST", "/api/threads/\(threadId)/git/checkout", body: ["ref": ref]), as: ThreadGitState.self)
     }
 
     /// `GET /api/threads/:tid/files/content`: the bytes of one of those files.

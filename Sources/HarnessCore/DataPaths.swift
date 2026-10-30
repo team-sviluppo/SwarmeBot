@@ -25,6 +25,8 @@ public struct DataPaths: Sendable {
     public var attachments: URL { root.appendingPathComponent("attachments", isDirectory: true) }
     public var workspaces: URL { root.appendingPathComponent("workspaces", isDirectory: true) }
     public var decisions: URL { root.appendingPathComponent("decisions.ndjson") }
+    /// Which plugins the user switched off (Plugins.swift).
+    public var plugins: URL { root.appendingPathComponent("plugins.json") }
 
     public func legacyMessages(_ threadId: String) -> URL {
         root.appendingPathComponent("messages-\(threadId).json")

@@ -170,7 +170,7 @@ final class AntigravityInstance: ProviderInstance, ProviderAdapter {
         let process: CLIProcess
         do {
             process = try CLIProcess(cli: cli, args: args, cwd: cwd,
-                                     environment: childEnvironment().merging(turn.secretEnvironment) { _, secret in secret })
+                                     environment: childEnvironment().merging(turn.turnEnvironment) { _, secret in secret })
         } catch {
             let failure = error as? SpawnFailure ?? SpawnFailure(message: "spawn failed: \(error.localizedDescription)", setup: false)
             // as in Node, where the spawn error arrives after turn.started

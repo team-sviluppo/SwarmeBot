@@ -283,11 +283,12 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
     // MARK: Turns
 
     private func emit(_ threadId: String, _ turnId: String, itemId: String? = nil, requestId: String? = nil,
-                      input: String? = nil, output: String? = nil, subagent: SubagentState? = nil, _ body: RuntimeEvent.Body) {
+                      input: String? = nil, output: String? = nil, subagent: SubagentState? = nil, context: RuntimeEvent.Context? = nil, _ body: RuntimeEvent.Body) {
         var event = RuntimeEvent(provider: provider, threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body)
         event.toolInput = input
         event.toolOutput = output
         event.subagent = subagent
+        event.context = context
         events.emit(event)
     }
 
@@ -329,6 +330,12 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         if let model = LocalHosts.applyClaudeInject(&probe, modelId: turn.model).model { args += ["--model", model] }
         if let effort = turn.effort { args += ["--effort", effort] }
         if let system = turn.system { args += ["--append-system-prompt", system] }
+        // linked read-only (a project's other repositories): readable from here, and no edit there.
+        // `//path` is the CLI's way to write an absolute path in a rule.
+        if !turn.readOnlyFolders.isEmpty {
+            for folder in turn.readOnlyFolders { args += ["--add-dir", folder] }
+            args += ["--disallowedTools", turn.readOnlyFolders.map { "Edit(/\($0)/**)" }.joined(separator: ",")]
+        }
 
         // integrations become MCP servers, their tools pre-allowed (a headless
         // acceptEdits run silently denies anything unlisted). For agents it
@@ -392,7 +399,7 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
         // The CLI reports when a background completion still owes the parent
         // another turn. stdin must outlive that turn and its approval requests.
         env["CLAUDE_CODE_SDK_READS_SESSION_STATE"] = "1"
-        for (key, value) in turn.secretEnvironment { env[key] = value }
+        for (key, value) in turn.turnEnvironment { env[key] = value }
         // a download or a build through the vault may take long: Claude's default would cut it
         if turn.secrets != nil { env["MCP_TOOL_TIMEOUT"] = String(VaultTool.maxSeconds * 1000 + 60_000) }
         let process: CLIProcess
@@ -480,7 +487,9 @@ final class ClaudeInstance: ProviderInstance, ProviderAdapter {
                               .itemStarted(itemType: "tool", title: block["name"]?.string))
                 }
                 if let usage = message["usage"], usage.object != nil {
-                    self.emit(threadId, turnId, .tokenUsage(
+                    let used = (usage["input_tokens"]?.double ?? 0) + (usage["cache_creation_input_tokens"]?.double ?? 0)
+                        + (usage["cache_read_input_tokens"]?.double ?? 0) + (usage["output_tokens"]?.double ?? 0)
+                    self.emit(threadId, turnId, context: .init(used: used), .tokenUsage(
                         input: (usage["input_tokens"]?.double ?? 0) + (usage["cache_read_input_tokens"]?.double ?? 0),
                         output: usage["output_tokens"]?.double ?? 0
                     ))

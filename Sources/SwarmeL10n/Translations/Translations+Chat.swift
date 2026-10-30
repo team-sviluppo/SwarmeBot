@@ -1,11 +1,6 @@
 // English for the chat window: sidebar, header, transcript, composer, inspector, palette, menus, notifications.
 extension Translations {
     static let chat: [String: String] = [
-        "Apri terminale": "Open terminal",
-        "Cambia branch": "Switch branch",
-        "Cerca branch": "Search branches",
-        "Nessun branch disponibile": "No branches available",
-        "Attendi la fine del turno per cambiare branch": "Wait for the turn to finish before switching branches",
         "Cartella di lavoro non disponibile": "Working folder unavailable",
         "Configura una connessione SSH per aprire il terminale sul server": "Configure an SSH connection to open the server terminal",
         "server": "server",
@@ -250,13 +245,10 @@ extension Translations {
         "Velocità media di risposta, in parte stimata": "Average reply speed, partly estimated",
         "Velocità stimata dal testo": "Speed estimated from the text",
         "VM locale": "Local VM",
-        "1 file modificato": "1 file modified",
-        "%@ file modificati": "%@ files modified",
         "Commit & push": "Commit & push",
         "Chiede all'agente di fare commit e push delle modifiche": "Asks the agent to commit and push the changes",
         "Mostra i file": "Show files",
         "Nascondi i file": "Hide files",
-        "Branch git attivo: %@": "Active git branch: %@",
         "HEAD staccato su %@": "Detached HEAD at %@",
         "Aggiunto": "Added",
         "Eliminato": "Deleted",

@@ -113,6 +113,7 @@ extension Harness {
         guard let group = store.group(groupId), let threadId = group["threadId"]?.string,
               let member = roomMembers(group).first(where: { $0["id"]?.string == memberId }),
               let (peerId, botId) = GuestId.parse(memberId) else { return true }
+        let interruptEpoch = roomInterruptEpochs[groupId, default: 0]
         spoken.insert(memberId)
         let name = member["name"]?.string ?? "Bot"
         let from: JSON = ["botId": .string(memberId), "name": .string(name), "color": member["color"] ?? "blue"]
@@ -146,6 +147,7 @@ extension Harness {
             var message: JSONObject = ["role": "bot", "kind": "text", "text": .string(text), "from": from]
             if let ref { message["guestRef"] = .string(ref) }
             store.appendMessage(threadId, message)
+            guard roomInterruptEpochs[groupId, default: 0] == interruptEpoch else { return true }
             return await chainMentions(groupId: groupId, speakerId: memberId, reply: text, hop: hop, spoken: &spoken)
         }
     }
@@ -165,8 +167,8 @@ extension Harness {
     /// What the guest's engine needs: who is in the channel and its recent text.
     func guestTurnBody(_ group: JSONObject, botId: String) -> JSON {
         let threadId = group["threadId"]?.string ?? ""
-        let messages: [JSON] = store.messages(threadId)
-            .filter { $0["kind"]?.string == "text" && !($0["text"]?.string ?? "").isEmpty }
+        let messages: [JSON] = sessionMessages(threadId)
+            .filter { $0["kind"]?.string == "text" && $0["queued"]?.bool != true && !($0["text"]?.string ?? "").isEmpty }
             .suffix(Self.roomContextMessages)
             .map { message in
                 let user = message["role"]?.string == "user"
@@ -177,15 +179,17 @@ extension Harness {
                 if let ref = message["guestRef"] { out["ref"] = ref }
                 return .object(out)
             }
-        return .object(JSONObject([
+        var body = JSONObject([
             ("conversationId", group["id"] ?? .null), ("name", group["name"] ?? ""), ("botId", .string(botId)),
             ("roster", .strings(roomRoster(group))), ("userName", .string(userName)), ("hostName", .string(hostName)),
             ("messages", .array(messages)),
-        ]))
+        ])
+        if let epoch = group["sessionEpoch"] { body["sessionEpoch"] = epoch; body["sessionStartedAt"] = group["sessionStartedAt"] }
+        return .object(body)
     }
 
-    nonisolated static func callGuest(_ peer: PeerEngine, body: JSON, timeout: Double, session: URLSession = .shared) async -> GuestOutcome {
-        guard let url = URL(string: peer.url + "/api/guest-turns") else { return .failed("bad server address") }
+    nonisolated static func callGuest(_ peer: PeerEngine, body: JSON, timeout: Double, endpoint: String = "/api/guest-turns", session: URLSession = .shared) async -> GuestOutcome {
+        guard let url = URL(string: peer.url + endpoint) else { return .failed("bad server address") }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = timeout
@@ -235,6 +239,14 @@ extension Harness {
         }
         guard let botId = body["botId"]?.string, let bot = store.bot(botId) else { return .error(404, "no such bot") }
         let incoming = (body["messages"]?.array ?? []).suffix(Self.maxGuestMessages)
+        if body["summaryOnly"]?.bool == true {
+            let text = incoming.map { "\(String(($0["name"]?.string ?? "Bot").prefix(200))): \(String(($0["text"]?.string ?? "").prefix(20_000)))" }.joined(separator: "\n")
+            do {
+                let summary = try await generateText(selection: ModelSelection(json: bot["modelSelection"]), system: Self.roomSummaryPrompt, text: String(text.suffix(32_000)))
+                return .json(200, ["text": .string(summary), "messageId": .null])
+            } catch let error as HTTPError { return .error(error.status, error.message) }
+            catch { return .error(502, error.localizedDescription) }
+        }
         let name = String((body["name"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }?.prefix(200)
                           ?? "Channel")
         var guest = JSONObject([("conversationId", .string(conversationId)), ("deviceId", .string(deviceId))])
@@ -251,6 +263,14 @@ extension Harness {
                                           "defaultResponder": ["kind": "mentions"]]) ?? room
         if Store.isBusy(bot) { return .json(409, ["busy": true, "error": "bot is busy"]) }
         if let busy = room["busyBotId"]?.string, !busy.isEmpty { return .json(409, ["busy": true, "error": "the channel is busy"]) }
+
+        if let epoch = body["sessionEpoch"]?.string, !epoch.isEmpty, epoch.count <= 100 {
+            if let previous = room["sessionStartedAt"]?.double, let incoming = body["sessionStartedAt"]?.double,
+               incoming < previous || (incoming == previous && room["sessionEpoch"]?.string != epoch) {
+                return .error(409, "stale channel session")
+            }
+            resetRoomSession(groupId, epoch: epoch, at: body["sessionStartedAt"]?.double ?? Date().timeIntervalSince1970 * 1000)
+        }
 
         // the host's conversation, once: by its ids, and our own replies by `ref`
         let threadId = room["threadId"]?.string ?? ""

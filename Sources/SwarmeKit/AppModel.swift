@@ -60,8 +60,9 @@ public final class AppModel {
     @ObservationIgnored public internal(set) var client: CompanionClient?
     /// The files each settled reply points at, by thread and message (AppModel+Desktop.swift).
     @ObservationIgnored var replyFileCache: [String: [ReplyFile]] = [:]
-    /// Code mode: the git state of each chat's folder, by thread (AppModel+CodeMode.swift).
-    public internal(set) var gitStates: [String: ThreadGitState] = [:]
+    /// The plugins the connected engine carries (AppModel+Plugins.swift); empty
+    /// for an engine that predates them.
+    public internal(set) var enginePlugins: [EnginePluginInfo] = []
     /// Which engine the window shows: this Mac's, or a remote one (AppModel+Remote.swift).
     public internal(set) var engineChoice: EngineChoice = .local
     public internal(set) var remoteEngines: [RemoteEngine] = []
@@ -81,6 +82,8 @@ public final class AppModel {
     @ObservationIgnored var visibleCache: [String: (version: Int, messages: [Message])] = [:]
     /// Hooks the app layer sets: system notifications and the Dock badge.
     @ObservationIgnored public var onNotify: ((NotificationFrame) -> Void)?
+    /// Runs a shell command line in the terminal app the user picked.
+    @ObservationIgnored public var terminalRunner: ((String) -> Void)?
     @ObservationIgnored public var onUnreadChange: ((Int) -> Void)?
     /// A settings window's model (AppModel+Settings.swift): config, engines,
     /// connectors and skills of one engine, no chats, no harness of its own.
@@ -179,6 +182,7 @@ public final class AppModel {
                         if !settingsOnly { Task { await self.refreshAutomations() } }
                         Task { await self.refreshMCPConnectors() }
                         Task { await self.refreshSkills() }
+                        Task { await self.refreshPlugins() }
                         continue
                     }
                     advance(to: frame.seq)
@@ -295,6 +299,11 @@ public final class AppModel {
     // MARK: - Reading
 
     var defaultSelection: ChatID? {
+        // `SWARMEBOT_SELECT=room:<id>` or `bot:<id>` opens that chat first — for snapshots
+        if let wanted = ProcessInfo.processInfo.environment["SWARMEBOT_SELECT"] {
+            if wanted.hasPrefix("room:"), state.rooms.contains(where: { $0.id == String(wanted.dropFirst(5)) }) { return .room(String(wanted.dropFirst(5))) }
+            if wanted.hasPrefix("bot:"), state.bots.contains(where: { $0.id == String(wanted.dropFirst(4)) }) { return .bot(String(wanted.dropFirst(4))) }
+        }
         if let pinned = visibleBots.first { return .bot(pinned.id) }
         return state.rooms.first.map { .room($0.id) }
     }

@@ -476,6 +476,24 @@ public struct CompanionClient: Sendable {
         try await send(try makeRequest("POST", "/api/groups/\(groupId)/messages", body: ["text": text]))
     }
 
+    public func steer(text: String, botId: String? = nil, groupId: String? = nil) async throws {
+        let path = botId.map { "/api/bots/\($0)/messages" } ?? "/api/groups/\(groupId ?? "")/messages"
+        try await send(try makeRequest("POST", path, body: ["text": text, "interrupt": true]))
+    }
+
+    public func newRoomSession(_ groupId: String, summarize: Bool) async throws -> [String] {
+        struct Answer: Decodable { var pendingPeers: [String] }
+        var request = try makeRequest("POST", "/api/groups/\(groupId)/session", body: ["summarize": summarize])
+        request.timeoutInterval = 110
+        return try await send(request, as: Answer.self).pendingPeers
+    }
+
+    public func compactTask(botId: String, threadId: String) async throws {
+        var request = try makeRequest("POST", "/api/bots/\(botId)/tasks/\(threadId)/compact", body: [:])
+        request.timeoutInterval = 100
+        try await send(request)
+    }
+
     /// Answer an approval or a question.
     ///
     /// Addressed by thread rather than by bot on purpose: a request raised

@@ -25,6 +25,11 @@ public final class Harness {
     /// The engine's environment, never with the vault key in it.
     private(set) var environment: [String: String]
     private let drivers: [ProviderDriver]
+    private let enginePlugins: [any EnginePlugin]
+    /// The plugins linked into this engine (Plugins.swift).
+    public private(set) lazy var plugins = PluginRegistry(harness: self, plugins: enginePlugins)
+    /// Folders each chat's current turn may read and not change (ReadOnlyGuard.swift), by thread.
+    var readOnlyFolders: [String: [String]] = [:]
     /// Secrets bots use in shell commands (Vault.swift, VaultTurns.swift).
     public let vault: Vault
     /// Turn grant token → what its `mcp-secrets` helper may run with.
@@ -44,6 +49,10 @@ public final class Harness {
     private var firstTokenAt: [String: Date] = [:]
     /// Messages sent while the bot was busy: threadId → (botId, [(messageId, text)]).
     private var queues: [String: (botId: String, items: [(String, String)])] = [:]
+    var roomSessionResets: Set<String> = []
+    var roomQueueIds: [String: UUID] = [:]
+    var roomInterruptEpochs: [String: Int] = [:]
+    var taskSessionResets: Set<String> = []
 
     // computers (Box.swift, ComputerControl.swift, Computers.swift)
     public let computerControl = ComputerControl()
@@ -147,8 +156,9 @@ public final class Harness {
         }
     }
 
-    public init(paths: DataPaths, environment: [String: String], drivers: [ProviderDriver]) throws {
+    public init(paths: DataPaths, environment: [String: String], drivers: [ProviderDriver], plugins: [any EnginePlugin] = []) throws {
         self.paths = paths
+        self.enginePlugins = plugins
         // the key opens the vault and goes no further: not to the drivers, not to any child
         let vaultKey = Vault.key(from: environment)
         var environment = environment
@@ -221,6 +231,7 @@ public final class Harness {
         let leftover = delegations.threads
         if !leftover.isEmpty { print("delegations: \(leftover.count) thread(s) with queued handoffs from a previous run — draining") }
         for threadId in leftover { drainDelegations(threadId) }
+        await plugins.start()
     }
 
     /// Nothing for the stall window: stop it, say so, keep ownership for the
@@ -398,6 +409,12 @@ public final class Harness {
         let group = bot == nil ? store.groupByThread(threadId) : nil
         guard bot != nil || group != nil else { return }
         let botId = bot?["id"]?.string
+        if let context = event.context, context.used.isFinite, context.used >= 0 {
+            var cleaned = context
+            if let window = cleaned.window, !window.isFinite || window <= 0 { cleaned.window = nil }
+            if let botId { store.setTaskContext(botId, threadId, context: cleaned.json) }
+            else if let id = group?["id"]?.string { store.patchGroup(id, ["context": cleaned.json]) }
+        }
         // in a room the speaking member signs the bot's messages
         let speaker = group != nil ? groupSpeakers[threadId] : nil
         let push = { (message: JSONObject) -> JSONObject in
@@ -546,6 +563,7 @@ public final class Harness {
             }
             // a delegated turn's terminal state belongs in its A⇄B channel
             finalizeDelegationWatch(threadId, ok: ok, reply: reply)
+            plugins.afterTurn(TurnResult(threadId: threadId, botId: botId ?? speaker?["botId"]?.string, groupId: group?["id"]?.string, ok: ok, cost: cost))
 
         case .turnStarted:
             turnStartedAt[threadId] = Date()
@@ -569,6 +587,20 @@ public final class Harness {
         let askerId = asker?["id"]?.string
         let unattended = permission && event.requestId != nil ? isUnattended(askerId) : false
         let alwaysAllow = asker?["alwaysAllow"]?.array?.compactMap(\.string) ?? []
+        // a folder linked read-only: no auto mode, no always-allow and no card for a write there
+        if permission, let requestId = event.requestId, let folders = readOnlyFolders[threadId],
+           let reason = ReadOnlyGuard.reason(tool: tool, summary: summary, folders: folders) {
+            let instance = fleet.get(event.providerInstanceId ?? ModelSelection(json: asker?["modelSelection"]).instanceId)
+            Task { @MainActor in
+                _ = await instance?.adapter.respond(threadId: threadId, requestId: requestId, decision: RequestDecision(behavior: "deny", message: reason))
+                _ = push(["role": "bot", "kind": "activity", "tool": ["name": .string("denied, read-only folder: \(summary.prefix(100))"), "ok": false]])
+                var entry: JSONObject = ["threadId": .string(threadId), "requestId": .string(requestId), "tool": .string(tool),
+                                         "summary": .string(summary), "decision": "auto-denied", "source": "read-only-folder"]
+                if let askerId { entry["botId"] = .string(askerId) }
+                DecisionLog.append(self.paths, entry)
+            }
+            return
+        }
         let verdict: AutoApprove.Verdict? = permission && asker != nil && event.requestId != nil
             ? AutoApprove.verdict(autoApprove: asker?["autoApprove"]?.truthy == true, alwaysAllow: alwaysAllow,
                                   tool: tool, summary: summary, unattended: unattended, scope: approvalScope)
@@ -665,6 +697,7 @@ public final class Harness {
         guard let bot = store.bot(botId) else { throw TurnError(status: 404, message: "no such bot") }
         if Store.isBusy(bot) { throw TurnError(status: 409, message: "the bot is already working — interrupt it first") }
         let threadId = explicitThread ?? bot["threadId"]?.string ?? ""
+        guard !taskSessionResets.contains(threadId) else { throw TurnError(status: 409, message: "this chat is being compacted") }
         // inherited from a bot already running unattended; a person typing ends it
         if options.automationSource == "webhook" || options.unattended { markUnattended(botId) }
         else if options.automationSource == nil, options.commsDepth == 0 { clearUnattended(botId) }
@@ -694,7 +727,7 @@ public final class Harness {
 
         let userMessage = existing ?? store.appendMessage(threadId, ["role": "user", "kind": "text", "text": .string(text)])
         let userId = userMessage["id"]?.string
-        let transcript: [(role: String, text: String)] = store.activePath(threadId)
+        let transcript: [(role: String, text: String)] = Self.afterSessionDivider(store.activePath(threadId))
             .filter { $0["kind"]?.string == "text" && !($0["text"]?.string ?? "").isEmpty && $0["id"]?.string != userId }
             .suffix(40)
             .map { ($0["role"]?.string == "user" ? "user" : "assistant", $0["text"]?.string ?? "") }
@@ -772,6 +805,7 @@ public final class Harness {
                     resumeCursor: resume ? cursors[instanceId] : nil, transcript: transcript,
                     system: system.isEmpty ? nil : system, cwd: cwd, agents: agents
                 )
+                if let epoch = task?["sessionEpoch"]?.string { input.sessionKey = threadId + ":" + epoch }
                 input.cloudBoxId = computer.boxId
                 input.computer = computer.server
                 input.computerScope = computer.scope
@@ -780,6 +814,10 @@ public final class Harness {
                                                                instance: instance, model: model)
                 input.secrets = secrets.server
                 input.secretEnvironment = secrets.environment
+                var setup = TurnSetup(botId: botId, threadId: threadId, groupId: nil, driverKind: instance.driverKind, bot: bot, group: nil, cwd: cwd)
+                self.plugins.beforeTurn(&setup)
+                setup.apply(to: &input)
+                self.readOnlyFolders[threadId] = setup.readOnlyFolders.isEmpty ? nil : setup.readOnlyFolders
                 self.watchdog.watch(threadId, botId: botId)
                 _ = try await instance.adapter.sendTurn(input)
                 if rewound { self.store.patchBot(botId, ["rewound": false, "resumeCursors": [:]]) }
@@ -891,6 +929,7 @@ public final class Harness {
     }
 
     public func shutdown() async {
+        plugins.stop()
         mcpPool.stopAll()
         await fleet.stopAll()
     }

@@ -383,3 +383,17 @@ public enum JSONValue: Codable, Hashable, Sendable {
         return (try? encoder.encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? ""
     }
 }
+
+// JSONSerialization takes Foundation values; keep the public data itself typed and Sendable.
+extension JSONValue {
+    var foundationValue: Any {
+        switch self {
+        case .null: return NSNull()
+        case let .bool(value): return value
+        case let .number(value): return value
+        case let .string(value): return value
+        case let .array(value): return value.map(\.foundationValue)
+        case let .object(value): return value.mapValues(\.foundationValue)
+        }
+    }
+}

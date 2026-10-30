@@ -9,7 +9,7 @@
 // machine the app could open any file anyway, so nothing is held back.
 import Foundation
 
-enum ThreadFiles {
+public enum ThreadFiles {
     static let maxPaths = 20
     static let maxBytes = 50 * 1024 * 1024
 
@@ -21,7 +21,7 @@ enum ThreadFiles {
     /// The folders a chat's turns run in, the first one for relative paths;
     /// nil for a thread that is neither a bot's nor a room's.
     @MainActor
-    static func roots(_ store: Store, _ paths: DataPaths, threadId: String) -> [String]? {
+    public static func roots(_ store: Store, _ paths: DataPaths, threadId: String) -> [String]? {
         if let bot = store.botByThread(threadId), let botId = bot["id"]?.string {
             let task = store.taskByThread(botId, threadId)
             return unique([task?["cwd"]?.string, bot["cwd"]?.string, paths.workspace(botId).path])

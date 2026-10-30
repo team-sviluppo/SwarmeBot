@@ -103,6 +103,17 @@ public func effortLevelsForModel(_ options: [ModelOption], model: String, driver
 // MARK: - Runtime events
 
 public struct RuntimeEvent: Sendable {
+    /// Latest provider request's context, separate from cumulative billable usage. Internal provenance only.
+    public struct Context: Sendable, Equatable {
+        public var used: Double
+        public var window: Double?
+        public init(used: Double, window: Double? = nil) { self.used = used; self.window = window }
+        public var json: JSON {
+            var value: JSON = ["used": .number(used)]
+            if let window { value["window"] = .number(window) }
+            return value
+        }
+    }
     public enum Body: Sendable, Equatable {
         case sessionStarted(sessionId: String?, model: String?, resumeCursor: String?)
         case sessionExited(reason: String?)
@@ -148,6 +159,7 @@ public struct RuntimeEvent: Sendable {
     /// Internal lifecycle data; persisted through existing activity messages.
     /// The runtime wire envelope remains unchanged.
     public var subagent: SubagentState?
+    public var context: Context?
 
     public init(
         provider: String, providerInstanceId: InstanceID? = nil, threadId: ThreadID, turnId: String? = nil,
@@ -359,6 +371,19 @@ public struct SendTurnInput: Sendable {
     /// Vault secrets the user put in the CLI's environment for this turn
     /// ("env" mode), for drivers that spawn a process. Empty changes nothing.
     public var secretEnvironment: [String: String] = [:]
+    /// What a plugin added to the CLI's environment for this turn (Plugins.swift).
+    /// Empty changes nothing.
+    public var pluginEnvironment: [String: String] = [:]
+    /// Folders the agent may read and must not change (a project's linked repositories).
+    /// Real paths. Empty changes nothing; drivers that can enforce it do, and the engine's
+    /// permission broker refuses writes under them for the rest (ReadOnlyGuard.swift).
+    public var readOnlyFolders: [String] = []
+
+    /// Everything the engine adds to a spawned CLI's environment for this turn;
+    /// a vault secret wins over a plugin's value.
+    public var turnEnvironment: [String: String] {
+        pluginEnvironment.merging(secretEnvironment) { _, secret in secret }
+    }
 
     public init(threadId: ThreadID, text: String, model: String? = nil, effort: String? = nil, resumeCursor: JSON? = nil,
                 transcript: [(role: String, text: String)] = [], system: String? = nil, cwd: String? = nil,

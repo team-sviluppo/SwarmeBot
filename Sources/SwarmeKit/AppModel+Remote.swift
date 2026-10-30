@@ -258,8 +258,13 @@ extension AppModel {
         return CompanionClient(connection: connection, token: token)
     }
 
+    /// A shell on the server, in the terminal the user picked (`terminalRunner`, set by the app).
     public func openTerminal(_ identity: SSHIdentity, command: String? = nil) throws {
-        try ServerTerminal.open(identity, store: identityStore, command: command)
+        if let terminalRunner {
+            terminalRunner(ServerTerminal.line(identity, store: identityStore, command: command))
+        } else {
+            try ServerTerminal.open(identity, store: identityStore, command: command)
+        }
     }
 }
 

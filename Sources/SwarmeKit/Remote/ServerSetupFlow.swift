@@ -295,11 +295,17 @@ extension ServerSetupFlow {
 /// A Terminal window logged in on the server with SwarmeBot's key, for what
 /// only a person can do there: the CLIs' own logins (`claude`, `codex`, `pi`).
 public enum ServerTerminal {
-    public static func open(_ identity: SSHIdentity, store: SSHIdentityStore, command: String? = nil) throws {
+    /// The ssh command line that logs in on the server, running `command` there if given.
+    public static func line(_ identity: SSHIdentity, store: SSHIdentityStore, command: String? = nil) -> String {
         let ssh = SSHCommand(identity: identity, store: store)
         var argv = ["/usr/bin/ssh", "-t"] + ssh.options() + ["--", identity.host]
         if let command { argv.append(command) }
-        let line = argv.map(RemoteScripts.quote).joined(separator: " ")
+        return argv.map(RemoteScripts.quote).joined(separator: " ")
+    }
+
+    /// In Terminal, for a caller that has no way to open the terminal the user picked.
+    public static func open(_ identity: SSHIdentity, store: SSHIdentityStore, command: String? = nil) throws {
+        let line = line(identity, store: store, command: command)
         let script = "tell application \"Terminal\"\nactivate\ndo script \"\(line.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\"\nend tell"
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")

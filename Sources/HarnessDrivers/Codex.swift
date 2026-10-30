@@ -442,10 +442,11 @@ final class CodexTurn {
         }
     }
 
-    private func emit(itemId: String? = nil, requestId: String? = nil, input: String? = nil, output: String? = nil, _ body: RuntimeEvent.Body) {
+    private func emit(itemId: String? = nil, requestId: String? = nil, input: String? = nil, output: String? = nil, context: RuntimeEvent.Context? = nil, _ body: RuntimeEvent.Body) {
         var event = RuntimeEvent(provider: "codex", threadId: threadId, turnId: turnId, itemId: itemId, requestId: requestId, body)
         event.toolInput = input
         event.toolOutput = output
+        event.context = context
         instance.emit(event)
     }
 
@@ -640,7 +641,9 @@ final class CodexTurn {
                 usage = .init(input: last["inputTokens"]?.double ?? 0, output: last["outputTokens"]?.double ?? 0)
             }
             if let total = tokens?["total"], total.truthy {
-                emit(.tokenUsage(input: total["inputTokens"]?.double ?? 0, output: total["outputTokens"]?.double ?? 0))
+                let last = tokens?["last"]
+                let context = last.map { RuntimeEvent.Context(used: ($0["inputTokens"]?.double ?? 0) + ($0["outputTokens"]?.double ?? 0), window: tokens?["modelContextWindow"]?.double) }
+                emit(context: context, .tokenUsage(input: total["inputTokens"]?.double ?? 0, output: total["outputTokens"]?.double ?? 0))
             }
         case "turn/completed":
             let t = p["turn"] ?? .null
@@ -746,7 +749,7 @@ final class CodexTurn {
             args += Self.mount(&env, name: VaultTool.serverName, secrets)
             args += ["-c", "mcp_servers.\(VaultTool.serverName).tool_timeout_sec=\(VaultTool.maxSeconds + 60)"]
         }
-        for (key, value) in turn.secretEnvironment { env[key] = value }
+        for (key, value) in turn.turnEnvironment { env[key] = value }
         let cwd = turn.cwd ?? NSHomeDirectory()
         do {
             process = try CLIProcess(cli: instance.cli, args: args, cwd: cwd, environment: env)

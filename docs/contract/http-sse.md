@@ -102,11 +102,7 @@ Shape ricorrenti: **WireBot** = `BotRecord` senza `resumeCursors`, con `tasks[]`
 
 #### Code mode (Swift desktop)
 
-- `GET /api/threads/:tid/git`: `{repo, folder?, root?, branch?, detached?, changes:[{path,name,status,bytes}]}`. `folder` è la cartella effettiva del task anche fuori da un repository.
-- `GET /api/threads/:tid/git/branches`: `{branches:[{ref,name,remote}]}`; branch locali e riferimenti remoti già presenti, esclusi gli alias simbolici come `origin/HEAD`.
-- `POST /api/threads/:tid/git/checkout`: `{ref}` completo restituito dall'elenco; risponde con lo stato Git aggiornato. I branch remoti riusano un branch locale che li traccia oppure ne creano uno con tracking. Nessun force/reset/stash; conflitti con modifiche locali e bot al lavoro nello stesso repository restituiscono 409.
-
-In Code mode il chip del branch apre un selettore ricercabile. Accanto, **Apri terminale / Open terminal** apre una shell nella cartella effettiva del task; i motori remoti richiedono un'identità SSH configurata su questo Mac.
+Le route di Code mode (`/api/threads/:tid/git*`, `resume-command`) non fanno parte del nucleo: le serve il **plugin Code** e sono documentate con lui, in `Plugins/Code/README.md`. Un client le usa solo se `GET /api/plugins` dichiara `code`.
 
 ### 2.2 Room (groups)
 
@@ -296,6 +292,17 @@ salvati, nei frame `runtime` e nel log eventi.
 | GET | `/api/decisions` | `limit` (default 200) | `{decisions:[{at, threadId, requestId?, botId?, botName?, tool?, summary?, decision:"auto-approved"\|"card-shown"\|"user-approved"\|"user-denied", source, rule?, unattended?}]}` | ❌ | ❌ |
 | GET | `/api/health` | — | `{app:"swarmebot", pid, static}` | (Electron) | ❌ |
 | GET | `/*` (non `/api/`) | — | file da `OMB_STATIC_DIR`, SPA fallback | — | — |
+
+#### Plugin (solo Swift, `HarnessCore/Plugins.swift`)
+
+Il motore dichiara i plugin collegati in compilazione, così un client mostra l'interfaccia di un plugin solo se il motore lo ha (piano `docs/plans/2026-10-28-code-mode-t3.md` §12). Un motore senza plugin risponde `{plugins: []}`.
+
+| Metodo | Path | Request | Risposta |
+|---|---|---|---|
+| GET | `/api/plugins` | — | `{plugins:[{id, name, version, enabled, requires?}]}`; `enabled` è falso se l'utente l'ha spento o se manca un plugin richiesto |
+| PUT | `/api/plugins/:id` | JSON obbligatorio, `{enabled}` | come il GET; 404 per un plugin sconosciuto, 400 se `enabled` non è un booleano. La scelta resta in `<data>/plugins.json` |
+
+Un plugin spento non serve le sue route (404 come se non ci fossero), non è ascoltato dai turni e i suoi flag su bot e canali non vengono accettati; i dati già scritti restano. Le route che un plugin aggiunge si documentano con il plugin, non qui; le mutazioni (POST/PUT/PATCH) di un plugin richiedono `content-type: application/json` come quelle del nucleo.
 
 ### 2.13 Route interne (bearer `COMMS_TOKEN`, non per la UI)
 
@@ -500,3 +507,35 @@ mancano **`xai`**, **`vps`**, **`opencodeGo`**, **`localEndpoint`**, **`rooms`**
    persistere né loggare lato client.
 8. I proxy figli (agents, phone) sono lanciati con `process.execPath` + `ELECTRON_RUN_AS_NODE=1`: un host Swift che
    lancia l'harness con un `node` standalone eredita il comportamento corretto, ma va verificato.
+
+
+## Estensioni Swift: sessioni e contesto (fase 3 Code, 2026-10-29)
+
+Queste aggiunte non cambiano le forme runtime congelate sopra e funzionano anche senza il plugin Code.
+
+- `POST /api/groups/:gid/session` con `{summarize?:bool}`: 200 `{ok:true,pendingPeers:[]}`. Solo a canale libero,
+  incluse le code; 409 se occupato o se è lo specchio di un canale ospitato altrove. Azzera tutti i cursori dei membri,
+  cambia la chiave di sessione per i driver che la memorizzano e appende un messaggio `activity` con `sessionDivider:true`.
+  La cronologia resta leggibile e ricercabile; `roomContext` riparte dopo l'ultimo divisore.
+- `summarize:true` usa il membro scelto come risponditore predefinito, in una chiamata separata senza strumenti,
+  e inserisce il riassunto dopo il divisore. Un membro ospite lo scrive sul proprio motore tramite
+  `POST /api/guest-turns/summary`, con lo stesso contesto/identità di `/api/guest-turns`, senza avanzare la sessione
+  dello specchio né aggiungere messaggi. La route dedicata risponde 404 sui motori vecchi, evitando di avviare un
+  turno ordinario per errore. Nessun reset se la generazione fallisce. `everyone` e `mentions` richiedono
+  prima di scegliere un membro; errori del modello 502/504. Le chiamate di generazione possono durare fino a 90 secondi.
+- Nei canali misti il reset viaggia su `POST /api/guest-turns/session` con `{conversationId,sessionEpoch,startedAt,summary?}`,
+  autenticato e limitato allo specchio del dispositivo chiamante. I server non raggiungibili sono in `pendingPeers`.
+  `POST /api/guest-turns` porta anche `sessionEpoch` e `sessionStartedAt`: un ospite aggiornato recupera il reset prima
+  di rispondere. Un reset ritardato non può ripristinare una sessione precedente. I motori precedenti vanno aggiornati.
+- `POST /api/bots/:id/tasks/:tid/compact` con `{}`: 200 `{ok:true}`. Scrive un riassunto in una chiamata separata,
+  poi azzera i cursori del task e appende divisore e riassunto alla stessa conversazione. Lo storico sopra il divisore
+  resta disponibile ma non rientra nel prompt; anche i driver che memorizzano `sessionKey` ricevono una chiave nuova.
+  409 se il bot lavora o se la chat viene già compattata; 400 per una chat vuota. Errore del modello: nessun reset.
+- `POST /api/bots/:id/messages` e `/api/groups/:gid/messages` accettano `interrupt:true` per correggere la rotta:
+  interrompono il turno e accodano il nuovo messaggio. Nei canali l'interruzione ferma anche i risponditori rimasti
+  e le vecchie partenze in attesa; i messaggi già visibili restano nel contesto del successivo turno.
+  I messaggi in attesa portano `queued:true`, rimosso alla partenza; sono esclusi dal contesto del turno corrente.
+- Task e canali possono portare `context:{used,window?}`. È il contesto dell'ultima richiesta al modello (oggi Claude
+  e Codex), distinto dai token cumulativi fatturati. `window` viene riportato solo quando il provider lo fornisce;
+  senza limite noto l'app mostra i token, senza inventare una percentuale. Il reset rimuove il vecchio contatore.
+  Nessun campo è aggiunto all'envelope `RuntimeEvent`: i metadati interni aggiornano i frame `bot`/`group` esistenti.

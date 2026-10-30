@@ -192,7 +192,7 @@ final class ACPInstance: ProviderInstance, ProviderAdapter {
         // before anything starts, as in the Node engine: a config writer that
         // refuses (droid's unreadable settings.json) fails the send itself
         var env = childEnvironment()
-        for (key, value) in turn.secretEnvironment { env[key] = value }
+        for (key, value) in turn.turnEnvironment { env[key] = value }
         let model = try support.resolveTurnModel.map { try $0(turn.model, env) } ?? turn.model
         let acpTurn = ACPTurn(instance: self, turn: turn, environment: env, model: model)
         active[turn.threadId] = acpTurn

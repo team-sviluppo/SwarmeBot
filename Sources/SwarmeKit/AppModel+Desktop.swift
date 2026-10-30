@@ -44,6 +44,15 @@ extension AppModel {
         }
     }
 
+    public func steer(_ text: String, attachments: [ComposerAttachment]) async {
+        guard let client else { return }
+        let botId = selectedBot?.id, roomId = selectedRoom?.id
+        do {
+            let prompt = try await composePrompt(text, attachments: attachments, uploadingTo: client)
+            try await client.steer(text: prompt, botId: botId, groupId: roomId)
+        } catch { lastError = error.localizedDescription }
+    }
+
     /// The text and one tag per attachment, images uploaded to `client`'s engine.
     func composePrompt(_ text: String, attachments: [ComposerAttachment], uploadingTo client: CompanionClient) async throws -> String {
         var parts = [text.trimmingCharacters(in: .whitespacesAndNewlines)]
@@ -171,9 +180,25 @@ extension AppModel {
         await perform { _ = try await $0.createTask(botId: bot.id, title: title) }
     }
 
+    public func newRoomSession(_ room: Room, summarize: Bool) async {
+        await perform { client in
+            let pending = try await client.newRoomSession(room.id, summarize: summarize)
+            if !pending.isEmpty { self.lastError = tr("Alcuni server non hanno confermato il reset della sessione.") }
+        }
+    }
+
+    public func compactTask(_ bot: Bot) async {
+        await perform { try await $0.compactTask(botId: bot.id, threadId: bot.threadId) }
+    }
+
     public func switchTask(_ task: BotTask) async {
         guard let bot = selectedBot, task.threadId != bot.threadId else { return }
         await perform { _ = try await $0.switchTask(botId: bot.id, threadId: task.threadId) }
+    }
+
+    public func openTask(botId: String, threadId: String) async {
+        selection = .bot(botId)
+        await perform { _ = try await $0.switchTask(botId: botId, threadId: threadId) }
     }
 
     /// A routine or webhook run that starts gets a task of its own, not the
