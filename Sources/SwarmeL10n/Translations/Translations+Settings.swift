@@ -40,6 +40,7 @@ extension Translations {
         "Chiavi e servizi": "Keys and services",
         "DeepSeek": "DeepSeek",
         "Aggiornamenti": "Updates",
+        "Sezioni delle impostazioni": "Settings sections",
 
         // General
         "Profilo": "Profile",

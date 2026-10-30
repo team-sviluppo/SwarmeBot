@@ -7,7 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     /// Debug aid for screenshots: `SWARMEBOT_SETTINGS_TAB=phone` opens on that pane.
-    @State private var tab = ProcessInfo.processInfo.environment["SWARMEBOT_SETTINGS_TAB"] ?? "general"
+    @State private var tab = SettingsSection.initial(ProcessInfo.processInfo.environment["SWARMEBOT_SETTINGS_TAB"], sections: SettingsSection.allCases)
 
     var body: some View {
         tabs
@@ -16,23 +16,26 @@ struct SettingsView: View {
     }
 
     private var tabs: some View {
-        TabView(selection: $tab) {
-            GeneralPane().tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }.tag("general")
-            EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
-            RemoteServersPane().tabItem { Label(tr("Server remoti"), systemImage: "server.rack") }.tag("remote")
-            ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
-            SharedRepositoriesPane().tabItem { Label(tr("Condivisione"), systemImage: "folder.badge.person.crop") }.tag("sharing")
-            SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
-            PluginsPane().tabItem { Label(tr("Plugin"), systemImage: "shippingbox") }.tag("plugins")
-            VaultPane().tabItem { Label(tr("Vault"), systemImage: "lock.shield") }.tag("vault")
-            PhonePane().tabItem { Label(tr("Telefono"), systemImage: "iphone") }.tag("phone")
-            MacControlPane().tabItem { Label(tr("Controllo Mac"), systemImage: "macbook.and.iphone") }.tag("mac")
-            KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
-            DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
-            UpdatesPane().tabItem { Label(tr("Aggiornamenti"), systemImage: "arrow.down.circle") }.tag("updates")
+        SettingsNavigation(selection: $tab, sections: SettingsSection.allCases) { section in
+            switch section {
+            case .general: GeneralPane()
+            case .engines: EnginesPane()
+            case .remote: RemoteServersPane()
+            case .connectors: ConnectorsPane()
+            case .sharing: SharedRepositoriesPane()
+            case .skills: SkillsPane()
+            case .plugins: PluginsPane()
+            case .vault: VaultPane()
+            case .phone: PhonePane()
+            case .mac: MacControlPane()
+            case .keys: KeysPane()
+            case .deepseek: DeepSeekPane()
+            case .updates: UpdatesPane()
+            }
         }
         .safeAreaInset(edge: .bottom) { SettingsProblem() }
-        .frame(width: 920, height: 560)
+        .frame(minWidth: 920, idealWidth: 1100, minHeight: 560, idealHeight: 600)
+        .navigationTitle(tab.title)
     }
 }
 
@@ -41,22 +44,24 @@ struct SettingsView: View {
 struct RemoteSettingsView: View {
     let engineId: String
     @Environment(AppModel.self) private var app
-    @State private var tab = ProcessInfo.processInfo.environment["SWARMEBOT_SETTINGS_TAB"] ?? "general"
+    @State private var tab = SettingsSection.initial(ProcessInfo.processInfo.environment["SWARMEBOT_SETTINGS_TAB"], sections: SettingsSection.remoteSections)
 
     var body: some View {
         if let engine = app.remoteEngines.first(where: { $0.id == engineId }) {
-            TabView(selection: $tab) {
-                GeneralPane(remote: true).tabItem { Label(tr("Generale"), systemImage: "person.crop.circle") }.tag("general")
-                EnginesPane().tabItem { Label(tr("Motori"), systemImage: "cpu") }.tag("engines")
-                ConnectorsPane().tabItem { Label(tr("Connettori"), systemImage: "puzzlepiece.extension") }.tag("connectors")
-                SkillsPane().tabItem { Label(tr("Skill"), systemImage: "wand.and.stars") }.tag("skills")
-                PluginsPane().tabItem { Label(tr("Plugin"), systemImage: "shippingbox") }.tag("plugins")
-                VaultPane().tabItem { Label(tr("Vault"), systemImage: "lock.shield") }.tag("vault")
-                KeysPane().tabItem { Label(tr("Chiavi e servizi"), systemImage: "key") }.tag("keys")
-                DeepSeekPane().tabItem { Label(tr("DeepSeek"), systemImage: "network") }.tag("deepseek")
+            SettingsNavigation(selection: $tab, sections: SettingsSection.remoteSections) { section in
+                switch section {
+                case .engines: EnginesPane()
+                case .connectors: ConnectorsPane()
+                case .skills: SkillsPane()
+                case .plugins: PluginsPane()
+                case .vault: VaultPane()
+                case .keys: KeysPane()
+                case .deepseek: DeepSeekPane()
+                default: GeneralPane(remote: true)
+                }
             }
             .safeAreaInset(edge: .bottom) { SettingsProblem() }
-            .frame(width: 920, height: 560)
+            .frame(minWidth: 920, idealWidth: 1100, minHeight: 560, idealHeight: 600)
             .navigationTitle(tr("[SERVER REMOTO] - %@", engine.name))
             .environment(app.settingsModel(for: .remote(engineId)))
             .onDisappear { app.closeSettings(for: .remote(engineId)) }
