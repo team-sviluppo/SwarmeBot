@@ -12,12 +12,12 @@ struct CylonStore {
         directory = harness.plugins.directory(for: "cylon")
     }
 
-    private func read(_ name: String) -> JSONObject {
+    func read(_ name: String) -> JSONObject {
         guard let data = try? Data(contentsOf: directory.appendingPathComponent(name)), let object = try? JSON.parse(data).object else { return JSONObject() }
         return object
     }
 
-    private func write(_ name: String, _ object: JSONObject) throws {
+    func write(_ name: String, _ object: JSONObject) throws {
         try FileIO.writeAtomic(JSON.object(object).data, to: directory.appendingPathComponent(name))
     }
 

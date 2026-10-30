@@ -124,8 +124,8 @@ final class CylonFixture {
 
     deinit { try? FileManager.default.removeItem(at: root) }
 
-    func call(_ method: String, _ path: String, _ body: JSON? = nil) async -> (status: Int, json: JSON?) {
-        let request = HTTPRequest(method: method, path: path, query: [:], headers: ["content-type": "application/json"], body: body?.data ?? Data())
+    func call(_ method: String, _ path: String, _ body: JSON? = nil, query: [String: String] = [:]) async -> (status: Int, json: JSON?) {
+        let request = HTTPRequest(method: method, path: path, query: query, headers: ["content-type": "application/json"], body: body?.data ?? Data())
         guard case let .response(response) = await routes.handle(request) else { return (-1, nil) }
         return (response.status, try? JSON.parse(response.body))
     }

@@ -50,7 +50,38 @@ All under `/api/`, mutations need `content-type: application/json`. Phases: `spe
 | PUT | `/cylon/roles/:project` | `{<phase>: botId \| null}` | `{roles}`; 400 for an unknown phase or bot. Also hands the Cylon source to the bots that have a part |
 | GET, PUT | `/cylon/settings` | `{sourceId: string \| null}` | the skill source the plugin uses; 400 for one that does not exist |
 
-Kept in `<data>/plugins/cylon/`: `roles.json`, `settings.json`, `pipelines.json`.
+### Boards (plugin 1.1.0)
+
+A job that touches several repositories is split **by a person**, on ClickUp, into independent tickets, one per repository, linked
+there. A **board** lists them in order of priority and starts each in the channel of its repository. SwarmeBot does not split,
+create or link tickets, and a priority is only an order: it blocks nothing, the channels work independently.
+
+- A board belongs to a project (`projectId`); a project may have several. Its `items` are `{id, role, groupId, ticketId, tag, title?}`:
+  the repository's role, the channel that works on it (found from the channel's `plugins.code = {projectId, role}` and its Cylon switch;
+  `groupId` in the request when several qualify), the ticket and the tag it has on ClickUp. **The order of the array is the priority.**
+- **State is read, never stored**, from the channel's pipeline: `not-started`, `ready` (a phase can go out), `running` (a bot is working),
+  `waiting` (the phase is open and the channel idle: the bot asked something), `failed`, `done`, `other-ticket` (the channel works on a
+  different ticket), `channel-missing`. A `cylon-spec` ticket changes id after its spec, so an item matches the pipeline's `ticketId` or its
+  `specTicketId`. Removing an item or the board stops nothing.
+- **Start** is the channel's own *Start a ticket…* (`begin`): a clean session, 409 for a working channel or one in the middle of another
+  ticket (`replace: true` overrides), 409 for a channel that does not follow the flow. **Start next** starts the first item, in order, that is
+  `not-started`, and stops at its error instead of skipping to another.
+- `busyBots` names the bots of the project's roles that are working, and where: the engine refuses a phase for a bot busy elsewhere.
+
+| Method | Path | Request | Answer |
+|---|---|---|---|
+| GET | `/cylon/boards?projectId=` | — | `{boards: [board]}` |
+| POST | `/cylon/boards` | `{projectId, title, parentUrl?}`; `parentUrl` is an http(s) link to the mother ticket, to show | 201 `{board}`; 400 for a missing project or title (up to 120 characters) or a `parentUrl` that is not http(s); 409 past 100 boards |
+| GET, PATCH, DELETE | `/cylon/boards/:id` | PATCH `{title?, parentUrl?: string \| null, order?: [itemId]}`; `order` must name every item once (400) | `{board}`; DELETE `{ok}`; 404 |
+| POST | `/cylon/boards/:id/items` | `{role, ticket, tag?: "cylon-plan", title?, groupId?}` | 201 `{board}`; 400 for a bad role, ticket or tag, `cylon-investigate`, a `groupId` that does not work on the role, or several channels that do and no `groupId`; 409 for a ticket already there, no channel working on the role, a channel that does not follow the flow, or a board with 30 tickets |
+| DELETE | `/cylon/boards/:id/items/:item` | — | `{board}` |
+| POST | `/cylon/boards/:id/items/:item/start`, `/cylon/boards/:id/start-next` | `{replace?}` | `{board, started: itemId}` after `begin`; 409 as above, for a ticket its channel already follows, or when nothing is left to start |
+
+`board` is `{id, projectId, title, createdAt, parentUrl?, items: [item + {state, channel: null \| {name, follows}, flow, prUrl?}], summary:
+{total, done, prOpen, running, notStarted, problems}, busyBots: [{botId, name, channel}]}`, where `flow` is what `GET /groups/:gid/cylon`
+answers for the item's channel.
+
+Kept in `<data>/plugins/cylon/`: `roles.json`, `settings.json`, `pipelines.json`, `boards.json`.
 
 ## In the app
 
@@ -63,6 +94,12 @@ Kept in `<data>/plugins/cylon/`: `roles.json`, `settings.json`, `pipelines.json`
 - **Start a ticket…**: the ticket's id or address, and the tag it has on ClickUp (`cylon-spec` or `cylon-plan`); the channel starts a
   clean session. The menu of the bar starts another ticket or closes the flow. For a phase that needs the task's folder before the
   plan has made it, the popover asks for the folder's name.
+- **The Board tab** in the right column of a channel that follows the flow (and ⌘K › *Project board*): the project's boards (a picker, *New
+  board* with a name and the link of the mother ticket), their tickets in order, dragged to change the priority. Each row: the repository,
+  the ticket, its channel (a click goes there), the phases as small icons, what it is doing in words, what keeps the next phase from going
+  out (the same warnings as the bar) and *Start* for a ticket nobody has started (*Start…* asks before replacing the ticket a channel is on).
+  The footer says how many have a PR open, which bots are busy and where, and has *Start the next one* and *Add ticket…* (repository, ticket,
+  tag, name; the channel when more than one works on it).
 - **A channel's settings** (the Cylon card): *Follow the Cylon flow*, which needs a project for the channel (Code card).
 - **Settings › Plugins › Cylon**: the skill source (made in Settings › Skills) and, per project, the bot of each phase.
 - The app polls the engine every 2 s while something runs and every 15 s otherwise; the engine follows the turns itself.

@@ -12,7 +12,7 @@ public final class CylonState {
     var errors: [String: String] = [:]
     /// Project id → phase → bot id.
     var roles: [String: [String: String]] = [:]
-    var projects: [CylonProjectName] = []
+    var projects: [CylonProject] = []
     var sourceId: String?
 
     func refresh(model: AppModel, groupId: String) async {
@@ -33,6 +33,55 @@ public final class CylonState {
             errors[groupId] = error.localizedDescription
             await refresh(model: model, groupId: groupId)
         }
+    }
+
+    // MARK: boards
+
+    /// The boards of each project, by project id.
+    var boards: [String: [CylonBoardWire]] = [:]
+    /// What the person chose to look at, by project id.
+    var chosenBoard: [String: String] = [:]
+    var boardErrors: [String: String] = [:]
+
+    func refreshBoards(model: AppModel, projectId: String) async {
+        guard let client = model.client else { return }
+        do {
+            let list = try await client.cylonBoards(projectId: projectId)
+            if boards[projectId] != list { boards[projectId] = list }
+        } catch { if !Task.isCancelled { boardErrors[projectId] = error.localizedDescription } }
+    }
+
+    /// One call on a board; the board it answers with replaces the one shown, and a refusal is said under the list.
+    func actOnBoard(model: AppModel, projectId: String, _ call: (CompanionClient) async throws -> CylonBoardWire) async {
+        guard let client = model.client else { return }
+        boardErrors[projectId] = nil
+        do {
+            let board = try await call(client)
+            var list = boards[projectId] ?? []
+            if let index = list.firstIndex(where: { $0.id == board.id }) { list[index] = board } else { list.append(board) }
+            boards[projectId] = list
+            chosenBoard[projectId] = board.id
+        } catch {
+            boardErrors[projectId] = error.localizedDescription
+            await refreshBoards(model: model, projectId: projectId)
+        }
+    }
+
+    func deleteBoard(model: AppModel, projectId: String, id: String) async {
+        guard let client = model.client else { return }
+        boardErrors[projectId] = nil
+        do {
+            try await client.deleteCylonBoard(id)
+            boards[projectId]?.removeAll { $0.id == id }
+            if chosenBoard[projectId] == id { chosenBoard[projectId] = nil }
+        } catch { boardErrors[projectId] = error.localizedDescription }
+    }
+
+    /// How often to look again at a board: at once while a bot works on a ticket, soon while one is started, rarely otherwise.
+    static func pollInterval(_ boards: [CylonBoardWire]) -> Duration {
+        let states = boards.flatMap { $0.items.map(\.state) }
+        if states.contains("running") { return .seconds(2) }
+        return states.contains { $0 == "ready" || $0 == "waiting" } ? .seconds(5) : .seconds(12)
     }
 
     func refreshSettings(model: AppModel) async {

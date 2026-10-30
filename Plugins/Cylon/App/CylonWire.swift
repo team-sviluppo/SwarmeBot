@@ -91,10 +91,6 @@ struct CylonStatus: Decodable, Equatable {
     var current: Phase? { phases.first { $0.current == true } }
 }
 
-struct CylonProjectName: Decodable, Identifiable, Hashable {
-    var id: String
-    var name: String
-}
 
 extension CompanionClient {
     func cylonStatus(groupId: String) async throws -> CylonStatus {
@@ -137,8 +133,8 @@ extension CompanionClient {
         try await pluginRequest("PUT", "/api/cylon/settings", body: ["sourceId": id.map { $0 as Any } ?? NSNull()])
     }
 
-    func cylonProjects() async throws -> [CylonProjectName] {
-        struct Answer: Decodable { var projects: [CylonProjectName] }
+    func cylonProjects() async throws -> [CylonProject] {
+        struct Answer: Decodable { var projects: [CylonProject] }
         return try await pluginRequest("GET", "/api/projects", as: Answer.self).projects
     }
 }
