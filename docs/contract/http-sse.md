@@ -539,3 +539,53 @@ Queste aggiunte non cambiano le forme runtime congelate sopra e funzionano anche
   e Codex), distinto dai token cumulativi fatturati. `window` viene riportato solo quando il provider lo fornisce;
   senza limite noto l'app mostra i token, senza inventare una percentuale. Il reset rimuove il vecchio contatore.
   Nessun campo è aggiunto all'envelope `RuntimeEvent`: i metadati interni aggiornano i frame `bot`/`group` esistenti.
+
+
+## Estensioni Swift: revisione di un altro bot (fase 4 Code, 2026-10-29)
+
+Aggiunta additiva ai messaggi, scritta dal plugin Code; un client che non la conosce la ignora e vede un normale
+messaggio del bot.
+
+- Un messaggio `role:"bot", kind:"text"` può portare `review:{applied:bool}` e `from:{botId,name,color}`: è la revisione
+  che un altro bot ha scritto sulle modifiche della chat (`POST /api/threads/:tid/code/review`, in `Plugins/Code/README.md`).
+  `from` dice chi l'ha scritta anche in una chat di un solo bot. Non fa parte dei turni della chat. `applied` passa a `true`
+  quando viene consegnata al bot che ha fatto le modifiche.
+
+
+## Estensioni Swift: sorgenti skill da GitHub (fase 5 Code, 2026-10-29)
+
+Aggiunte che non toccano le forme congelate. Una **sorgente** è una cartella di skill di un repository GitHub (anche
+privato) che il motore tiene installata nella sua cartella delle skill: all'avvio (dopo 20 s), ogni 6 ore e a richiesta.
+Vive sul motore, quindi un motore remoto si aggiorna da solo. Il token è un segreto del Vault **nominato** dalla sorgente
+(`secret`): nessuna rotta ne restituisce o ne scrive il valore.
+
+| Metodo | Percorso | Richiesta | Risposta |
+|---|---|---|---|
+| GET | `/api/skill-sources` | — | `{sources:[Source]}` |
+| POST | `/api/skill-sources` | JSON: `{repo:"owner/name", path?:"skills", ref?:"main", name?, secret?, enabled?, assign?:{all?,botIds?}, requires?:{commands?,connectors?}}` | 201 `{source}`. 400 per `repo` non valido, `path` con `..` o assoluto, `ref` non valido, segreto assente dal Vault, bot inesistente; 409 se la stessa cartella è già una sorgente; al massimo 10 |
+| PATCH | `/api/skill-sources/:id` | gli stessi campi | `{source}` |
+| DELETE | `/api/skill-sources/:id` | — | `{ok}`: elimina la sorgente **e le skill che aveva installato** |
+| POST | `/api/skill-sources/:id/update` | JSON `{force?}` | 200 `{source}` sempre: un errore è in `source.last.error`, la versione installata resta |
+| POST | `/api/skill-sources/:id/rollback` | JSON | `{source}`; 409 senza una versione precedente |
+
+`Source` = `{id, name, repo, path, ref, secret?, secretPresent?, enabled, assign:{all, botIds}, requires:{commands, connectors},
+installed?:{sha, shortSha, at, skills:[{name, present}]}, previousSha?, canRollback, held, syncing, missing:[{kind:"command"|"connector", name}],
+last?:{checkedAt, ok, error?, unchanged?, held?, rolledBack?, sha?, updated?:{added, changed, removed}, conflicts?}}`.
+
+- **Aggiornamento sicuro**: controlla lo sha del ref (`commits/:ref`) e non scarica nulla se è già installato; altrimenti scarica il tarball,
+  lo scompatta in una cartella temporanea e valida **ogni** skill (cartella con `SKILL.md`, nome = cartella, descrizione ≤ 1024, al più 200 file
+  e 8 MB; link simbolici e file nascosti non vengono presi). Se una sola non è valida non cambia **niente** e l'errore le elenca; altrimenti
+  le sostituisce tutte insieme e tiene la versione sostituita. Una skill fatta a mano con lo stesso nome, o di un'altra sorgente, non si tocca
+  (`conflicts`). Una skill sparita dal repository sparisce.
+- **Torna alla versione precedente**: ripristina la versione sostituita e **non reinstalla** il commit da cui si è tornati finché il repository non
+  avanza (`held`); `update` con `force` lo ignora.
+- **Skill gestite**: `GET /api/skills` e `/api/skills/:id` portano `source:{id, name, sha}`; `PUT`, `DELETE` e `POST replace` rispondono 409
+  (il prossimo aggiornamento riprenderebbe la skill): si cambia nella sorgente o si fa una copia con un altro nome.
+- **Assegnazione**: `assign.all` o `assign.botIds` danno ai bot tutte le skill della sorgente, in più delle proprie (`bot.skills` vince: una skill
+  spenta dal bot resta spenta). Un bot eliminato esce dalle assegnazioni.
+- Il broadcast è `{kind:"skill-sources"}` (e `{kind:"skills"}` quando le skill installate cambiano).
+
+**Skill nei turni dei canali.** Prima solo i turni di un bot singolo le ricevevano. Ora anche il turno di un membro di un canale: l'indice delle
+skill accese per default del membro nel prompt di sistema, e `/nome` nell'ultimo messaggio della persona porta il testo intero della skill al membro
+a cui è rivolto (non a uno che un compagno ha chiamato).
+

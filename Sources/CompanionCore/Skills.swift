@@ -15,6 +15,8 @@ public struct Skill: Decodable, Hashable, Identifiable, Sendable {
     /// Ships something a bot could run, not only text to read.
     public var hasScripts: Bool
     public var updatedAt: Double
+    /// Set when a GitHub source keeps this skill: it is not edited here.
+    public var source: SkillOrigin?
 }
 
 /// Where the engine keeps the skills.

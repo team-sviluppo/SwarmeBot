@@ -120,7 +120,7 @@ extension Harness {
             bulletin.isEmpty ? nil : "Room bulletin (shared instructions for everyone):\n\(bulletin)",
             "Reply as yourself, briefly and conversationally. To bring a teammate in, mention them like @Name — they'll see the conversation and respond.",
         ].compactMap { $0 }.joined(separator: "\n")
-        let text = "\(roomContext(threadId, userName: human))\n\n(Reply to the conversation above as \(name).)"
+        var text = "\(roomContext(threadId, userName: human))\n\n(Reply to the conversation above as \(name).)"
 
         // same workspace and library as a 1:1 turn: a different conversation, not a
         // different bot. A room has no per-chat switches, so every ready document goes.
@@ -135,6 +135,15 @@ extension Harness {
         }
         let library = self.library.prompt(botId, off: [], mode: Library.mode(instance.driverKind), message: roomContext(threadId, userName: human))
         if !library.isEmpty { roomSystem = "\(system)\n\n\(library)" }
+        // skills, as in a 1:1 turn: the ones switched on by default, and a `/name` in the last message of the person,
+        // for the member it was written to (not for one a teammate brings in)
+        let skillful = skillSources.augment(bot)
+        let said = sessionMessages(threadId).last { $0["role"]?.string == "user" && $0["kind"]?.string == "text" && $0["queued"]?.bool != true }?["text"]?.string ?? ""
+        let invoked = hop == 0 ? Skills.invoked(said, bot: skillful) : []
+        let available = Skills.active(bot: skillful, task: nil) { self.skills.skill($0) != nil }.filter { !invoked.contains($0) }
+        let skillsPrompt = skills.prompt(available, mode: Library.mode(instance.driverKind))
+        if !skillsPrompt.isEmpty { roomSystem += "\n\n\(skillsPrompt)" }
+        text = skills.invocation(invoked, mode: Library.mode(instance.driverKind)) + text
         // each member brings its own secrets, as it brings its own connectors
         let secrets = turnSecrets(botId: botId, threadId: threadId, instance: instance, cwd: cwd, computerKind: nil)
         if !secrets.prompt.isEmpty { roomSystem += "\n\n\(secrets.prompt)" }

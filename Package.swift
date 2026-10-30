@@ -69,10 +69,17 @@ let package = Package(
             path: "Plugins/Code/App",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // The Cylon plugin, app side (macOS only).
+        .target(
+            name: "CylonPluginApp",
+            dependencies: ["CompanionCore", "SwarmeKit", "SwarmeBotUI"],
+            path: "Plugins/Cylon/App",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         // A thin shell: names the plugins and starts SwarmeBotUI.
         .executableTarget(
             name: "SwarmeBot",
-            dependencies: ["SwarmeBotUI", "CodePluginApp"],
+            dependencies: ["SwarmeBotUI", "CodePluginApp", "CylonPluginApp"],
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
@@ -117,9 +124,16 @@ let package = Package(
             path: "Plugins/Code/Engine",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // The Cylon plugin, engine side: the phases of a Cylon task in a channel. Builds on Linux too.
+        .target(
+            name: "CylonPluginEngine",
+            dependencies: ["HarnessCore"],
+            path: "Plugins/Cylon/Engine",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "swarme-harness",
-            dependencies: ["HarnessRunner", "CodePluginEngine"],
+            dependencies: ["HarnessRunner", "CodePluginEngine", "CylonPluginEngine"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         // The push relay for the iOS app (docs/plans/2026-10-22-app-ios.md §6.5): Linux and macOS.
@@ -142,8 +156,18 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
+            name: "CylonPluginEngineTests",
+            dependencies: ["CylonPluginEngine", "CodePluginEngine", "HarnessCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
             name: "CodePluginAppTests",
             dependencies: ["CodePluginApp", "SwarmeBotUI", "CompanionCore", "SwarmeKit"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "CylonPluginAppTests",
+            dependencies: ["CylonPluginApp", "SwarmeBotUI", "CompanionCore", "SwarmeKit"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

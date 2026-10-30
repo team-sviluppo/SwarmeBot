@@ -55,6 +55,7 @@ public final class Routes {
         if let team = await TeamRoutes.handle(r, harness: harness) { return team }
         if let avatar = AvatarRoutes.handle(r, harness: harness) { return avatar }
         if let connectors = try await MCPConnectorRoutes.handle(r, harness: harness) { return connectors }
+        if let sources = try await SkillSourceRoutes.handle(r, harness: harness) { return sources }
         if let skills = try SkillRoutes.handle(r, harness: harness) { return skills }
         if let shared = try SharedRepositoryRoutes.handle(r, harness: harness) { return shared }
         if let vault = try VaultRoutes.handle(r, harness: harness) { return vault }
@@ -127,6 +128,7 @@ public final class Routes {
                 harness.stopScreenPoller(m[0])
                 harness.computerControl.forget(m[0])
                 harness.vault.forgetBot(m[0])
+                harness.skillSources.forgetBot(m[0])
                 _ = store.deleteBot(m[0])
                 return ok(["ok": true])
             }

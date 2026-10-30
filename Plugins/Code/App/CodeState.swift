@@ -81,10 +81,23 @@ public final class CodeState {
     var scriptErrors: [String: String] = [:]
     var scriptPanels: Set<String> = []
     var branchPickerRequest = 0
+    /// Plan or Execute, by thread; absent is Execute.
+    var modes: [String: CodeChatMode] = [:]
+    /// The review of each chat's changes by another bot, by thread: the running one, or the last to end.
+    var reviews: [String: CodeReviewRun] = [:]
+    /// The pull request of each chat's branch, by thread.
+    var pullRequests: [String: CodePullRequestStatus] = [:]
+    var reviewErrors: [String: String] = [:]
 
     func engineHasPhase3(_ model: AppModel) -> Bool {
         guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
         return Self.version(version, atLeast: "1.4.0")
+    }
+
+    /// Whether the engine's plugin has Plan mode, reviews by another bot and the pull request's state.
+    func engineHasPhase4(_ model: AppModel) -> Bool {
+        guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
+        return Self.version(version, atLeast: "1.5.0")
     }
 
     /// What the agent is told when "Commit & push" is clicked. Engine-side
@@ -270,5 +283,104 @@ public final class CodeState {
     /// Hands the agent the commit and the push.
     func commitAndPush(model: AppModel) async {
         await model.send(Self.commitAndPushPrompt)
+    }
+}
+
+
+// MARK: - Plan mode, review by another bot, pull request
+
+extension CodeState {
+    /// What the agent hears when the plan is approved. Engine-side text, so English.
+    static let planApprovedPrompt = "The plan is approved. Go ahead and carry it out."
+
+    func mode(of threadId: String) -> CodeChatMode { modes[threadId] ?? .execute }
+
+    func refreshMode(model: AppModel, threadId: String) async {
+        guard engineHasPhase4(model), let client = model.client else { return }
+        let mode = (try? await client.codeMode(threadId: threadId)) ?? .execute
+        if modes[threadId] != mode { modes[threadId] = mode }
+    }
+
+    func setMode(model: AppModel, threadId: String, _ mode: CodeChatMode) async {
+        guard let client = model.client else { return }
+        do {
+            try await client.setCodeMode(threadId: threadId, mode)
+            modes[threadId] = mode
+        } catch { model.lastError = error.localizedDescription }
+    }
+
+    /// The plan is good: from now the agent may change things, and it is told to start.
+    func approvePlan(model: AppModel, threadId: String) async {
+        await setMode(model: model, threadId: threadId, .execute)
+        guard mode(of: threadId) == .execute else { return }
+        await model.send(Self.planApprovedPrompt)
+    }
+
+    // MARK: review
+
+    /// The bots that can review this chat: every visible one but the chat's own.
+    func reviewers(model: AppModel, chat: CodeChat) -> [Bot] {
+        model.state.bots.filter { $0.hidden != true && !(chat.kind == .bot && $0.id == chat.id) }
+    }
+
+    func refreshReview(model: AppModel, threadId: String) async {
+        guard engineHasPhase4(model), let client = model.client else { return }
+        let run = try? await client.codeReview(threadId: threadId)
+        if reviews[threadId] != run { reviews[threadId] = run }
+    }
+
+    func startReview(model: AppModel, threadId: String, botId: String) async {
+        guard let client = model.client else { return }
+        reviewErrors[threadId] = nil
+        do { reviews[threadId] = try await client.startCodeReview(threadId: threadId, botId: botId) }
+        catch { reviewErrors[threadId] = error.localizedDescription }
+    }
+
+    func cancelReview(model: AppModel, threadId: String) async {
+        guard let client = model.client else { return }
+        try? await client.cancelCodeReview(threadId: threadId)
+        await refreshReview(model: model, threadId: threadId)
+    }
+
+    /// What the first bot is told about a review. Engine-side text, so English.
+    static func reviewMessage(reviewer: String, review: String) -> String {
+        "\(reviewer) reviewed your changes. Their review:\n\n\(review)\n\nGo through each point: fix what is right, and tell me briefly what you would not change and why."
+    }
+
+    /// *Apply*: the review goes to the bot that made the changes, and is marked so that it is offered once.
+    func applyReview(model: AppModel, threadId: String, message: Message) async {
+        let name = message.from.map { "@\($0.name)" } ?? "Another bot"
+        if let client = model.client { try? await client.markCodeReviewApplied(threadId: threadId, messageId: message.id) }
+        await model.send(Self.reviewMessage(reviewer: name, review: message.text ?? ""))
+    }
+
+    // MARK: pull request
+
+    func refreshPullRequest(model: AppModel, threadId: String, refresh: Bool = false) async {
+        guard engineHasPhase4(model), let client = model.client else { return }
+        guard let status = try? await client.pullRequest(threadId: threadId, refresh: refresh) else { return }
+        if pullRequests[threadId] != status { pullRequests[threadId] = status }
+    }
+
+    /// The CI failed: what failed goes to the bot, with the end of its logs.
+    func sendCIFailures(model: AppModel, threadId: String) async throws {
+        guard let client = model.client else { throw URLError(.notConnectedToInternet) }
+        let message = try await client.ciFailureMessage(threadId: threadId)
+        await model.send(message)
+    }
+
+    /// What the colleagues commented on the pull request goes to the bot.
+    func sendPullRequestComments(model: AppModel, threadId: String) async throws {
+        guard let client = model.client else { throw URLError(.notConnectedToInternet) }
+        let message = try await client.pullRequestCommentsMessage(threadId: threadId)
+        await model.send(message)
+    }
+
+    /// How often to ask GitHub again: soon while checks run, rarely when there is nothing to wait for.
+    static func pollInterval(_ status: CodePullRequestStatus?) -> Duration {
+        guard let status, status.available else { return .seconds(600) }
+        guard let pr = status.pr else { return .seconds(180) }
+        if !pr.isOpen { return .seconds(900) }
+        return pr.checks.state == "pending" ? .seconds(30) : .seconds(120)
     }
 }

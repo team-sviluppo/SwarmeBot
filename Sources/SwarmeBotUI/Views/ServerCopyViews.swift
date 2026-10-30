@@ -2,8 +2,9 @@ import CompanionCore
 import SwarmeKit
 import SwiftUI
 
-/// "Copia su server…": this Mac's connectors and skills, picked together and
-/// sent to a server in one go. HTTP connectors and skills start ticked; a
+/// "Copia su server…": this Mac's connectors, skills and GitHub skill sources, picked together and
+/// sent to a server in one go. HTTP connectors and skills start ticked, and so do sources with no token (one
+/// with a token carries it to the server's vault, so it is the person's to tick); a
 /// stdio connector runs a command of this Mac, so it only works there if the
 /// server has it too, and starts unticked. An OAuth connector goes without
 /// its login, which is done again on the server.
@@ -12,12 +13,13 @@ struct ServerCopySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var engineId = ""
     @State private var picked: Set<String> = []
-    @State private var existing: (connectors: Set<String>, skills: Set<String>)?
+    @State private var existing: (connectors: Set<String>, skills: Set<String>, sources: [SkillSource])?
     @State private var busy = false
     @State private var error: String?
     @State private var outcomes: [ServerCopyOutcome]?
 
     private var engine: RemoteEngine? { model.remoteEngines.first { $0.id == engineId } }
+    private var copiableSkills: [Skill] { model.skills.filter { $0.source == nil } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -31,7 +33,9 @@ struct ServerCopySheet: View {
             // opened from one pane, the other list may not be loaded yet
             await model.refreshMCPConnectors()
             await model.refreshSkills()
-            picked = Set(model.mcpConnectors.filter { $0.transport == "http" }.map { "c:\($0.id)" } + model.skills.map { "s:\($0.id)" })
+            // a skill a source keeps goes with its source
+            picked = Set(model.mcpConnectors.filter { $0.transport == "http" }.map { "c:\($0.id)" } + copiableSkills.map { "s:\($0.id)" }
+                         + model.skillSources.filter { $0.secret == nil }.map { "g:\($0.id)" })
         }
         .task(id: engineId) {
             existing = nil
@@ -54,10 +58,19 @@ struct ServerCopySheet: View {
                 }
             }
             Section(tr("Skill")) {
-                if model.skills.isEmpty { Text(tr("Nessuna skill su questo Mac.")).foregroundStyle(.secondary) }
-                ForEach(model.skills) { skill in
+                if copiableSkills.isEmpty { Text(tr("Nessuna skill su questo Mac.")).foregroundStyle(.secondary) }
+                ForEach(copiableSkills) { skill in
                     row(key: "s:\(skill.id)", name: skill.name, detail: skill.hasScripts ? tr("contiene script") : nil,
                         replaces: existing?.skills.contains(skill.id) == true)
+                }
+            }
+            if !model.skillSources.isEmpty {
+                Section(tr("Sorgenti GitHub")) {
+                    ForEach(model.skillSources) { source in
+                        row(key: "g:\(source.id)", name: source.name,
+                            detail: source.secret.map { tr("col token %@, che va nel Vault del server", $0) } ?? tr("repository pubblico"),
+                            replaces: existing?.sources.contains { SkillSourceCopy.same($0, source) } == true)
+                    }
                 }
             }
         }
@@ -120,7 +133,8 @@ struct ServerCopySheet: View {
         busy = true
         defer { busy = false }
         let connectors = model.mcpConnectors.filter { picked.contains("c:\($0.id)") }
-        let skills = model.skills.filter { picked.contains("s:\($0.id)") }
-        outcomes = await model.copyToServer(connectors: connectors, skills: skills, engine: engine)
+        let skills = copiableSkills.filter { picked.contains("s:\($0.id)") }
+        let sources = model.skillSources.filter { picked.contains("g:\($0.id)") }
+        outcomes = await model.copyToServer(connectors: connectors, skills: skills, sources: sources, engine: engine)
     }
 }

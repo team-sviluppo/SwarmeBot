@@ -30,7 +30,7 @@ extension Harness {
         store.group(groupId)?["busyBotId"]?.string != nil || groupQueues[groupId] != nil || roomSessionResets.contains(groupId)
     }
 
-    func newRoomSession(_ groupId: String, summarize: Bool) async throws -> JSONObject {
+    public func newRoomSession(_ groupId: String, summarize: Bool) async throws -> JSONObject {
         guard let group = store.group(groupId) else { throw HTTPError(404, "no such room") }
         guard group["guest"] == nil else { throw HTTPError(409, "this channel is written from where it lives") }
         guard !roomIsBusy(groupId) else { throw HTTPError(409, "the channel is working — stop it before starting a new session") }

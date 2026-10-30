@@ -42,6 +42,8 @@ public final class AppModel {
     /// Settings › Skill: instruction folders bots can be given, and where the engine keeps them.
     public internal(set) var skills: [Skill] = []
     public internal(set) var skillsFolder: SkillsFolder?
+    /// GitHub folders of skills the engine keeps installed (AppModel+SkillSources.swift).
+    public internal(set) var skillSources: [SkillSource] = []
     /// The engine's secrets vault, without values (AppModel+Vault.swift).
     public internal(set) var vault: VaultState?
     /// Where the transcript should land after a search jump.
@@ -82,6 +84,8 @@ public final class AppModel {
     @ObservationIgnored var visibleCache: [String: (version: Int, messages: [Message])] = [:]
     /// Hooks the app layer sets: system notifications and the Dock badge.
     @ObservationIgnored public var onNotify: ((NotificationFrame) -> Void)?
+    /// A GitHub skill source updated and changed skills (AppModel+SkillSources.swift).
+    @ObservationIgnored public var onSkillsUpdated: ((SkillSource, SkillSource.Updated) -> Void)?
     /// Runs a shell command line in the terminal app the user picked.
     @ObservationIgnored public var terminalRunner: ((String) -> Void)?
     @ObservationIgnored public var onUnreadChange: ((Int) -> Void)?
@@ -224,6 +228,9 @@ public final class AppModel {
                     }
                     if case .skills = frame.frame {
                         Task { await self.refreshSkills() }
+                    }
+                    if case let .unknown(kind) = frame.frame, kind == "skill-sources" {
+                        Task { await self.refreshSkillSources() }
                     }
                     if case .vault = frame.frame {
                         Task { await self.refreshVault() }

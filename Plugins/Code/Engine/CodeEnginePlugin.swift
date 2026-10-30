@@ -10,11 +10,13 @@ import HarnessCore
 @MainActor
 public final class CodeEnginePlugin: EnginePlugin {
     private lazy var scripts = ProjectScripts()
+    private let reviews = CodeReviews()
+    private let pullRequests = CodePullRequests()
     public nonisolated init() {}
 
     public nonisolated var id: String { "code" }
     public nonisolated var name: String { "Code" }
-    public nonisolated var version: String { "1.4.0" }
+    public nonisolated var version: String { "1.5.0" }
     public nonisolated var botFlags: [String] { ["codeMode"] }
     /// Code mode for a whole channel: one folder for every member, one of them working at a time.
     public nonisolated var groupFlags: [String] { ["codeMode"] }
@@ -87,6 +89,16 @@ public final class CodeEnginePlugin: EnginePlugin {
     /// A channel's project, not its members': a bot of project A speaking in a channel of project B works with B.
     public func beforeTurn(_ turn: inout TurnSetup) {
         guard let harness = turn.harness else { return }
+        // a bot reviewing another's changes reads the repository and changes nothing
+        if let root = reviews.reading[turn.threadId] {
+            turn.system += (turn.system.isEmpty ? "" : "\n\n") + CodeReviews.system
+            turn.readOnlyFolders.append(ReadOnlyGuard.canonical(root))
+        }
+        // Plan mode: the chat's folder is read-only until the plan is approved
+        if CodeModes(harness: harness).mode(of: turn.threadId) == .plan {
+            turn.system += (turn.system.isEmpty ? "" : "\n\n") + CodeModes.prompt
+            if let cwd = turn.cwd { turn.readOnlyFolders.append(ReadOnlyGuard.canonical(cwd)) }
+        }
         let owner = turn.group ?? turn.bot
         guard let data = owner["plugins"]?["code"]?.object, let projectId = data["projectId"]?.string else { return }
         let store = ProjectStore(harness: harness)
@@ -124,6 +136,60 @@ public final class CodeEnginePlugin: EnginePlugin {
             let thread = request.params["tid"] ?? ""
             _ = try self.scripts.configuration(harness: request.harness, thread: thread)
             return .response(.json(200, ["run": self.scripts.stop(thread: thread)]))
+        }
+        router.get("/api/threads/:tid/code/mode") { request in
+            let thread = request.params["tid"] ?? ""
+            guard ThreadFiles.roots(request.harness.store, request.harness.paths, threadId: thread) != nil else { return .response(.error(404, "no such thread")) }
+            return .response(.json(200, ["mode": .string(CodeModes(harness: request.harness).mode(of: thread).rawValue)]))
+        }
+        router.put("/api/threads/:tid/code/mode") { request in
+            let thread = request.params["tid"] ?? ""
+            guard ThreadFiles.roots(request.harness.store, request.harness.paths, threadId: thread) != nil else { return .response(.error(404, "no such thread")) }
+            guard let mode = try request.http.json()["mode"]?.string.flatMap(CodeMode.init(rawValue:)) else { throw HTTPError(400, "mode must be plan or execute") }
+            try CodeModes(harness: request.harness).set(mode, for: thread)
+            return .response(.json(200, ["mode": .string(mode.rawValue)]))
+        }
+        router.get("/api/threads/:tid/code/review") { request in
+            .response(.json(200, self.reviews.status(of: request.params["tid"] ?? "")))
+        }
+        router.post("/api/threads/:tid/code/review") { request in
+            let harness = request.harness
+            let threadId = request.params["tid"] ?? ""
+            guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: threadId)?.first else { return .response(.error(404, "no such thread")) }
+            guard let reviewer = try request.http.json()["botId"]?.string, !reviewer.isEmpty else { throw HTTPError(400, "botId is required") }
+            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            let material = try await CodeReviews.material(root: repo.root, changes: repo.changes.map(\.path))
+            let run = try self.reviews.start(harness: harness, originThread: threadId, reviewerId: reviewer, root: repo.root, branch: repo.detached ? nil : repo.branch,
+                                             files: material.files, diff: material.diff, truncated: material.truncated)
+            var answer = run.wire
+            answer["scope"] = .string(material.scope)
+            return .response(.json(202, ["review": answer]))
+        }
+        router.delete("/api/threads/:tid/code/review") { request in
+            .response(.json(200, ["cancelled": .bool(self.reviews.cancel(threadId: request.params["tid"] ?? ""))]))
+        }
+        router.post("/api/threads/:tid/code/review/applied") { request in
+            guard let id = try request.http.json()["messageId"]?.string else { throw HTTPError(400, "messageId is required") }
+            try self.reviews.markApplied(harness: request.harness, threadId: request.params["tid"] ?? "", messageId: id)
+            return .response(.json(200, ["ok": true]))
+        }
+        router.get("/api/threads/:tid/code/pr") { request in
+            let harness = request.harness
+            guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else { return .response(.error(404, "no such thread")) }
+            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.json(200, ["available": true, "pr": .null])) }
+            return .response(.json(200, try await self.pullRequests.status(root: repo.root, branch: repo.detached ? nil : repo.branch, refresh: request.http.query["refresh"] == "1")))
+        }
+        router.get("/api/threads/:tid/code/pr/ci-failures") { request in
+            let harness = request.harness
+            guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else { return .response(.error(404, "no such thread")) }
+            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            return .response(.json(200, try await self.pullRequests.ciFailures(root: repo.root, branch: repo.detached ? nil : repo.branch)))
+        }
+        router.get("/api/threads/:tid/code/pr/comments") { request in
+            let harness = request.harness
+            guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else { return .response(.error(404, "no such thread")) }
+            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            return .response(.json(200, try await self.pullRequests.comments(root: repo.root, branch: repo.detached ? nil : repo.branch)))
         }
         router.get("/api/projects") { request in
             .response(.json(200, ["projects": .array(ProjectStore(harness: request.harness).all.map(JSON.object))]))
@@ -201,7 +267,9 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard !ThreadGit.botWorking(in: repo.root, harness: harness, threadId: threadId) else {
                 return .response(.error(409, "a bot is working — let it finish before committing"))
             }
-            return .response(.json(200, try await CodeCommit.run(folder: folder, request: parsed)))
+            let result = try await CodeCommit.run(folder: folder, request: parsed)
+            self.pullRequests.forget(root: repo.root)
+            return .response(.json(200, result))
         }
         router.get("/api/threads/:tid/files") { request in
             let harness = request.harness
@@ -246,5 +314,8 @@ public final class CodeEnginePlugin: EnginePlugin {
         }
     }
 
-    public func stop(_ harness: Harness) { scripts.stopAll() }
+    public func stop(_ harness: Harness) {
+        scripts.stopAll()
+        reviews.stopAll()
+    }
 }

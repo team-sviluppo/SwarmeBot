@@ -11,7 +11,8 @@ struct TurnEnds {
         var pending: String?
         var speaker: String?
         for message in messages {
-            guard message.kind == .text else { continue }
+            // a review by another bot is no part of the turns it comments on
+            guard message.kind == .text, message.review == nil else { continue }
             if message.role == .user {
                 if let pending { ids.insert(pending) }
                 pending = nil

@@ -57,6 +57,7 @@ struct CodeDiffPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
+            CodeReviewProblem(chat: chat, state: state)
             Rectangle().fill(Theme.hairline.opacity(0.4)).frame(height: 1)
             if git?.repo != true {
                 placeholder(tr("La cartella della chat non è un repository git."))
@@ -96,6 +97,7 @@ struct CodeDiffPanel: View {
             }
             .buttonStyle(IconButtonStyle(size: 26, iconSize: 12))
             .help(tr("Ricarica"))
+            if state.engineHasPhase4(model) { CodeReviewMenu(chat: chat, state: state) }
             Button { showCommit = true } label: {
                 Label(tr("Commit…"), systemImage: "arrow.up.circle").fixedSize()
             }

@@ -71,6 +71,11 @@ public struct Sender: Codable, Hashable, Sendable {
     public var color: String
 }
 
+public struct ReviewNote: Codable, Hashable, Sendable {
+    /// Whether the review was handed to the bot that made the changes.
+    public var applied: Bool?
+}
+
 public struct Reaction: Codable, Hashable, Sendable {
     public var emoji: String
     public var by: String
@@ -142,6 +147,9 @@ public struct Message: Codable, Hashable, Identifiable, Sendable {
     public var interrupted: Bool?
     /// A channel keeps its history, but a new agent session starts here.
     public var sessionDivider: Bool?
+    /// A review of the chat's changes written by another bot (`from` says which); the Code plugin offers to
+    /// apply it. It is not part of the chat's own turns.
+    public var review: ReviewNote?
 
     public var date: Date { Date(timeIntervalSince1970: at / 1000) }
 }

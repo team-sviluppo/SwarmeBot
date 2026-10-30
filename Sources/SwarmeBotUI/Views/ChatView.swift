@@ -283,7 +283,9 @@ struct MessageRow: View {
                 UserMessage(message: message, threadId: threadId, editable: !isRoom)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    if isRoom, let from = message.from {
+                    // a review comes from another bot, also in a chat that is one bot's
+                    let speaker = isRoom || message.review != nil ? message.from : nil
+                    if let from = speaker {
                         HStack(spacing: 6) {
                             if let bot = model.state.bot(from.botId) {
                                 BotAvatar(bot: bot, size: 24, animated: false)
@@ -291,10 +293,13 @@ struct MessageRow: View {
                                 SwarmeAvatar(color: from.color, size: 24, animated: false)
                             }
                             Text(from.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.secondary)
+                            if message.review != nil {
+                                Text(tr("Revisione")).font(.system(size: 11.5, weight: .medium)).foregroundStyle(Theme.tertiary)
+                            }
                         }
                     }
                     HoverActions(message: message, threadId: threadId, isUser: false, copyText: message.text ?? "") {
-                        BotBubble(color: isRoom ? message.from?.color : model.selectedBot?.color) {
+                        BotBubble(color: speaker != nil ? message.from?.color : model.selectedBot?.color) {
                             MarkdownText(source: message.text ?? "")
                         }
                             .contextMenu { messageMenu }

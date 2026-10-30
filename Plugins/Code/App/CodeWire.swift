@@ -261,3 +261,120 @@ extension CompanionClient {
         return try await pluginRequest("GET", "/api/fs/dirs", query: query, as: FolderListing.self)
     }
 }
+
+// MARK: - Plan mode, review by another bot, pull request
+
+/// Whether the agent of a chat may change things (`GET /api/threads/:tid/code/mode`).
+enum CodeChatMode: String, Sendable {
+    case plan, execute
+}
+
+/// A review of the chat's changes by another bot (`/api/threads/:tid/code/review`).
+struct CodeReviewRun: Decodable, Equatable, Sendable {
+    var id: String
+    var reviewerId: String
+    var reviewerName: String
+    /// The task of the reviewer's where it is working, for opening it.
+    var reviewerThread: String
+    /// `running`, `done`, `failed`, `cancelled`.
+    var status: String
+    var branch: String?
+    var scope: String?
+    var error: String?
+    var messageId: String?
+
+    var running: Bool { status == "running" }
+}
+
+/// The pull request of the chat's branch, folded by the engine (`GET /api/threads/:tid/code/pr`).
+struct CodePullRequest: Decodable, Equatable, Sendable {
+    struct Check: Decodable, Equatable, Sendable, Identifiable {
+        var name: String
+        /// `success`, `failure`, `pending`, `skipped`.
+        var state: String
+        var workflow: String?
+        var url: String?
+        var id: String { (workflow ?? "") + "/" + name + "/" + (url ?? "") }
+        var title: String { workflow.map { "\($0) / \(name)" } ?? name }
+    }
+
+    struct Checks: Decodable, Equatable, Sendable {
+        /// `none`, `success`, `failure`, `pending`.
+        var state: String
+        var total: Int
+        var passed: Int
+        var failed: Int
+        var pending: Int
+        var items: [Check]
+    }
+
+    var number: Int
+    var url: String
+    var title: String
+    /// `open`, `closed`, `merged`.
+    var state: String
+    var draft: Bool
+    var base: String?
+    var head: String?
+    var checks: Checks
+    var comments: Int
+    var merge: String?
+    var mergeable: String?
+    var reviewDecision: String?
+    var author: String?
+
+    var isOpen: Bool { state == "open" }
+}
+
+struct CodePullRequestStatus: Decodable, Equatable, Sendable {
+    var available: Bool
+    var reason: String?
+    var pr: CodePullRequest?
+}
+
+extension CompanionClient {
+    func codeMode(threadId: String) async throws -> CodeChatMode {
+        struct Answer: Decodable { var mode: String }
+        let answer = try await pluginRequest("GET", "/api/threads/\(threadId)/code/mode", as: Answer.self)
+        return CodeChatMode(rawValue: answer.mode) ?? .execute
+    }
+
+    func setCodeMode(threadId: String, _ mode: CodeChatMode) async throws {
+        try await pluginRequest("PUT", "/api/threads/\(threadId)/code/mode", body: ["mode": mode.rawValue])
+    }
+
+    func codeReview(threadId: String) async throws -> CodeReviewRun? {
+        struct Answer: Decodable { var review: CodeReviewRun? }
+        return try await pluginRequest("GET", "/api/threads/\(threadId)/code/review", as: Answer.self).review
+    }
+
+    func startCodeReview(threadId: String, botId: String) async throws -> CodeReviewRun {
+        struct Answer: Decodable { var review: CodeReviewRun }
+        return try await pluginRequest("POST", "/api/threads/\(threadId)/code/review", body: ["botId": botId], as: Answer.self).review
+    }
+
+    func cancelCodeReview(threadId: String) async throws {
+        try await pluginRequest("DELETE", "/api/threads/\(threadId)/code/review")
+    }
+
+    func markCodeReviewApplied(threadId: String, messageId: String) async throws {
+        try await pluginRequest("POST", "/api/threads/\(threadId)/code/review/applied", body: ["messageId": messageId])
+    }
+
+    func pullRequest(threadId: String, refresh: Bool) async throws -> CodePullRequestStatus {
+        let query = refresh ? [URLQueryItem(name: "refresh", value: "1")] : []
+        return try await pluginRequest("GET", "/api/threads/\(threadId)/code/pr", query: query, as: CodePullRequestStatus.self)
+    }
+
+    /// The message that hands the agent what failed in the CI.
+    func ciFailureMessage(threadId: String) async throws -> String {
+        struct Answer: Decodable { var message: String }
+        return try await pluginRequest("GET", "/api/threads/\(threadId)/code/pr/ci-failures", as: Answer.self).message
+    }
+
+    /// The message that hands the agent what the colleagues commented.
+    func pullRequestCommentsMessage(threadId: String) async throws -> String {
+        struct Answer: Decodable { var message: String }
+        return try await pluginRequest("GET", "/api/threads/\(threadId)/code/pr/comments", as: Answer.self).message
+    }
+}

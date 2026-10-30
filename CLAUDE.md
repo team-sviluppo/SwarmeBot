@@ -45,6 +45,7 @@ and stays untranslated.
 | `SwarmeBotUI` | The SwiftUI app as a library (`Views/`, `Mascot/`, Sparkle `Updater`, notifications) and the app plugin host (`Plugins/`: `AppPlugin`, `PluginHost`, `SwarmeApp.run(plugins:)`). |
 | `SwarmeBot` | The app executable: a thin shell, `SwarmeApp.run(plugins: [CodeAppPlugin()])`. |
 | `Plugins/Code` | The Code plugin (`docs/plans/2026-10-28-code-mode-t3.md`): `CodePluginEngine` (git routes on the engine, builds on Linux) and `CodePluginApp` (the Mac app's half). Plugins are linked at build time; the core never imports one. |
+| `Plugins/Cylon` | The Cylon plugin (`docs/plans/2026-10-28-code-mode-t3.md` §10): the phases of a Cylon task in a channel (spec, plan, run, review, pull request), one bot per phase, each started as its skill and followed to its end. `CylonPluginEngine` (builds on Linux) and `CylonPluginApp`. See its README. |
 | `HarnessCore` | The engine: contracts (`RuntimeEvent`, drivers), `Store` + `MessageDB` (SQLite), `Harness` (turns), `Routes`, `HTTPServer`/`HTTPTransport`/`SSEHub`, rooms, comms between bots, routines, webhooks, library, team, computers (Box, local VM, VPS), MCP connectors + OAuth, permission broker, remote access (devices, pairing, rate limits). |
 | `HarnessDrivers` | One file per provider driver; `ACP/ACPCore` (JSON-RPC runtime) + `ACP/ACPDrivers`; `DeepSeek/`. |
 | `HarnessRunner` | The engine's startup and subcommands as a library (`HarnessMain.run(plugins:)`); it needs the drivers, so it sits next to `HarnessDrivers`, not in `HarnessCore`. |
@@ -92,7 +93,7 @@ Useful environment variables:
 - `SWARMEBOT_HARNESS_URL` — attach to an engine already running instead of starting one.
 - `SWARMEBOT_SNAPSHOT=/path.png` (+ `SWARMEBOT_SNAPSHOT_DELAY`) — screenshot the window, no screen-recording permission needed.
 - `SWARMEBOT_SELECT=bot:<id>` or `room:<id>` — the opening chat on test data.
-- `SWARMEBOT_OPEN=palette` or a plugin command id (e.g. `code.scripts`) — open it after launch for snapshots.
+- `SWARMEBOT_OPEN=palette`, `settings` (with `SWARMEBOT_SETTINGS_TAB=skills` and `SWARMEBOT_SNAPSHOT_WINDOW=<the tab's title>`) or a plugin command id (e.g. `code.scripts`) — open it after launch for snapshots.
 - `SWARMEBOT_LINUX_ENGINES=build/linux` — use locally built Linux engines instead of downloading them.
 - Engine: `OMB_PORT`, `OMB_DATA_DIR`, `OMB_WEBHOOK_PORT` (same names as the old Node engine).
 - Logs: `~/Library/Logs/SwarmeBot/server.log`.

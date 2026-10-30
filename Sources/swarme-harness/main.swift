@@ -3,6 +3,7 @@
 // (docs/plans/2026-10-28-code-mode-t3.md §12). An engine without plugins is
 // `HarnessMain.run()`.
 import CodePluginEngine
+import CylonPluginEngine
 import HarnessRunner
 
-HarnessMain.run(plugins: [CodeEnginePlugin()])
+HarnessMain.run(plugins: [CodeEnginePlugin(), CylonEnginePlugin()])

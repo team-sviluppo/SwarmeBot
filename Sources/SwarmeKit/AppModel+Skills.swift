@@ -8,6 +8,7 @@ extension AppModel {
         guard let client else { return }
         if let list = try? await client.skills() { skills = list }
         if let folder = try? await client.skillsFolder() { skillsFolder = folder }
+        await refreshSkillSources()
     }
 
     /// A skill folder, or a `.zip`/`.skill` holding one, from this Mac.
