@@ -133,6 +133,16 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Scelte nei riepiloghi (2026-10-30): una domanda generica o parole come “opzioni” e
+  “select” nel messaggio non bastano a rendere selezionabile un elenco. Il parser richiede
+  una richiesta esplicita di scelta nella riga adiacente, separa gli elenchi interrotti da
+  testo, tabelle o codice e prende solo le alternative della domanda finale.
+  Verifica: test di regressione su riepiloghi, procedura del token GitHub, link e domande
+  effettive; build Mac; suite di 736 test con 14 integrazioni opzionali saltate, zero errori
+  ed esclusione del solo test di trasferimento bloccante già documentato sotto.
+  Schermate dell'app su dati e motore isolati: procedura senza selettore, domanda con le sole
+  alternative corrette. Nessuna modifica al motore; nessuna parità Node eseguita.
+
 - Notifiche, scelte e contesto (2026-10-30): il completamento senza testo invia comunque
   `notify`; anche i turni nei canali notificano. Sul Mac la visibilità richiede una finestra
   chat visibile e in primo piano; il click riapre finestra e thread corretti. Il supporto vale
