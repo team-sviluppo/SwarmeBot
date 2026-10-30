@@ -12,13 +12,13 @@ import HarnessCore
 
 @MainActor
 public final class CylonEnginePlugin: EnginePlugin {
-    private weak var harness: Harness?
+    weak var harness: Harness?
 
     public nonisolated init() {}
 
     public nonisolated var id: String { "cylon" }
     public nonisolated var name: String { "Cylon" }
-    public nonisolated var version: String { "1.0.0" }
+    public nonisolated var version: String { "1.1.0" }
     /// The channels are Code channels with a project: the roles are the project's.
     public nonisolated var requires: [String] { ["code"] }
 
@@ -135,6 +135,7 @@ public final class CylonEnginePlugin: EnginePlugin {
             if let source = store.sourceId { try? harness.skillSources.assign(botIds: store.roles(of: project).values.map { $0 }, to: source) }
             return .response(.json(200, ["roles": store.roles[project] ?? .object(JSONObject())]))
         }
+        boardRoutes(router)
         router.get("/api/cylon/settings") { request in
             .response(.json(200, ["sourceId": CylonStore(harness: request.harness).sourceId.map { .string($0) } ?? .null]))
         }
@@ -160,7 +161,7 @@ public final class CylonEnginePlugin: EnginePlugin {
     // MARK: starting
 
     /// A ticket comes in: a new pipeline, and a clean session for it, since the state between phases is on disk.
-    private func begin(_ id: String, group: JSONObject, body: JSONObject, harness: Harness) async throws {
+    func begin(_ id: String, group: JSONObject, body: JSONObject, harness: Harness) async throws {
         guard group["plugins"]?["cylon"]?["follow"]?.bool == true else { throw HTTPError(409, "this channel does not follow the Cylon flow: switch it on in the channel's settings") }
         guard let raw = body["ticket"]?.string, let ticket = CylonDetect.ticketId(raw) else { throw HTTPError(400, "ticket must be a ClickUp ticket's id or address") }
         let tag = body["tag"]?.string ?? "cylon-plan"

@@ -30,6 +30,20 @@ public final class CylonAppPlugin: AppPlugin {
         return [PluginView(CylonPhaseBar(room: room, state: state).id(room.id))]
     }
 
+    /// The board of the channel's project, in the right column.
+    public func inspectorTabs(_ chat: ChatContext) -> [PluginTab] {
+        guard let room = chat.room else { return [] }
+        return [PluginTab(id: CylonBoardPanel.tabId, title: tr("Tabellone"), icon: "rectangle.3.group", width: CylonBoardPanel.width,
+                          content: PluginView(CylonBoardPanel(room: room, state: state).id(room.id)))]
+    }
+
+    public func commands(_ model: AppModel) async -> [PluginCommand] {
+        guard let room = model.selectedRoom, Self.follows(room) else { return [] }
+        return [PluginCommand(id: "cylon.board", section: tr("Comandi"), title: tr("Tabellone del progetto"), icon: "rectangle.3.group") {
+            PluginHost.shared.openInspectorTab(CylonBoardPanel.tabId)
+        }]
+    }
+
     public func settingsSections(_ scope: SettingsScope) -> [PluginView] {
         switch scope {
         case let .room(room): return [PluginView(CylonRoomSettings(room: room, state: state))]
