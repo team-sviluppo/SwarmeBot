@@ -34,6 +34,18 @@ final class CodeAppPluginTests: XCTestCase {
         XCTAssertTrue(plugin.composerAccessories(chat(nil)).isEmpty)
     }
 
+    func testHeaderToggleRequiresTheEngineToOfferTheChatColumn() throws {
+        let plugin = CodeAppPlugin()
+        let chat = chat(try bot(codeMode: true))
+        chat.model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.3.0", enabled: true)]
+        XCTAssertNil(plugin.chatNavigation(chat))
+        XCTAssertNil(plugin.chatColumn(chat))
+        chat.model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.4.0", enabled: true)]
+        XCTAssertNotNil(plugin.chatNavigation(chat))
+        XCTAssertNotNil(plugin.chatColumn(chat))
+        XCTAssertNil(plugin.chatNavigation(self.chat(nil)), "channels have no bot task list")
+    }
+
     func testTheFooterIsAlwaysOursInACodeChat() throws {
         // in a Code chat the file cards never show: mid-turn replies get an empty footer, a turn's end the badge
         let plugin = CodeAppPlugin()

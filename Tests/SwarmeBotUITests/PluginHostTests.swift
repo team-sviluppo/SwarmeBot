@@ -12,6 +12,7 @@ final class PluginHostTests: XCTestCase {
         let name: String
         var active = true
         var footer: PluginView?
+        var navigation: PluginView?
 
         init(_ id: String) {
             self.id = id
@@ -21,6 +22,7 @@ final class PluginHostTests: XCTestCase {
         func isActive(for chat: ChatContext) -> Bool { active }
         func composerAccessories(_ chat: ChatContext) -> [PluginView] { [PluginView(Text(verbatim: id))] }
         func replyFooter(_ message: Message, _ chat: ChatContext, _ position: TurnPosition) -> PluginView? { footer }
+        func chatNavigation(_ chat: ChatContext) -> PluginView? { navigation }
         func settingsSections(_ scope: SettingsScope) -> [PluginView] { [PluginView(Text(verbatim: id))] }
     }
 
@@ -92,6 +94,22 @@ final class PluginHostTests: XCTestCase {
         let host = PluginHost()
         host.install([Fake("code"), Fake("code")])
         XCTAssertEqual(host.plugins.count, 1)
+    }
+
+    func testHeaderNavigationOnlyReplacesTheCoreControlsForAnAvailableActivePlugin() {
+        let host = PluginHost()
+        let plugin = Fake("code")
+        plugin.navigation = PluginView(Text(verbatim: "chats"))
+        host.install([plugin])
+        let model = AppModel()
+        XCTAssertNil(host.chatNavigation(chat(model)), "the engine lacks the plugin: keep core navigation")
+        model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.6.0", enabled: true)]
+        XCTAssertNotNil(host.chatNavigation(chat(model)))
+        plugin.active = false
+        XCTAssertNil(host.chatNavigation(chat(model)), "ordinary chats keep core navigation")
+        plugin.active = true
+        model.enginePlugins[0].enabled = false
+        XCTAssertNil(host.chatNavigation(chat(model)), "a disabled plugin cannot hide core navigation")
     }
 
     func testTurnEndsAreTheLastBotTextBeforeTheNextUserMessage() throws {

@@ -46,11 +46,15 @@ struct ChatHeader: View {
                 .help(tr("Interrompi (⌘.)"))
             }
             if let bot = model.selectedBot {
-                Button(tr("Nuova chat")) { Task { await model.createTask(title: nil) } }
-                    .buttonStyle(ChipButtonStyle(filled: false, size: 13))
-                    .disabled(model.isBusy(bot))
-                    .help(tr("Apri una chat nuova"))
-                taskMenu(bot)
+                if let navigation = PluginHost.shared.chatNavigation(.current(model)) {
+                    navigation
+                } else {
+                    Button(tr("Nuova chat")) { Task { await model.createTask(title: nil) } }
+                        .buttonStyle(ChipButtonStyle(filled: false, size: 13))
+                        .disabled(model.isBusy(bot))
+                        .help(tr("Apri una chat nuova"))
+                    taskMenu(bot)
+                }
                 if let context = currentTask(bot)?.context {
                     contextChip(context) {
                         startingSession = true
@@ -129,15 +133,33 @@ struct ChatHeader: View {
     }
 
     private func contextChip(_ context: ContextUsage, compact: @escaping () -> Void) -> some View {
-        Menu {
-            Text(tr("Ultimo contesto inviato: %@ token", String(format: "%.0f", max(0, context.used.isFinite ? context.used : 0))))
-            Button(tr("Compatta con riassunto"), action: compact)
-        } label: {
-            Label(context.fraction.map { String(format: "%.0f%%", $0 * 100) } ?? String(format: "%.1fk", context.used / 1000), systemImage: "gauge.medium")
-                .font(.system(size: 11.5)).foregroundStyle((context.fraction ?? 0) >= 0.8 ? Theme.warning : Theme.secondary)
+        Group {
+            // A read-only value while running, so disabled menu styling cannot dim it.
+            if busy || startingSession {
+                contextLabel(context)
+            } else {
+                Menu {
+                    Text(tr("Ultimo contesto inviato: %@ token", String(format: "%.0f", max(0, context.used.isFinite ? context.used : 0))))
+                    Button(tr("Compatta con riassunto"), action: compact)
+                } label: {
+                    contextLabel(context)
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            }
         }
-        .menuStyle(.borderlessButton).fixedSize().disabled(busy || startingSession)
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(Capsule().fill(Theme.raised))
+        .overlay(Capsule().stroke((context.fraction ?? 0) >= 0.8 ? Theme.warning : Theme.accentBorder.opacity(0.65)))
+        .fixedSize()
         .help(tr("Contesto dell'ultima richiesta al modello; non è il totale dei token fatturati"))
+        .accessibilityLabel(tr("Contesto della sessione"))
+    }
+
+    private func contextLabel(_ context: ContextUsage) -> some View {
+        Label(context.fraction.map { String(format: "%.0f%%", $0 * 100) } ?? String(format: "%.1fk", context.used / 1000), systemImage: "gauge.medium")
+            .font(.system(size: 12.5, weight: .semibold)).monospacedDigit()
+            .foregroundStyle((context.fraction ?? 0) >= 0.8 ? Theme.warning : Theme.ink)
+            .fixedSize()
     }
 
     private func toggle(_ tab: InspectorView.Tab?) {

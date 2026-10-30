@@ -65,40 +65,38 @@ struct CodeChatColumn: View {
     }
 
     var body: some View {
+        if !collapsed { expanded }
+    }
+
+    private var expanded: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                if !collapsed { Text(tr("Chat")).font(.system(size: 13, weight: .semibold)); Spacer() }
-                Button { collapsed.toggle() } label: { Image(systemName: "sidebar.left") }
-                    .buttonStyle(.plain).help(tr("Colonna Chat (⌘⇧L)"))
-                    .keyboardShortcut("l", modifiers: [.command, .shift])
-                if !collapsed {
-                    Button { Task { await model.createTask(title: nil) } } label: { Image(systemName: "plus") }
-                        .buttonStyle(.plain).disabled(model.isBusy(bot)).help(tr("Nuova chat"))
-                }
+                Text(tr("Chat")).font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Button { Task { await model.createTask(title: nil) } } label: { Image(systemName: "plus") }
+                    .buttonStyle(.plain).disabled(model.isBusy(bot)).help(tr("Nuova chat"))
             }.padding(12).frame(height: 50)
-            CodeContextMeter(chat: CodeChat(bot: bot), compact: collapsed)
-                .padding(.horizontal, collapsed ? 0 : 10).padding(.bottom, 8)
-            if !collapsed {
-                TextField(tr("Cerca chat"), text: $query)
-                    .textFieldStyle(.roundedBorder).font(.system(size: 11.5)).padding(.horizontal, 10)
-                    .help(tr("Titolo o branch; premi Invio per cercare nei messaggi"))
-                    .onSubmit { Task { await search() } }
-                    .onChange(of: query) { _, _ in hits = [] }
-                HStack(spacing: 5) {
-                    filterButton(tr("Tutte"), value: "all")
-                    filterButton(tr("Al lavoro"), value: "working")
-                    filterButton(tr("Da leggere"), value: "unread")
-                }.padding(.vertical, 8)
-                Picker(tr("Branch"), selection: $branch) {
-                    Text(tr("Tutti i branch")).tag("")
-                    ForEach(Array(Set(rows.compactMap { $0.git?.branch })).sorted(), id: \.self) { Text(verbatim: $0).tag($0) }
-                }.font(.system(size: 11)).padding(.horizontal, 10).padding(.bottom, 6)
-            }
-            if let error, !collapsed { Text(verbatim: error).font(.caption).foregroundStyle(Theme.danger).padding(8) }
+            CodeContextMeter(chat: CodeChat(bot: bot))
+                .padding(.horizontal, 10).padding(.bottom, 8)
+            TextField(tr("Cerca chat"), text: $query)
+                .textFieldStyle(.roundedBorder).font(.system(size: 11.5)).padding(.horizontal, 10)
+                .help(tr("Titolo o branch; premi Invio per cercare nei messaggi"))
+                .onSubmit { Task { await search() } }
+                .onChange(of: query) { _, _ in hits = [] }
+            HStack(spacing: 5) {
+                filterButton(tr("Tutte"), value: "all")
+                filterButton(tr("Al lavoro"), value: "working")
+                filterButton(tr("Da leggere"), value: "unread")
+            }.padding(.vertical, 8)
+            Picker(tr("Branch"), selection: $branch) {
+                Text(tr("Tutti i branch")).tag("")
+                ForEach(Array(Set(rows.compactMap { $0.git?.branch })).sorted(), id: \.self) { Text(verbatim: $0).tag($0) }
+            }.font(.system(size: 11)).padding(.horizontal, 10).padding(.bottom, 6)
+            if let error { Text(verbatim: error).font(.caption).foregroundStyle(Theme.danger).padding(8) }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 3) {
                     if searching { ProgressView().controlSize(.small) }
-                    if !hits.isEmpty && !collapsed {
+                    if !hits.isEmpty {
                         ForEach(hits) { hit in
                             Button { Task { await model.open(hit) } } label: {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -111,12 +109,12 @@ struct CodeChatColumn: View {
                         ForEach(0..<4) { group in
                             let chats = filtered.filter { !$0.archived && Self.dateGroup($0.updatedAt) == group }
                             if !chats.isEmpty {
-                                if !collapsed { Text([tr("Oggi"), tr("Ieri"), tr("Questa settimana"), tr("Più vecchie")][group])
-                                    .font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.tertiary).padding(.top, 10).padding(.leading, 8) }
+                                Text([tr("Oggi"), tr("Ieri"), tr("Questa settimana"), tr("Più vecchie")][group])
+                                    .font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.tertiary).padding(.top, 10).padding(.leading, 8)
                                 ForEach(chats) { row($0) }
                             }
                         }
-                        if !collapsed, filtered.contains(where: \.archived) {
+                        if filtered.contains(where: \.archived) {
                             DisclosureGroup(tr("Archiviate"), isExpanded: $archivedOpen) {
                                 ForEach(filtered.filter(\.archived)) { row($0) }
                             }.font(.system(size: 11)).padding(6)
@@ -125,7 +123,7 @@ struct CodeChatColumn: View {
                 }.padding(6)
             }
         }
-        .frame(width: collapsed ? 44 : 240).background(Theme.card)
+        .frame(width: 240).background(Theme.card)
         .overlay(alignment: .trailing) { Rectangle().fill(Theme.hairline.opacity(0.4)).frame(width: 1) }
         .task(id: bot.id) {
             while !Task.isCancelled {
@@ -156,31 +154,29 @@ struct CodeChatColumn: View {
     private func row(_ item: CodeChatRow) -> some View {
         Button { Task { await model.openTask(botId: bot.id, threadId: item.threadId) } } label: {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: item.icon).font(.system(size: collapsed ? 13 : 10))
+                Image(systemName: item.icon).font(.system(size: 10))
                     .foregroundStyle(item.status == "error" ? Theme.danger : item.unread || item.status == "working" ? Theme.accent : Theme.secondary)
                     .frame(width: 14).padding(.top, 3)
-                if !collapsed {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 4) {
-                            Text(item.title).font(.system(size: 12.5, weight: item.unread ? .semibold : .regular)).lineLimit(1)
-                            if item.pinned { Image(systemName: "pin.fill").font(.system(size: 9)) }
-                        }
-                        Text(Date(timeIntervalSince1970: item.updatedAt / 1000).appRelative()).font(.system(size: 10.5)).foregroundStyle(Theme.tertiary)
-                        if let git = item.git, git.repo {
-                            Text(verbatim: git.branch ?? "").font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).truncationMode(.middle)
-                            if !git.changes.isEmpty {
-                                HStack(spacing: 5) {
-                                    if let added = git.additions, let deleted = git.deletions {
-                                        Text(verbatim: "+\(added) −\(deleted)").foregroundStyle(Theme.secondary)
-                                    }
-                                    Label(String(git.changes.count), systemImage: "doc.on.doc").foregroundStyle(Theme.tertiary)
-                                }.font(.system(size: 10.5, design: .monospaced))
-                                    .help(git.summaryPartial == true ? tr("Le righe dei file non tracciati non sono incluse nel conteggio") : tr("Stato attuale della cartella condivisa"))
-                            }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Text(item.title).font(.system(size: 12.5, weight: item.unread ? .semibold : .regular)).lineLimit(1)
+                        if item.pinned { Image(systemName: "pin.fill").font(.system(size: 9)) }
+                    }
+                    Text(Date(timeIntervalSince1970: item.updatedAt / 1000).appRelative()).font(.system(size: 10.5)).foregroundStyle(Theme.tertiary)
+                    if let git = item.git, git.repo {
+                        Text(verbatim: git.branch ?? "").font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.secondary).lineLimit(1).truncationMode(.middle)
+                        if !git.changes.isEmpty {
+                            HStack(spacing: 5) {
+                                if let added = git.additions, let deleted = git.deletions {
+                                    Text(verbatim: "+\(added) −\(deleted)").foregroundStyle(Theme.secondary)
+                                }
+                                Label(String(git.changes.count), systemImage: "doc.on.doc").foregroundStyle(Theme.tertiary)
+                            }.font(.system(size: 10.5, design: .monospaced))
+                                .help(git.summaryPartial == true ? tr("Le righe dei file non tracciati non sono incluse nel conteggio") : tr("Stato attuale della cartella condivisa"))
                         }
                     }
-                    Spacer(minLength: 0)
                 }
+                Spacer(minLength: 0)
             }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 8).fill(bot.threadId == item.threadId ? Theme.raised : .clear))
         }

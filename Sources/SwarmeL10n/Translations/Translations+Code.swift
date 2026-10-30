@@ -17,6 +17,8 @@ extension Translations {
         "Compatta con riassunto": "Compact with summary",
         "Contesto dell'ultima richiesta al modello; non è il totale dei token fatturati": "Context of the last model request; separate from total billable tokens",
         "Colonna Chat (⌘⇧L)": "Chat column (⌘⇧L)",
+        "Nascosta": "Hidden",
+        "Visibile": "Visible",
         "Cerca titolo o branch; Invio nei messaggi": "Search title or branch; Enter for messages",
         "Tutte": "All",
         "Al lavoro": "Working",

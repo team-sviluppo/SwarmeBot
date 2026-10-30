@@ -108,6 +108,9 @@ member's model (or its first local member when the responder policy has no selec
 
 Code bots get a collapsible **Chat** column (⌘⇧L, remembered per bot and engine), with date groups, title/branch
 filtering, working/unread filters and a branch filter. Enter searches the bot's message history and shows snippets.
+The chat icon in the header opens and closes the column completely; new chats are created with its **+** button.
+Code uses this navigation in place of the header's new-chat button and task menu. Older engines without the column
+keep the core navigation. The header's context indicator stays legible and read-only while a turn runs.
 The context menu renames, pins, archives, opens a terminal/editor, copies the path or deletes a chat; archived chats
 stay in a collapsed group. Read/archive markers live on the engine. ⌘K includes Code chats and branch/script actions.
 The branch and diff counts in the column describe the **current shared working folder**, rather than a separate
@@ -141,7 +144,8 @@ An engine whose plugin is older than 1.5.0 has none of this, and the app shows n
 and read before each turn. In Plan the agent is told to explore and propose a plan and to change nothing, and the chat's
 own folder is linked read-only (the guard of the project's linked folders: `--add-dir` and a rule for Claude, a refused
 permission for the engines that ask before writing). It is **not a sandbox**: a command that writes without asking is what
-it cannot stop. The app's chip switches the mode; under the newest reply of a chat in Plan it offers *Approve and execute*,
+it cannot stop. Execute is the default; the composer mode picker is currently hidden. Existing Plan sessions (including
+workflow-managed ones) keep their mode; under the newest reply of a chat in Plan the app offers *Approve and execute*,
 which switches to Execute and tells the agent to go ahead (writing a correction instead asks for a new plan).
 
 **Review by another bot.** *Ask for a review from…* (in the Diff tab and under a reply's badge) sends the diff to a second

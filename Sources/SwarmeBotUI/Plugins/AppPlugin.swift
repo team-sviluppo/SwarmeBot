@@ -116,6 +116,8 @@ public protocol AppPlugin: AnyObject {
     /// Output panels between the transcript and the composer.
     func bottomPanels(_ chat: ChatContext) -> [PluginView]
     func chatColumn(_ chat: ChatContext) -> PluginView?
+    /// Replaces the header's new-chat button and task menu; nil keeps the core controls.
+    func chatNavigation(_ chat: ChatContext) -> PluginView?
     func commands(_ model: AppModel) async -> [PluginCommand]
     /// Rows of the settings of a bot or channel (the plugin's switch, its options).
     func settingsSections(_ scope: SettingsScope) -> [PluginView]
@@ -133,6 +135,7 @@ public extension AppPlugin {
     func inspectorTabs(_ chat: ChatContext) -> [PluginTab] { [] }
     func bottomPanels(_ chat: ChatContext) -> [PluginView] { [] }
     func chatColumn(_ chat: ChatContext) -> PluginView? { nil }
+    func chatNavigation(_ chat: ChatContext) -> PluginView? { nil }
     func commands(_ model: AppModel) async -> [PluginCommand] { [] }
     func settingsSections(_ scope: SettingsScope) -> [PluginView] { [] }
     func chatChanged(_ chat: ChatContext) async {}
@@ -193,6 +196,10 @@ public final class PluginHost {
 
     public func chatColumn(_ chat: ChatContext) -> PluginView? {
         active(for: chat).lazy.compactMap { $0.chatColumn(chat) }.first
+    }
+
+    public func chatNavigation(_ chat: ChatContext) -> PluginView? {
+        active(for: chat).lazy.compactMap { $0.chatNavigation(chat) }.first
     }
 
     public func commands(_ model: AppModel) async -> [PluginCommand] {
