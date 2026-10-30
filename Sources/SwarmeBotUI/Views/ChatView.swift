@@ -305,6 +305,17 @@ struct MessageRow: View {
                             .contextMenu { messageMenu }
                     }
                     .replyFileLinks(threadId: threadId, model: model)
+                    if !chatContext.isBusy, model.selectedRoom?.guest == nil, message.interrupted != true, message.review == nil,
+                       model.visibleTranscript(threadId).last(where: { $0.kind == .text || $0.kind == .options })?.id == message.id {
+                        let options = SuggestedChoices.parse(message.text ?? "")
+                        if !options.isEmpty {
+                            QuestionChoicesView(options: options) { selected, custom in
+                                guard model.selectedThreadId == threadId else { return }
+                                await model.send(custom ?? selected.first ?? "")
+                            }.id(message.id)
+                            .frame(maxWidth: 600)
+                        }
+                    }
                     if let turn, let footer = PluginHost.shared.replyFooter(message, chatContext, turn) {
                         footer
                     } else {

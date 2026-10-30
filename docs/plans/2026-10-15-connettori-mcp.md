@@ -567,3 +567,25 @@ cambiano. Per il resto si verifica con:
     turno; secondo login senza nuova registrazione; refresh revocato → disconnesso; callback con `state`
     sconosciuto → 400; logout.
 - **Non verificato dal vivo**: un server MCP OAuth reale (serve il tuo account nel browser).
+
+
+### Correzioni Codex del 30 ottobre 2026
+
+- `thread/start` risponde mentre l'avvio MCP è ancora in corso: prima di `turn/start`,
+  SwarmeBot richiede `mcpServerStatus/list` sulla sessione, segue la paginazione e controlla
+  che i server assegnati siano presenti. I vecchi app-server senza questo metodo restano supportati.
+- Montaggio esplicitamente abilitato, avvio fino a 120 s e chiamate fino a 960 s: il primo
+  `tools/list` del proxy può attendere un connettore freddo. Le credenziali restano nell'ambiente,
+  solo i nomi delle variabili sono in argv.
+- Errori `mcpServer/startupStatus/updated`, inventario mancante ed errori di discovery sono
+  visibili nella chat. Prima gli eventi di avvio con thread id potevano essere scartati perché
+  arrivavano prima della risposta di `thread/start`.
+- Verificati: build macOS e Linux ARM64; `connectors_e2e.py` con Codex e Claude su entrambi;
+  discovery con Codex Linux ufficiale 0.165.0 (checksum fissato dal progetto), anche con avvio
+  MCP ritardato di 20 s. La risposta `thread/start` precede `ready`; l'inventario attende il server.
+  Prova senza login e senza `turn/start`, quindi senza inferenze a pagamento.
+- Il server Linux dell'utente non è stato modificato né verificato direttamente. La corsa
+  all'avvio è una causa possibile del problema segnalato; eventuali errori specifici del server
+  saranno ora visibili. Non sono state eseguite prove di parità con il vecchio motore Node.
+- Riferimenti: [App Server](https://learn.chatgpt.com/docs/app-server),
+  [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).

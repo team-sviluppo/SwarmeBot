@@ -8,11 +8,14 @@ import AppKit
 import CompanionCore
 import SwarmeKit
 import UserNotifications
+import OSLog
 
 @MainActor
 final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationCenterBridge()
     weak var model: AppModel?
+    var showMainWindow: (() -> Void)?
+    private let log = Logger(subsystem: "com.swarmebot.mac", category: "notifications")
 
     /// UNUserNotificationCenter aborts the process outside an app bundle,
     /// which is exactly what `swift run` is.
@@ -28,22 +31,35 @@ final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate
         guard supported else { return }
         let center = UNUserNotificationCenter.current()
         center.delegate = self
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { [log] _, error in
+            if let error { log.error("Notification authorization failed: \(error.localizedDescription, privacy: .public)") }
+        }
     }
 
     private func deliver(_ frame: NotificationFrame) {
         guard supported, let model else { return }
         if let bot = model.state.bot(frame.botId), !bot.notifications { return }
         // the chat is on screen and the app is in front: nothing to tell
-        if NSApp.isActive, model.selection == .bot(frame.botId), !frame.isBlocking { return }
+        let chatVisible = NSApp.windows.contains {
+            $0.identifier?.rawValue.hasPrefix("main") == true && $0.isVisible && !$0.isMiniaturized
+                && $0.occlusionState.contains(.visible) && $0.isKeyWindow
+        }
+        if !Self.shouldDeliver(isActive: NSApp.isActive, chatVisible: chatVisible,
+                               selectedThread: model.selectedThreadId, frame: frame) { return }
         let content = UNMutableNotificationContent()
         content.title = frame.title.isEmpty ? frame.botName : frame.title
         content.body = frame.body
-        content.sound = frame.isBlocking ? .default : nil
-        content.userInfo = ["botId": frame.botId]
+        content.sound = .default
+        content.userInfo = ["botId": frame.botId, "threadId": frame.threadId]
         content.threadIdentifier = frame.threadId
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        UNUserNotificationCenter.current().add(request) { [log] error in
+            if let error { log.error("Notification delivery failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
+    static func shouldDeliver(isActive: Bool, chatVisible: Bool, selectedThread: String?, frame: NotificationFrame) -> Bool {
+        frame.isBlocking || !isActive || !chatVisible || selectedThread != frame.threadId
     }
 
     /// A GitHub source changed skills: they can run scripts, so say which.
@@ -65,9 +81,20 @@ final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let botId = response.notification.request.content.userInfo["botId"] as? String
+        let info = response.notification.request.content.userInfo
+        let botId = info["botId"] as? String
+        let threadId = info["threadId"] as? String
         Task { @MainActor in
-            if let botId { self.model?.selection = .bot(botId) }
+            if let model = self.model {
+                if let threadId, let room = model.state.rooms.first(where: { $0.threadId == threadId }) {
+                    model.selection = .room(room.id)
+                } else if let botId {
+                    if let threadId, model.state.bot(botId)?.threadId != threadId {
+                        await model.openTask(botId: botId, threadId: threadId)
+                    } else { model.selection = .bot(botId) }
+                }
+            }
+            self.showMainWindow?()
             NSApp.activate(ignoringOtherApps: true)
             completionHandler()
         }

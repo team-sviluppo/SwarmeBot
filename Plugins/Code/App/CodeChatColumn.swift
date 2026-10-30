@@ -76,6 +76,8 @@ struct CodeChatColumn: View {
                         .buttonStyle(.plain).disabled(model.isBusy(bot)).help(tr("Nuova chat"))
                 }
             }.padding(12).frame(height: 50)
+            CodeContextMeter(chat: CodeChat(bot: bot), compact: collapsed)
+                .padding(.horizontal, collapsed ? 0 : 10).padding(.bottom, 8)
             if !collapsed {
                 TextField(tr("Cerca chat"), text: $query)
                     .textFieldStyle(.roundedBorder).font(.system(size: 11.5)).padding(.horizontal, 10)

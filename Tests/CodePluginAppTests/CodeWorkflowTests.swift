@@ -313,7 +313,7 @@ final class CodeChannelAppTests: XCTestCase {
         let model = AppModel()
         model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.3.0", enabled: true)]
         let context = chat(try room(#","codeMode":true"#), model: model)
-        XCTAssertEqual(plugin.composerAccessories(context).count, 5)
+        XCTAssertEqual(plugin.composerAccessories(context).count, 6)
         XCTAssertEqual(plugin.inspectorTabs(context).map(\.id), ["code.diff"])
     }
 

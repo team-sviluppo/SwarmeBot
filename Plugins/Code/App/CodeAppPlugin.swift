@@ -24,6 +24,7 @@ public final class CodeAppPlugin: AppPlugin {
     public func composerAccessories(_ chat: ChatContext) -> [PluginView] {
         guard let code = CodeChat(chat) else { return [] }
         var chips = [PluginView(GitBranchChip(chat: code, state: state))]
+        if code.kind == .room { chips.insert(PluginView(CodeContextMeter(chat: code)), at: 0) }
         if state.engineHasGitSync(chat.model) { chips.append(PluginView(CodeSyncChip(chat: code, state: state))) }
         if state.engineHasPhase4(chat.model) {
             chips.append(PluginView(CodePlanToggle(chat: code, state: state)))

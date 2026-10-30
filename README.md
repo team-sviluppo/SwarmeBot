@@ -88,7 +88,7 @@ servers and also has private bots of its own.
   "always allow" rules.
 - **Edit and resend** a message and move between versions of the conversation (‹ 1/3 ›).
 - **Queued messages**: write while a bot or channel is working; **Steer now** interrupts the turn and sends the new direction. **Stop** keeps the partial reply.
-- **Session context** from Claude and Codex, separate from billable usage. Compact a bot chat with a summary; start a new session in a channel, optionally with its default member’s summary. History stays searchable.
+- **Session context** from Claude and Codex, separate from billable usage. Code mode keeps a percentage and meter in the chat column, also when collapsed; channels show it by the composer. Unknown limits remain unavailable. Compact a bot chat with a summary; start a new session in a channel, optionally with its default member’s summary. History stays searchable.
 - **Tasks**: a bot's work is split into tasks (threads) you can create, switch, rename, pin, delete,
   each with its cost and token usage.
 - **Attachments**: paste images, drop files, attach long text as a chip; reactions on messages.
@@ -179,7 +179,8 @@ SwarmeBot reads these folders directly; sync or Git operations are handled by yo
 - Sidebar with sections (user sections, pinned, unread, hidden), context menus, search.
 - **⌘K** command palette: jump to chats, run commands, search messages and jump to the hit.
 - **Inspector**: Details (persona, auto-approve, notifications, working folder), Library, Computer.
-- macOS **notifications**, Dock badge and menu.
+- macOS **notifications** for finished turns and pending approvals/questions, including with the chat window closed or minimized. Clicking a notification reopens its chat. Dock badge and menu.
+- **Clickable choices** for provider questions and final replies with lettered or numbered alternatives. “Other” opens a free-text answer; grouped Codex questions keep distinct answers.
 - **Settings** (⌘,, always this Mac's engine): language and theme, profile and channel timeouts;
   **Engines** (executable, test, visibility, install and log in through Terminal); **Remote servers**;
   **Connectors**; **Skills**; **Phone**; **Mac control**; **Keys and services** (API keys in the macOS

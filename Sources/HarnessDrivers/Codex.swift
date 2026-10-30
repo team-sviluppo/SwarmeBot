@@ -518,45 +518,68 @@ final class CodexTurn {
         let method = message["method"]?.string ?? ""
         let params = message["params"] ?? .null
         let legacy = method == "execCommandApproval" || method == "applyPatchApproval"
-        let isQuestion = method == "item/tool/requestUserInput"
-        let tool = method == "item/fileChange/requestApproval" || method == "applyPatchApproval" ? "edit" : isQuestion ? "ask_user" : "shell"
-        if instance.fullAuto, !isQuestion {
+        let isQuestion = method == "item/tool/requestUserInput" || method == "tool/requestUserInput"
+        if isQuestion {
+            openQuestions(id: id, questions: params["questions"]?.array ?? [])
+            return
+        }
+        let tool = method == "item/fileChange/requestApproval" || method == "applyPatchApproval" ? "edit" : "shell"
+        if instance.fullAuto {
             send(["jsonrpc": "2.0", "id": id, "result": ["decision": legacy ? "approved" : "accept"]])
             return
         }
         let requestId = newId()
-        let questions = params["questions"]?.array
-        let summary: String
-        if let command = params["command"]?.string { summary = String(command.prefix(200)) }
-        else if let questions { summary = questions.compactMap { $0["question"]?.string ?? $0["header"]?.string }.filter { !$0.isEmpty }.joined(separator: " · ") }
-        else if let reason = params["reason"]?.string { summary = reason }
-        else { summary = tool }
-        let choices: [String]? = isQuestion ? Array((questions?.first?["options"]?.array ?? []).compactMap { $0["label"]?.string }.prefix(5)) : nil
+        let summary = params["command"]?.string.map { String($0.prefix(200)) } ?? params["reason"]?.string ?? tool
         var timer: Task<Void, Never>?
         let finish: (String, String?, String) -> Void = { [weak self] behavior, text, source in
             guard let self, self.asks.removeValue(forKey: requestId) != nil else { return }
             timer?.cancel()
-            if isQuestion {
-                var answers = JSONObject()
-                for question in questions ?? [] {
-                    let key = question["id"].flatMap(ACPTurn.text) ?? "undefined"
-                    answers[key] = ["answers": [.string(text.flatMap { $0.isEmpty ? nil : $0 } ?? Self.questionTimeoutNote)]]
-                }
-                self.send(["jsonrpc": "2.0", "id": id, "result": ["answers": .object(answers)]])
-            } else {
-                let decision = behavior == "allow" ? (legacy ? "approved" : "accept") : (legacy ? "denied" : "decline")
-                self.send(["jsonrpc": "2.0", "id": id, "result": ["decision": .string(decision)]])
-            }
+            let decision = behavior == "allow" ? (legacy ? "approved" : "accept") : (legacy ? "denied" : "decline")
+            self.send(["jsonrpc": "2.0", "id": id, "result": ["decision": .string(decision)]])
             self.emit(requestId: requestId, .requestResolved(behavior: behavior, source: source, approvalScope: nil))
         }
         timer = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 15 * 60 * 1_000_000_000)
             guard !Task.isCancelled else { return }
-            if isQuestion { finish("answer", Self.questionTimeoutNote, "timeout") } else { finish("deny", acpDenyTimeoutNote, "timeout") }
+            finish("deny", acpDenyTimeoutNote, "timeout")
         }
         asks[requestId] = finish
-        emit(requestId: requestId, .requestOpened(requestType: isQuestion ? "question" : "permission", tool: tool, summary: summary,
-                                                  choices: choices, multiSelect: nil, approvalScope: nil))
+        emit(requestId: requestId, .requestOpened(requestType: "permission", tool: tool, summary: summary,
+                                                  choices: nil, multiSelect: nil, approvalScope: nil))
+    }
+
+    /// Each question has its own card and answer; the provider receives the
+    /// complete response once, after all cards have resolved.
+    private func openQuestions(id: JSON, questions: [JSON]) {
+        guard !questions.isEmpty else {
+            send(["jsonrpc": "2.0", "id": id, "result": ["answers": [:]]])
+            return
+        }
+        var answers = JSONObject()
+        var remaining = questions.count
+        for (index, question) in questions.enumerated() {
+            let requestId = newId()
+            let key = question["id"].flatMap(ACPTurn.text) ?? "question-\(index)"
+            var timer: Task<Void, Never>?
+            let finish: (String, String?, String) -> Void = { [weak self] behavior, text, source in
+                guard let self, self.asks.removeValue(forKey: requestId) != nil else { return }
+                timer?.cancel()
+                answers[key] = ["answers": [.string(text.flatMap { $0.isEmpty ? nil : $0 } ?? Self.questionTimeoutNote)]]
+                remaining -= 1
+                self.emit(requestId: requestId, .requestResolved(behavior: "answer", source: source, approvalScope: nil))
+                if remaining == 0 { self.send(["jsonrpc": "2.0", "id": id, "result": ["answers": .object(answers)]]) }
+            }
+            asks[requestId] = finish
+            timer = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 15 * 60 * 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                finish("answer", Self.questionTimeoutNote, "timeout")
+            }
+            let options = (question["options"]?.array ?? []).compactMap { $0["label"]?.string }
+            emit(requestId: requestId, .requestOpened(requestType: "question", tool: "ask_user",
+                summary: question["question"]?.string ?? question["header"]?.string ?? "Question",
+                choices: options, multiSelect: nil, approvalScope: nil))
+        }
     }
 
     private func handleNotification(_ message: JSON) {
@@ -569,6 +592,14 @@ final class CodexTurn {
             var task = subtasks.tasks[id] ?? SubagentState(id: id, parentId: parent, title: id)
             task.title = thread["agentNickname"]?.string ?? task.title
             subtasks.update(task)
+            return
+        }
+        // Startup can finish while thread/start is still pending, before the
+        // provider thread id is known. Do not silently discard these failures.
+        if method == "mcpServer/startupStatus/updated", p["status"]?.string == "failed" {
+            let name = p["name"]?.string ?? "server"
+            let detail = p["error"]?.string ?? p["failureReason"]?.string ?? "startup failed"
+            emit(.runtimeError(message: "MCP \(name): \(detail)", setup: false))
             return
         }
         let source = p["threadId"]?.string
@@ -798,7 +829,45 @@ final class CodexTurn {
             "-c", "\(prefix).args=\(JSON.strings(server.args).serialized())",
             "-c", "\(prefix).env_vars=\(JSON.strings(server.env.keys).serialized())",
             "-c", "\(prefix).default_tools_approval_mode=\"auto\"",
+            "-c", "\(prefix).enabled=true",
+            // The proxy's first tools/list waits for a cold connector (npx,
+            // OAuth discovery). Do not depend on a CLI version's short default.
+            "-c", "\(prefix).startup_timeout_sec=120",
+            "-c", "\(prefix).tool_timeout_sec=960",
         ]
+    }
+
+    /// thread/start returns before MCP startup completes. Resolve the tool
+    /// inventory on this thread before asking the model to use its connectors.
+    private func prepareMCP(threadId: String) async throws {
+        var expected = turn.connectors.map(\.name)
+        if turn.agents != nil { expected.append("agents") }
+        if turn.computer != nil { expected.append("computer") }
+        if turn.secrets != nil { expected.append(VaultTool.serverName) }
+        guard !expected.isEmpty else { return }
+        var seen = Set<String>()
+        var cursor: JSON = .null
+        var cursors = Set<String>()
+        do {
+            repeat {
+                let result = try await request("mcpServerStatus/list", ["threadId": .string(threadId), "cursor": cursor, "limit": 100], timeout: 130)
+                for server in result["data"]?.array ?? [] {
+                    guard let name = server["name"]?.string, expected.contains(name) else { continue }
+                    seen.insert(name)
+                    if let error = server["toolsError"]?.string, !error.isEmpty {
+                        emit(.runtimeError(message: "MCP \(name): \(error)", setup: false))
+                    }
+                }
+                if let next = result["nextCursor"]?.string, cursors.insert(next).inserted { cursor = .string(next) }
+                else { break }
+            } while !settled
+            for name in expected where !seen.contains(name) {
+                emit(.runtimeError(message: "MCP \(name): the configured server is missing from Codex's tool inventory", setup: false))
+            }
+        } catch let error as RPCError where error.code?.int == -32601 {
+            // Older app-server versions have no inventory RPC; the explicit
+            // startup timeout still applies to their own MCP initialization.
+        }
     }
 
     private func run(cwd: String) async throws {
@@ -833,6 +902,7 @@ final class CodexTurn {
         effectiveProvider = effectiveProvider ?? CodexCatalog.decode(turn.model).provider
         providerThreadId = codexThread
         emit(.sessionStarted(sessionId: codexThread, model: startedModel ?? turn.model, resumeCursor: nil))
+        if let codexThread { try await prepareMCP(threadId: codexThread) }
         var params: JSONObject = [
             "threadId": JSON.from(codexThread),
             "input": [["type": "text", "text": .string(turn.system.map { "\($0)\n\n\(turn.text)" } ?? turn.text)]],

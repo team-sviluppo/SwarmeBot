@@ -133,6 +133,27 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Notifiche, scelte e contesto (2026-10-30): il completamento senza testo invia comunque
+  `notify`; anche i turni nei canali notificano. Sul Mac la visibilità richiede una finestra
+  chat visibile e in primo piano; il click riapre finestra e thread corretti. Il supporto vale
+  con app in esecuzione, anche senza finestre, non dopo l'uscita completa dall'app.
+- Le domande multiple Codex diventano card distinte: una risposta per id e un'unica risposta
+  RPC quando tutte sono risolte. Il bot e il watchdog restano in attesa finché esiste una card.
+  Le card e le alternative testuali finali offrono “Altro” con campo libero. Il riconoscimento
+  testuale accetta sequenze A/B/C e 1/2/3, richiede una domanda ed esclude blocchi di codice.
+- In Code il contesto è visibile nella colonna chat anche compressa; nei canali compare presso
+  il compositore. Claude usa il `contextWindow` di `result.modelUsage` insieme ai token
+  dell'ultima richiesta, senza usare i token di fatturazione cumulativi come numeratore.
+  Se il motore non comunica il limite si mostra un valore non disponibile.
+- Verifica: build Mac e Linux ARM64; suite automatica con esclusione del solo
+  `BotTransferTests.testAFailedMoveLeavesBothEnginesAsTheyWere`, già documentato come bloccante
+  (733 test, 14 integrazioni opzionali saltate, zero errori);
+  test mirati su domande multiple, stato d'attesa, notifiche senza testo, parsing e contesto;
+  scenario HTTP/SSE Codex `interactions`; schermate dell'app su dati isolati.
+  L'interazione automatica con l'app QA non è stata autorizzata: click reali e banner del
+  Centro Notifiche macOS non verificati. Vedere anche le correzioni del 30 ottobre nel
+  [piano MCP](2026-10-15-connettori-mcp.md). Nessuna parità Node eseguita.
+
 - Integrazione PR #27–#29 (2026-10-29): aggiornare ogni branch da `main` dopo il merge
   della PR precedente. Nel driver Codex conservare insieme costo stimato e registro dei
   sottoagenti, con un solo `providerThreadId` e `killTree()` al termine della run.

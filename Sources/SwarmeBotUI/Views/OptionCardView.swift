@@ -12,10 +12,6 @@ struct OptionCardView: View {
     let card: OptionCard
     let threadId: String
     @Environment(AppModel.self) private var model
-    @State private var sending = false
-    @State private var custom = ""
-    @State private var picked: Set<String> = []
-    @State private var hovered: String?
 
     var body: some View {
         Group {
@@ -29,7 +25,6 @@ struct OptionCardView: View {
                 .stroke(border, lineWidth: 1)
         )
         .opacity(card.isPermission && !card.isPending ? 0.7 : 1)
-        .disabled(sending)
     }
 
     private var border: Color {
@@ -107,64 +102,14 @@ struct OptionCardView: View {
                 }
             }
             if card.isPending {
-                VStack(spacing: 0) {
-                    ForEach(Array(card.options.enumerated()), id: \.offset) { index, option in
-                        Button {
-                            if card.multiSelect == true {
-                                if picked.contains(option) { picked.remove(option) } else { picked.insert(option) }
-                            } else {
-                                answer(option)
-                            }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Text(String(UnicodeScalar(UInt8(65 + index % 26))))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(Theme.secondary)
-                                    .frame(width: 24, height: 24)
-                                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.raised))
-                                Text(option).font(.system(size: 15)).foregroundStyle(Theme.ink)
-                                    .multilineTextAlignment(.leading)
-                                Spacer(minLength: 0)
-                                if card.multiSelect == true, picked.contains(option) {
-                                    Image(systemName: "checkmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent)
-                                }
-                            }
-                            .padding(12)
-                            .background(picked.contains(option) ? Theme.raised : hovered == option ? Theme.raised.opacity(0.6) : .clear)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .onHover { inside in
-                            if inside { hovered = option } else if hovered == option { hovered = nil }
-                        }
-                        if index < card.options.count - 1 {
-                            Rectangle().fill(Theme.hairline.opacity(0.4)).frame(height: 1)
-                        }
+                QuestionChoicesView(options: card.options, multiSelect: card.multiSelect == true) { selected, custom in
+                    if card.multiSelect == true {
+                        await model.answer(threadId: threadId, card: card, selected: selected, custom: custom)
+                    } else if let choice = custom ?? selected.first {
+                        await model.answer(threadId: threadId, card: card, choice: choice)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous).stroke(Theme.hairline.opacity(0.4)))
-                .padding(.top, 12)
-                HStack(spacing: 8) {
-                    TextField("", text: $custom, prompt: Text(tr("Scrivi la tua risposta")).foregroundStyle(Theme.secondary))
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 15))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: Theme.radiusRow).fill(Theme.inset))
-                        .overlay(RoundedRectangle(cornerRadius: Theme.radiusRow).stroke(Theme.hairline.opacity(0.4)))
-                        .onSubmit(submitCustom)
-                    if card.multiSelect == true || !custom.isEmpty {
-                        Button(tr("Invia"), action: submitCustom)
-                            .buttonStyle(.plain)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Theme.accentInk)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: Theme.radiusRow).fill(Theme.accent))
-                            .disabled(card.multiSelect == true ? picked.isEmpty && custom.isEmpty : custom.isEmpty)
-                    }
-                }
+                .id(card.requestId)
                 .padding(.top, 12)
             } else {
                 HStack(spacing: 6) {
@@ -180,24 +125,4 @@ struct OptionCardView: View {
         }
     }
 
-    private func submitCustom() {
-        if card.multiSelect == true {
-            sending = true
-            let ordered = card.options.filter(picked.contains)
-            Task {
-                await model.answer(threadId: threadId, card: card, selected: ordered, custom: custom.isEmpty ? nil : custom)
-                sending = false
-            }
-        } else if !custom.isEmpty {
-            answer(custom)
-        }
-    }
-
-    private func answer(_ choice: String) {
-        sending = true
-        Task {
-            await model.answer(threadId: threadId, card: card, choice: choice)
-            sending = false
-        }
-    }
 }
