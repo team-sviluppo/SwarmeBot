@@ -55,7 +55,7 @@ enum CodeCommit {
     }
 
     static func run(folder: String, request: Request) async throws -> JSON {
-        guard let state = await ThreadGit.inspect(folder: folder) else { throw HTTPError(400, "not a git repository") }
+        guard let state = try await ThreadGit.inspect(folder: folder) else { throw HTTPError(400, "not a git repository") }
         let root = state.root
         guard running.insert(root).inserted else { throw HTTPError(409, "a commit is already running in this repository") }
         defer { running.remove(root) }

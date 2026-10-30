@@ -169,4 +169,54 @@ final class GitSyncTests: XCTestCase {
         let plugins = await repo.callRaw("GET", "/api/plugins")
         XCTAssertEqual(plugins.json?["plugins"]?.array?.first { $0["id"] == "code" }?["version"], "1.6.0")
     }
+
+    // MARK: a git that is slow
+
+    /// A `git` that takes longer than the engine waits, standing in for a large repository or a machine under load.
+    private func slowGit(_ repo: RepoFixture) throws {
+        let script = repo.paths.root.appendingPathComponent("slow-git")
+        try Data("#!/bin/sh\nsleep 5\n".utf8).write(to: script)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        ThreadGit.gitExecutable = script.path
+        ThreadGit.inspectTimeout = 0.5
+    }
+
+    override func tearDown() async throws {
+        ThreadGit.gitExecutable = "git"
+        ThreadGit.inspectTimeout = 30
+    }
+
+    func testAGitThatDoesNotAnswerIsNotAFolderThatIsNotARepository() async throws {
+        let repo = try await RepoFixture()
+        try repo.initRepo()
+        try slowGit(repo)
+        // the state read all the time says git was slow, so that a client keeps what it knew
+        let state = await repo.call("GET", "git")
+        XCTAssertEqual(state.status, 200)
+        XCTAssertEqual(state.json?["repo"], false)
+        XCTAssertTrue(state.json?["unavailable"]?.string?.contains("git did not answer") == true, String(describing: state.json))
+        // what needs the repository says 504, not "not a git repository"
+        for action in ["pull", "push", "fetch"] {
+            let answer = await repo.call("POST", "git/\(action)", body: [:])
+            XCTAssertEqual(answer.status, 504, "\(action): \(String(describing: answer.json))")
+            XCTAssertTrue(answer.json?["error"]?.string?.contains("git did not answer") == true)
+        }
+        let commit = await repo.call("POST", "git/commit", body: ["message": "x"])
+        XCTAssertEqual(commit.status, 504)
+        // git back to normal, the same folder is a repository again
+        ThreadGit.gitExecutable = "git"
+        let back = await repo.call("GET", "git")
+        XCTAssertEqual(back.json?["repo"], true)
+        XCTAssertNil(back.json?["unavailable"])
+    }
+
+    func testAFolderThatIsNotARepositoryIsStillSaidSoWhenGitAnswers() async throws {
+        let plain = try await RepoFixture()
+        let state = await plain.call("GET", "git")
+        XCTAssertEqual(state.json?["repo"], false)
+        XCTAssertNil(state.json?["unavailable"], "git answered: it is not a repository")
+        let pull = await plain.call("POST", "git/pull", body: [:])
+        XCTAssertEqual(pull.status, 400)
+    }
 }
+

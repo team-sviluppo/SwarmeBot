@@ -157,7 +157,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             let threadId = request.params["tid"] ?? ""
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: threadId)?.first else { return .response(.error(404, "no such thread")) }
             guard let reviewer = try request.http.json()["botId"]?.string, !reviewer.isEmpty else { throw HTTPError(400, "botId is required") }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             let material = try await CodeReviews.material(root: repo.root, changes: repo.changes.map(\.path))
             let run = try self.reviews.start(harness: harness, originThread: threadId, reviewerId: reviewer, root: repo.root, branch: repo.detached ? nil : repo.branch,
                                              files: material.files, diff: material.diff, truncated: material.truncated)
@@ -176,19 +176,19 @@ public final class CodeEnginePlugin: EnginePlugin {
         router.get("/api/threads/:tid/code/pr") { request in
             let harness = request.harness
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else { return .response(.error(404, "no such thread")) }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.json(200, ["available": true, "pr": .null])) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.json(200, ["available": true, "pr": .null])) }
             return .response(.json(200, try await self.pullRequests.status(root: repo.root, branch: repo.detached ? nil : repo.branch, refresh: request.http.query["refresh"] == "1")))
         }
         router.get("/api/threads/:tid/code/pr/ci-failures") { request in
             let harness = request.harness
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else { return .response(.error(404, "no such thread")) }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             return .response(.json(200, try await self.pullRequests.ciFailures(root: repo.root, branch: repo.detached ? nil : repo.branch)))
         }
         router.get("/api/threads/:tid/code/pr/comments") { request in
             let harness = request.harness
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else { return .response(.error(404, "no such thread")) }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             return .response(.json(200, try await self.pullRequests.comments(root: repo.root, branch: repo.detached ? nil : repo.branch)))
         }
         router.get("/api/projects") { request in
@@ -227,7 +227,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: threadId)?.first else {
                 return .response(.error(404, "no such thread"))
             }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             guard !ThreadGit.botWorking(in: repo.root, harness: harness, threadId: threadId) else {
                 return .response(.error(409, "a bot is working — let it finish before switching branches"))
             }
@@ -240,7 +240,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else {
                 return .response(.error(404, "no such thread"))
             }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             guard (await GitRun.text(["remote"], in: repo.root)).map({ !$0.isEmpty }) == true else { return .response(.error(409, "this repository has no remote")) }
             // only the remote-tracking refs move: the working tree and the branch are not touched, so a bot may be working
             guard let output = await GitRun.git(["fetch", "--prune"], in: repo.root, timeout: 120) else { return .response(.error(504, "git fetch did not complete")) }
@@ -254,7 +254,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: threadId)?.first else {
                 return .response(.error(404, "no such thread"))
             }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             guard !repo.detached else { return .response(.error(400, "a detached HEAD has nothing to pull")) }
             guard !ThreadGit.botWorking(in: repo.root, harness: harness, threadId: threadId) else {
                 return .response(.error(409, "a bot is working — let it finish before pulling"))
@@ -273,7 +273,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else {
                 return .response(.error(404, "no such thread"))
             }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             guard !repo.detached else { return .response(.error(400, "a detached HEAD cannot be pushed")) }
             // the working tree is not touched, so a bot may be working; what is pushed is what is committed
             try await CodeCommit.push(root: repo.root, branch: repo.branch)
@@ -285,7 +285,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else {
                 return .response(.error(404, "no such thread"))
             }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             let result = try await GitDiff.diff(root: repo.root, path: request.http.query["path"])
             var answer: JSONObject = ["diff": .string(result.diff), "truncated": .bool(result.truncated), "binary": .bool(result.binary)]
             answer["path"] = result.path.map { .string($0) } ?? .null
@@ -297,7 +297,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: threadId)?.first else {
                 return .response(.error(404, "no such thread"))
             }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             let message = try await CommitMessage.generate(harness: harness, threadId: threadId, root: repo.root)
             return .response(.json(200, ["message": .string(message)]))
         }
@@ -308,7 +308,7 @@ public final class CodeEnginePlugin: EnginePlugin {
                 return .response(.error(404, "no such thread"))
             }
             let parsed = try CodeCommit.parse(try request.http.json())
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             guard !ThreadGit.botWorking(in: repo.root, harness: harness, threadId: threadId) else {
                 return .response(.error(409, "a bot is working — let it finish before committing"))
             }
@@ -321,7 +321,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: request.params["tid"] ?? "")?.first else {
                 return .response(.error(404, "no such thread"))
             }
-            let repo = await ThreadGit.inspect(folder: folder)
+            let repo = try await ThreadGit.inspect(folder: folder)
             let base = repo?.root ?? folder
             let listed = await CodeFiles.list(folder: base, root: repo?.root)
             let changed = (repo?.changes ?? []).map(\.path)
@@ -349,7 +349,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let folder = ThreadFiles.roots(harness.store, harness.paths, threadId: threadId)?.first else {
                 return .response(.error(404, "no such thread"))
             }
-            guard let repo = await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
+            guard let repo = try await ThreadGit.inspect(folder: folder) else { return .response(.error(400, "not a git repository")) }
             guard !ThreadGit.botWorking(in: repo.root, harness: harness, threadId: threadId) else {
                 return .response(.error(409, "a bot is working — let it finish before switching branches"))
             }

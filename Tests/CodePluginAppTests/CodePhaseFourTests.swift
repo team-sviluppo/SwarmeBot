@@ -140,5 +140,13 @@ final class CodePhaseFourTests: XCTestCase {
         XCTAssertTrue(CodeState.version("1.10.0", atLeast: "1.6.0"))
         XCTAssertFalse(CodeState.version("1.5.0", atLeast: "1.6.0"))
     }
+
+    func testAnAnswerThatSaysGitWasSlowIsNotAFolderWithoutARepository() throws {
+        let slow = try JSONDecoder().decode(ThreadGitState.self, from: Data(#"{"repo":false,"folder":"/p","unavailable":"git did not answer"}"#.utf8))
+        XCTAssertFalse(slow.repo)
+        XCTAssertEqual(slow.unavailable, "git did not answer")
+        let plain = try JSONDecoder().decode(ThreadGitState.self, from: Data(#"{"repo":false,"folder":"/p"}"#.utf8))
+        XCTAssertNil(plain.unavailable)
+    }
 }
 

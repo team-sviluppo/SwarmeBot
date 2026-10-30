@@ -185,3 +185,7 @@ In the app, a chip after the branch shows `↑n ↓m` (a check when in step) and
 pull when behind, push when ahead; the first step that fails stops the rest, with git's message under the buttons). The app's
 requests to a route that waits on git (these, and a commit that pushes or opens a pull request) allow four minutes instead of twenty seconds.
 
+**A git that does not answer** is not a folder that is not a repository: git gets 30 seconds (it was 8) to say what a folder is, and past
+that `GET /api/threads/:tid/git` answers `{repo:false, folder, unavailable}` (a client keeps what it last knew) while the routes that need the
+repository answer **504** `git did not answer…`. A folder that is really not a repository still answers 400 `not a git repository`.
+

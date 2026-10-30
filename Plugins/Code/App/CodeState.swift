@@ -286,6 +286,8 @@ public final class CodeState {
     func refreshGit(model: AppModel, threadId: String) async {
         guard let client = model.client else { return }
         let state = try? await client.threadGit(threadId: threadId)
+        // git was slow this time: keep what was last known rather than show a repository that is gone
+        if state?.unavailable != nil { return }
         if gitStates[threadId] != state { gitStates[threadId] = state }
     }
 

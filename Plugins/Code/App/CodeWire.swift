@@ -36,6 +36,8 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
     public var upstream: String?
     public var ahead: Int?
     public var behind: Int?
+    /// Set when git did not answer in time: nothing is known of the folder this time, which is not the same as no repository.
+    public var unavailable: String?
 
     public init(repo: Bool, root: String? = nil, branch: String? = nil, detached: Bool? = nil, changes: [Change] = []) {
         self.repo = repo
@@ -45,7 +47,7 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
         self.changes = changes
     }
 
-    private enum CodingKeys: String, CodingKey { case repo, folder, root, branch, detached, changes, additions, deletions, summaryPartial, upstream, ahead, behind }
+    private enum CodingKeys: String, CodingKey { case repo, folder, root, branch, detached, changes, additions, deletions, summaryPartial, upstream, ahead, behind, unavailable }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -61,6 +63,7 @@ public struct ThreadGitState: Decodable, Hashable, Sendable {
         upstream = try container.decodeIfPresent(String.self, forKey: .upstream)
         ahead = try container.decodeIfPresent(Int.self, forKey: .ahead)
         behind = try container.decodeIfPresent(Int.self, forKey: .behind)
+        unavailable = try container.decodeIfPresent(String.self, forKey: .unavailable)
     }
 }
 
