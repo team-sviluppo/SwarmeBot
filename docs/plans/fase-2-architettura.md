@@ -216,6 +216,11 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
   titolo `[AUTOMAZIONE] <nome>`. Il Node attivava solo i webhook: con le routine il risultato finiva in una chat
   nascosta nell'elenco e il pallino blu sul bot non bastava a trovarla. Lo scenario `automations` (non rieseguito:
   manca il checkout Node) dovrebbe divergere sul titolo della chat e sul `threadId` attivo del bot.
+- Divergenza voluta dal Node (2026-10-30): un membro **locale** di un canale che lavora in un'altra conversazione non viene più saltato
+  subito ("is busy in another conversation — skipped this round"): i membri liberi rispondono per primi, il canale scrive "… — waiting for
+  them", mostra `busyBotId` = il membro (c'è Stop) e lo aspetta al massimo `rooms.turnTimeoutMinutes` (5); poi il vecchio testo "skipped".
+  Il Node saltava sempre, e il membro occupato perdeva il turno senza che chi scriveva potesse farci niente. Gli ospiti di un altro motore
+  restano saltati subito. Lo scenario `rooms` (non rieseguito: manca il checkout Node) diverge solo se un membro è occupato altrove.
 
 ## Non verificato dal vivo
 

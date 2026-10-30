@@ -589,3 +589,13 @@ last?:{checkedAt, ok, error?, unchanged?, held?, rolledBack?, sha?, updated?:{ad
 skill accese per default del membro nel prompt di sistema, e `/nome` nell'ultimo messaggio della persona porta il testo intero della skill al membro
 a cui è rivolto (non a uno che un compagno ha chiamato).
 
+
+## Estensioni Swift: canali e membri occupati altrove (2026-10-30)
+
+Un membro **locale** di un canale che sta lavorando in un'altra conversazione (la sua chat o un altro canale) non viene più saltato subito.
+I membri liberi rispondono per primi, anche se nominati dopo. Per il membro occupato il canale scrive una `activity`
+`<nome> is busy in another conversation — waiting for them`, tiene `busyBotId` uguale al membro (così "Stop" è disponibile e un nuovo
+messaggio viene accodato con `queued:true`) e lo aspetta al massimo `rooms.turnTimeoutMinutes` (5 di default). Se si libera risponde
+come gli altri; se scade resta il testo di sempre, `<nome> is busy in another conversation — skipped this round`. `POST /api/groups/:gid/interrupt`
+annulla l'attesa. Un ospite di un altro motore occupato resta saltato subito. Chi scrive il canale non vede altri cambi di forma.
+
