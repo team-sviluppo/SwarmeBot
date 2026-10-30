@@ -113,8 +113,7 @@ struct ComposerView: View {
                 }.padding(.horizontal, 10)
             }
             if let bot = model.selectedBot {
-                ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                ComposerActions {
                     ModelPickerButton(bot: bot)
                     let folder = workingFolder(bot)
                     // a server's folder cannot be checked, or picked, from this Mac
@@ -143,9 +142,6 @@ struct ComposerView: View {
                     LibraryChip(bot: bot)
                     ConnectorsChip(bot: bot)
                     SkillsChip(bot: bot)
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, 6)
                 }
                 .pluginsFollowing(chat(for: bot))
             } else if let room = model.selectedRoom {
@@ -153,12 +149,8 @@ struct ComposerView: View {
                 let context = ChatContext.current(model)
                 let accessories = PluginHost.shared.composerAccessories(context)
                 if !accessories.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(Array(accessories.enumerated()), id: \.offset) { $0.element }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.leading, 6)
+                    ComposerActions {
+                        ForEach(Array(accessories.enumerated()), id: \.offset) { $0.element }
                     }
                     .pluginsFollowing(context)
                     .id(room.id)

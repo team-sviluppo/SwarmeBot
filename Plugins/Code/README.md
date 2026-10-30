@@ -112,6 +112,8 @@ The chat icon in the header opens and closes the column completely; new chats ar
 Code uses this navigation in place of the header's new-chat button and task menu. Older engines without the column
 keep the core navigation. The header's context indicator stays legible and read-only while a turn runs.
 The header's cost and response-speed chip is temporarily hidden.
+When the composer actions outgrow the available width (for example with an open PR), a chevron at the right expands
+them onto multiple rows. The same control collapses them back to the scrollable row; the app remembers this choice.
 The context menu renames, pins, archives, opens a terminal/editor, copies the path or deletes a chat; archived chats
 stay in a collapsed group. Read/archive markers live on the engine. ⌘K includes Code chats and branch/script actions.
 The branch and diff counts in the column describe the **current shared working folder**, rather than a separate
