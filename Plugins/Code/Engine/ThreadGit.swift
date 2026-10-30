@@ -69,7 +69,7 @@ enum ThreadGit {
 
     @MainActor
     static func checkout(folder: String, ref: String) async throws {
-        guard let state = await inspect(folder: folder) else { throw HTTPError(400, "not a git repository") }
+        guard let state = try await inspect(folder: folder) else { throw HTTPError(400, "not a git repository") }
         guard switching.insert(state.root).inserted else { throw HTTPError(409, "a checkout is already running") }
         defer { switching.remove(state.root) }
         let available = try await branches(folder: folder)
@@ -97,7 +97,7 @@ enum ThreadGit {
     /// nothing is lost, and git refuses only a name it cannot use.
     @MainActor
     static func createBranch(folder: String, name: String) async throws {
-        guard let state = await inspect(folder: folder) else { throw HTTPError(400, "not a git repository") }
+        guard let state = try await inspect(folder: folder) else { throw HTTPError(400, "not a git repository") }
         guard switching.insert(state.root).inserted else { throw HTTPError(409, "a checkout is already running") }
         defer { switching.remove(state.root) }
         let name = name.trimmingCharacters(in: .whitespaces)
@@ -126,21 +126,32 @@ enum ThreadGit {
         var changes: [Change]
     }
 
-    /// The folder's state, or nil when it is not inside a git work tree (or
-    /// git is not installed).
+    /// How long git has to answer a question about a folder: local, but a large repository or a busy machine can take
+    /// longer than a few seconds, and a git that is merely slow is not a folder that is not a repository.
+    nonisolated(unsafe) static var inspectTimeout: TimeInterval = 30
+    /// Tests point it at a script.
+    nonisolated(unsafe) static var gitExecutable = "git"
+
+    /// The folder's state, or nil when it is not inside a git work tree. Throws 504 when git does not answer in time (or
+    /// cannot be run): that says nothing about the folder, so it is not told as "not a git repository".
     @MainActor
-    static func inspect(folder: String) async -> State? {
+    static func inspect(folder: String) async throws -> State? {
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = EnvPath.augmented()
         environment["GIT_OPTIONAL_LOCKS"] = "0"
         environment["LC_ALL"] = "C"
+        func run(_ args: [String]) async -> CLIProcess.Output? {
+            await CLIProcess.run(gitExecutable, ["-c", "core.quotePath=false"] + args, environment: environment, cwd: folder, timeout: inspectTimeout)
+        }
         func git(_ args: [String]) async -> String? {
-            guard let output = await CLIProcess.run("git", ["-c", "core.quotePath=false"] + args, environment: environment, cwd: folder, timeout: 8),
-                  output.ok else { return nil }
+            guard let output = await run(args), output.ok else { return nil }
             return output.stdout
         }
-        guard let top = await git(["rev-parse", "--show-toplevel"]) else { return nil }
-        let root = top.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let probe = await run(["rev-parse", "--show-toplevel"]) else {
+            throw HTTPError(504, "git did not answer: the repository may be large or the machine busy (or git is not installed) — try again")
+        }
+        guard probe.ok else { return nil }
+        let root = probe.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !root.isEmpty else { return nil }
         var branch = (await git(["symbolic-ref", "--short", "-q", "HEAD"]) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         var detached = false
@@ -182,7 +193,12 @@ enum ThreadGit {
     @MainActor
     static func wire(folder: String?) async -> JSON {
         guard let folder else { return ["repo": false] }
-        guard let state = await inspect(folder: folder) else { return ["repo": false, "folder": .string(folder)] }
+        let inspected: State?
+        do { inspected = try await inspect(folder: folder) } catch let error as HTTPError {
+            // git is slow, not the folder wrong: say so, and let a client keep what it last knew
+            return ["repo": false, "folder": .string(folder), "unavailable": .string(error.message)]
+        } catch { return ["repo": false, "folder": .string(folder)] }
+        guard let state = inspected else { return ["repo": false, "folder": .string(folder)] }
         let changes: [JSON] = state.changes.map { change in
             let absolute = (state.root as NSString).appendingPathComponent(change.path)
             let size = (try? FileManager.default.attributesOfItem(atPath: absolute))?[.size] as? NSNumber
@@ -191,6 +207,15 @@ enum ThreadGit {
         }
         var answer: JSON = ["repo": true, "folder": .string(folder), "root": .string(state.root), "branch": .string(state.branch), "detached": .bool(state.detached),
                 "changes": .array(changes)]
+        // against the branch it follows, as of the last fetch: what a push would send and what a pull would bring
+        if !state.detached, let counts = await GitRun.text(["rev-list", "--left-right", "--count", "@{u}...HEAD"], in: state.root) {
+            let parts = counts.split(whereSeparator: \.isWhitespace).compactMap { Int($0) }
+            if parts.count == 2 {
+                answer["behind"] = .number(Double(parts[0]))
+                answer["ahead"] = .number(Double(parts[1]))
+                if let upstream = await GitRun.text(["rev-parse", "--abbrev-ref", "@{u}"], in: state.root) { answer["upstream"] = .string(upstream) }
+            }
+        }
         let stats = state.changes.isEmpty ? "" : await GitRun.text(["diff", "--numstat", "HEAD", "--", "."], in: folder)
         if let stats {
             let counts = lineCounts(stats)

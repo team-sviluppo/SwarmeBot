@@ -52,7 +52,7 @@ enum CommitMessage {
     static func generate(harness: Harness, threadId: String, root: String) async throws -> String {
         let diff = try await GitDiff.diff(root: root, path: nil)
         guard !diff.diff.isEmpty || diff.binary else { throw HTTPError(400, "nothing to commit") }
-        let state = await ThreadGit.inspect(folder: root)
+        let state = try? await ThreadGit.inspect(folder: root)
         let files = (state?.changes ?? []).map(\.path)
         let recent = (await GitRun.text(["log", "-8", "--format=%s"], in: root) ?? "").split(separator: "\n").map(String.init)
         guard let selection = selection(harness: harness, threadId: threadId), let instance = harness.fleet.get(selection.instanceId) else {
