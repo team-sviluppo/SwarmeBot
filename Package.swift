@@ -1,5 +1,26 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import Foundation
+
+// Private sources are prepared by scripts/build.sh (or prepare-private-plugins.py).
+// An ordinary public checkout needs neither the private repository nor generated files.
+struct PrivateTarget: Decodable {
+    let name: String
+    let path: String
+    let dependencies: [String]
+    let test: Bool
+}
+let privateRoot = ".build/private-plugins"
+let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+let privateManifest = packageRoot.appendingPathComponent(privateRoot + "/targets.json")
+let privateTargets: [PrivateTarget]
+if FileManager.default.fileExists(atPath: privateManifest.path) {
+    // Fail on corrupt staging instead of silently producing a different edition.
+    privateTargets = try JSONDecoder().decode([PrivateTarget].self, from: Data(contentsOf: privateManifest))
+} else {
+    privateTargets = []
+}
+let hasPrivatePlugins = !privateTargets.isEmpty
 
 // SwarmeBot for macOS, native.
 //
@@ -47,7 +68,8 @@ let package = Package(
         // UI languages and the Italian → English tables, for the Mac and iOS apps.
         .target(
             name: "SwarmeL10n",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            path: hasPrivatePlugins ? privateRoot + "/SwarmeL10n" : "Sources/SwarmeL10n",
+            swiftSettings: [.swiftLanguageMode(.v5)] + (hasPrivatePlugins ? [.define("SWARMEBOT_PRIVATE_PLUGINS")] : [])
         ),
         .target(
             name: "SwarmeKit",
@@ -69,18 +91,11 @@ let package = Package(
             path: "Plugins/Code/App",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
-        // The Cylon plugin, app side (macOS only).
-        .target(
-            name: "CylonPluginApp",
-            dependencies: ["CompanionCore", "SwarmeKit", "SwarmeBotUI"],
-            path: "Plugins/Cylon/App",
-            swiftSettings: [.swiftLanguageMode(.v5)]
-        ),
         // A thin shell: names the plugins and starts SwarmeBotUI.
         .executableTarget(
             name: "SwarmeBot",
-            dependencies: ["SwarmeBotUI", "CodePluginApp", "CylonPluginApp"],
-            swiftSettings: [.swiftLanguageMode(.v5)],
+            dependencies: ["SwarmeBotUI", "CodePluginApp"] + (hasPrivatePlugins ? [.byName(name: "PrivatePluginsApp")] : []),
+            swiftSettings: [.swiftLanguageMode(.v5)] + (hasPrivatePlugins ? [.define("SWARMEBOT_PRIVATE_PLUGINS")] : []),
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         // Phase 2: the harness in Swift (docs/plans/fase-2-architettura.md).
@@ -124,17 +139,10 @@ let package = Package(
             path: "Plugins/Code/Engine",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
-        // The Cylon plugin, engine side: the phases of a Cylon task in a channel. Builds on Linux too.
-        .target(
-            name: "CylonPluginEngine",
-            dependencies: ["HarnessCore"],
-            path: "Plugins/Cylon/Engine",
-            swiftSettings: [.swiftLanguageMode(.v5)]
-        ),
         .executableTarget(
             name: "swarme-harness",
-            dependencies: ["HarnessRunner", "CodePluginEngine", "CylonPluginEngine"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            dependencies: ["HarnessRunner", "CodePluginEngine"] + (hasPrivatePlugins ? [.byName(name: "PrivatePluginsEngine")] : []),
+            swiftSettings: [.swiftLanguageMode(.v5)] + (hasPrivatePlugins ? [.define("SWARMEBOT_PRIVATE_PLUGINS")] : [])
         ),
         // The push relay for the iOS app (docs/plans/2026-10-22-app-ios.md §6.5): Linux and macOS.
         .executableTarget(
@@ -156,18 +164,8 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
-            name: "CylonPluginEngineTests",
-            dependencies: ["CylonPluginEngine", "CodePluginEngine", "HarnessCore"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
-        ),
-        .testTarget(
             name: "CodePluginAppTests",
             dependencies: ["CodePluginApp", "SwarmeBotUI", "CompanionCore", "SwarmeKit"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
-        ),
-        .testTarget(
-            name: "CylonPluginAppTests",
-            dependencies: ["CylonPluginApp", "SwarmeBotUI", "CompanionCore", "SwarmeKit"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
@@ -186,5 +184,15 @@ let package = Package(
             dependencies: ["SwarmeKit", "CompanionCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
-    ]
+    ] + privateTargets.map { target in
+        let dependencies = target.dependencies.map { Target.Dependency.byName(name: $0) }
+        if target.test {
+            return .testTarget(name: target.name, dependencies: dependencies,
+                               path: privateRoot + "/" + target.path,
+                               swiftSettings: [.swiftLanguageMode(.v5)])
+        }
+        return .target(name: target.name, dependencies: dependencies,
+                       path: privateRoot + "/" + target.path,
+                       swiftSettings: [.swiftLanguageMode(.v5)])
+    }
 )

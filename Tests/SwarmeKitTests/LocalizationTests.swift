@@ -4,14 +4,14 @@ import XCTest
 /// Every UI string goes through `tr` and has an English entry.
 final class LocalizationTests: XCTestCase {
     private static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    private static let folders = ["Sources/SwarmeBotUI", "Sources/SwarmeKit", "Plugins", "iOS/SwarmeBot"]
+    private static let folders = ["Sources/SwarmeBotUI", "Sources/SwarmeKit", "Plugins", "iOS/SwarmeBot", ".build/private-plugins"]
 
     private func sources() throws -> [(path: String, lines: [String])] {
         var out: [(String, [String])] = []
         for folder in Self.folders {
             let base = Self.root.appendingPathComponent(folder)
             let files = FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil)?
-                .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" && !$0.path.contains("/Translations/") } ?? []
+                .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" && !$0.path.contains("/Translations/") && !$0.path.contains("/SwarmeL10n/") && !$0.path.contains("/Tests/") } ?? []
             for file in files {
                 let text = try String(contentsOf: file, encoding: .utf8)
                 out.append((file.path.replacingOccurrences(of: Self.root.path + "/", with: ""), text.components(separatedBy: "\n")))

@@ -45,7 +45,7 @@ and stays untranslated.
 | `SwarmeBotUI` | The SwiftUI app as a library (`Views/`, `Mascot/`, Sparkle `Updater`, notifications) and the app plugin host (`Plugins/`: `AppPlugin`, `PluginHost`, `SwarmeApp.run(plugins:)`). |
 | `SwarmeBot` | The app executable: a thin shell, `SwarmeApp.run(plugins: [CodeAppPlugin()])`. |
 | `Plugins/Code` | The Code plugin (`docs/plans/2026-10-28-code-mode-t3.md`): `CodePluginEngine` (git routes on the engine, builds on Linux) and `CodePluginApp` (the Mac app's half). Plugins are linked at build time; the core never imports one. |
-| `Plugins/Cylon` | The Cylon plugin (`docs/plans/2026-10-28-code-mode-t3.md` §10): the phases of a Cylon task in a channel (spec, plan, run, review, pull request), one bot per phase, each started as its skill and followed to its end. `CylonPluginEngine` (builds on Linux) and `CylonPluginApp`. See its README. |
+| `../SwarmeBotPlugins/Plugins/Cylon` | The private Cylon plugin (`docs/plans/2026-10-28-code-mode-t3.md` §10): the phases of a Cylon task in a channel (spec, plan, run, review, pull request), one bot per phase, each started as its skill and followed to its end. `CylonPluginEngine` (builds on Linux) and `CylonPluginApp`. See its README. |
 | `HarnessCore` | The engine: contracts (`RuntimeEvent`, drivers), `Store` + `MessageDB` (SQLite), `Harness` (turns), `Routes`, `HTTPServer`/`HTTPTransport`/`SSEHub`, rooms, comms between bots, routines, webhooks, library, team, computers (Box, local VM, VPS), MCP connectors + OAuth, permission broker, remote access (devices, pairing, rate limits). |
 | `HarnessDrivers` | One file per provider driver; `ACP/ACPCore` (JSON-RPC runtime) + `ACP/ACPDrivers`; `DeepSeek/`. |
 | `HarnessRunner` | The engine's startup and subcommands as a library (`HarnessMain.run(plugins:)`); it needs the drivers, so it sits next to `HarnessDrivers`, not in `HarnessCore`. |
@@ -63,7 +63,7 @@ git-ignored; never commit them.
 ## Build, run, test
 
 ```sh
-swift build
+scripts/build.sh                            # prepares optional private plugins, then swift build
 swift test                                   # unit + in-process integration tests
 swift test --filter HarnessCoreTests         # engine only
 swift run SwarmeBot                          # the app (see warning below)
@@ -119,7 +119,7 @@ When running parity in parallel, give each run its own **short** `TMPDIR` (`TMPD
 ### Packaging, release, Linux engine
 
 ```sh
-scripts/bundle-app.sh [--arch arm64|x86_64] [--dmg] [--notarize]
+scripts/bundle-app.sh [--arch arm64] [--dmg] [--notarize] [--no-private-plugins]
 scripts/release-mac.sh --version X.Y.Z [--no-publish]   # signs, notarizes, uploads to team-sviluppo/SwarmeBot
 scripts/build-linux-engine.sh [aarch64|x86_64]          # Docker, swift:6.4-noble → build/linux/
 scripts/linux-engines-manifest.sh <version>             # writes Resources/linux-engines.json (git-ignored)
@@ -127,6 +127,14 @@ scripts/linux-engines-manifest.sh <version>             # writes Resources/linux
 
 Releases publish to GitHub and Sparkle updates real users: only with an explicit request.
 Linux engines are not bundled; the app downloads them from the release and checks the pinned SHA-256.
+
+Private plugins live in the sibling `SwarmeBotPlugins` repository. Override its location with
+`SWARMEBOT_PRIVATE_PLUGINS_DIR`. `scripts/build.sh` and packaging scripts prepare sources,
+translations, registries and tests under `.build/private-plugins` (never commit that directory).
+Use `--no-private-plugins` on build, bundle, Linux build, manifest or release scripts to exclude them.
+Before direct `swift build`, `swift test` or Xcode work, run `scripts/prepare-private-plugins.py`;
+repeat it after editing private sources or shared translations. Without staging, SwiftPM builds only
+public plugins. New private plugins declare their modules and tests in `Plugins/<Name>/plugin.json`.
 
 ## Engineering rules
 

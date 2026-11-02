@@ -1,9 +1,14 @@
-// SwarmeBot for macOS — a thin shell: the app is SwarmeBotUI, and this
-// executable only says which plugins it carries (docs/plans/2026-10-28-code-mode-t3.md §12).
+// The app executable links the public plugins and any prepared private plugins.
 import CodePluginApp
-import CylonPluginApp
 import SwarmeBotUI
+#if SWARMEBOT_PRIVATE_PLUGINS
+import PrivatePluginsApp
+#endif
 
 MainActor.assumeIsolated {
-    SwarmeApp.run(plugins: [CodeAppPlugin(), CylonAppPlugin()])
+    var plugins: [any AppPlugin] = [CodeAppPlugin()]
+    #if SWARMEBOT_PRIVATE_PLUGINS
+    plugins += PrivatePluginsApp.make()
+    #endif
+    SwarmeApp.run(plugins: plugins)
 }

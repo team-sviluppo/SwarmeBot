@@ -239,9 +239,31 @@ third-party service.
 ```sh
 git clone https://github.com/team-sviluppo/SwarmeBot.git
 cd SwarmeBot
-swift build
+scripts/build.sh
 swift run SwarmeBot
 ```
+
+Private plugins are optional. If the private repository is checked out next to this one as
+`../SwarmeBotPlugins`, `scripts/build.sh` includes its plugins in the app and engine. Set
+`SWARMEBOT_PRIVATE_PLUGINS_DIR` to use another location. A missing checkout produces a public build.
+Private sources, tests and translations are staged under `.build/private-plugins` and stay untracked.
+
+```sh
+scripts/build.sh --no-private-plugins         # public plugins only; clears previous staging
+scripts/prepare-private-plugins.py           # prepare private sources for swift test or Xcode
+swift test                                  # includes the prepared private plugins' tests
+scripts/bundle-app.sh --no-private-plugins    # package without private plugins
+scripts/build-linux-engine.sh --no-private-plugins aarch64
+```
+
+The same `--no-private-plugins` option is supported by `release-mac.sh` and
+`linux-engines-manifest.sh`, including their child builds. With that option, Linux engines are
+rebuilt even if `SKIP_LINUX_ENGINES=1` requested reuse, to ensure they exclude private code.
+Direct `swift build`/`swift run` uses the last prepared selection; a fresh checkout builds public
+plugins only. Repeat preparation after editing private sources or shared translations.
+Each private plugin declares its modules, entry types, dependencies, tests and translation table
+in `Plugins/<Name>/plugin.json` in the private repository; the build generates registration code.
+Cylon and its tests and translations are maintained there.
 
 On first launch the app creates `~/.swarmebot` and starts the engine. On a machine that already
 has data there, it first makes a one-time full backup to

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The Linux engines for a release — docs/plans/2026-10-16-bot-remoto.md §3.6.
 #
-#   scripts/linux-engines-manifest.sh <version> [--skip-build]
+#   scripts/linux-engines-manifest.sh <version> [--skip-build] [--no-private-plugins]
 #
 # Builds both architectures (scripts/build-linux-engine.sh) unless asked not
 # to, stages them as release assets, and writes Resources/linux-engines.json:
@@ -16,7 +16,21 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${1:-}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "usage: $0 <version 1.2.3> [--skip-build]" >&2; exit 2; }
 RELEASES_REPO="${RELEASES_REPO:-team-sviluppo/SwarmeBot}"
-[[ "${2:-}" == "--skip-build" ]] || "$ROOT/scripts/build-linux-engine.sh" aarch64 x86_64
+shift
+SKIP_BUILD=0
+PRIVATE_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --skip-build) SKIP_BUILD=1 ;;
+    --no-private-plugins) PRIVATE_ARGS+=("$arg") ;;
+    *) echo "unknown option $arg" >&2; exit 2 ;;
+  esac
+done
+# A reused binary has no reliable plugin provenance. Rebuild to honor an
+# explicit request to exclude private plugins, even when reuse was requested.
+if [[ $SKIP_BUILD == 0 || ${#PRIVATE_ARGS[@]} -gt 0 ]]; then
+  "$ROOT/scripts/build-linux-engine.sh" ${PRIVATE_ARGS[@]+"${PRIVATE_ARGS[@]}"} aarch64 x86_64
+fi
 
 STAGE="$ROOT/build/linux/release"
 rm -rf "$STAGE" && mkdir -p "$STAGE"

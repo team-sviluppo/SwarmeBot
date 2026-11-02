@@ -4,7 +4,11 @@
 public enum Translations {
     public static let english: [String: String] = {
         var all: [String: String] = [:]
-        for part in [chat, settings, remote, engine, skills, vault, transfer, ios, code, cylon, plugins] {
+        var parts = [chat, settings, remote, engine, skills, vault, transfer, ios, code, plugins]
+        #if SWARMEBOT_PRIVATE_PLUGINS
+        parts += privatePlugins
+        #endif
+        for part in parts {
             all.merge(part) { first, _ in first }
         }
         return all
