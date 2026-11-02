@@ -426,6 +426,6 @@ final class CylonBoardTests: XCTestCase {
         guard case let .response(response) = await b.fixture.routes.handle(request) else { return XCTFail("not a response") }
         XCTAssertEqual(response.status, 415)
         let plugins = await b.call("GET", "/api/plugins")
-        XCTAssertEqual(plugins.json?["plugins"]?.array?.first { $0["id"] == "cylon" }?["version"], "1.1.0")
+        XCTAssertEqual(plugins.json?["plugins"]?.array?.first { $0["id"] == "cylon" }?["version"], "1.2.0")
     }
 }

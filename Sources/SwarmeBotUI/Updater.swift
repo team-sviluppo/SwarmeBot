@@ -2,6 +2,7 @@
 // signed with EdDSA. The updater runs only in a packaged app whose
 // Info.plist carries a public key — a dev build or an unsigned bundle has
 // nothing it could verify an update against, so it never starts one.
+// The feed and archives are public HTTPS downloads: no GitHub token or auth delegate.
 import Foundation
 import Sparkle
 

@@ -167,7 +167,7 @@ final class GitSyncTests: XCTestCase {
         let unknown = await repo.callRaw("POST", "/api/threads/nope/git/pull", body: [:])
         XCTAssertEqual(unknown.status, 404)
         let plugins = await repo.callRaw("GET", "/api/plugins")
-        XCTAssertEqual(plugins.json?["plugins"]?.array?.first { $0["id"] == "code" }?["version"], "1.6.0")
+        XCTAssertEqual(plugins.json?["plugins"]?.array?.first { $0["id"] == "code" }?["version"], "1.7.0")
     }
 
     // MARK: a git that is slow

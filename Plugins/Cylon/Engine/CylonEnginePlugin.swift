@@ -18,7 +18,7 @@ public final class CylonEnginePlugin: EnginePlugin {
 
     public nonisolated var id: String { "cylon" }
     public nonisolated var name: String { "Cylon" }
-    public nonisolated var version: String { "1.1.0" }
+    public nonisolated var version: String { "1.2.0" }
     /// The channels are Code channels with a project: the roles are the project's.
     public nonisolated var requires: [String] { ["code"] }
 
@@ -33,6 +33,11 @@ public final class CylonEnginePlugin: EnginePlugin {
     // MARK: following a phase
 
     public func start(_ harness: Harness) async { self.harness = harness }
+
+    public func beforeTurn(_ turn: inout TurnSetup) {
+        guard let harness = turn.harness else { return }
+        CylonProjects(harness: harness).prepare(&turn)
+    }
 
     /// A turn of a channel ended: if it was the bot of the running phase, see whether the phase is over.
     public func afterTurn(_ result: TurnResult) async {
@@ -93,6 +98,12 @@ public final class CylonEnginePlugin: EnginePlugin {
     }
 
     public func routes(_ router: PluginRouter) {
+        router.get("/api/cylon/projects/:project") { request in
+            .response(.json(200, .object(try CylonProjects(harness: request.harness).settings(request.params["project"] ?? ""))))
+        }
+        router.put("/api/cylon/projects/:project") { request in
+            .response(.json(200, .object(try CylonProjects(harness: request.harness).update(request.params["project"] ?? "", request.http.json()))))
+        }
         router.get("/api/groups/:gid/cylon") { request in
             let (id, _) = try self.channel(request)
             return .response(.json(200, await self.status(of: id, harness: request.harness)))

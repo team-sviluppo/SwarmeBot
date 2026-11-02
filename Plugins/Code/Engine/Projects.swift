@@ -1,5 +1,4 @@
-// Projects (docs/plans/2026-10-28-code-mode-t3.md §7): a name, a ClickUp list and the folders of a
-// piece of work with their roles, kept on the engine because the folders are on its machine. A bot or
+// Projects: a name and labeled repositories with stable ids, kept on the engine. A bot or
 // a channel belongs to at most one, and says which of its folders it works on; the others are linked
 // to it read-only, for context.
 //
@@ -8,8 +7,11 @@ import Foundation
 import HarnessCore
 
 enum ProjectRole {
-    /// The folders a project can name, in the order they are shown.
-    static let all = ["backend", "backoffice", "app", "bruno"]
+    static let legacyLabels = ["backend": "Backend", "backoffice": "Backoffice", "app": "App", "bruno": "Collection Bruno", "default": "Default"]
+
+    static func valid(_ id: String) -> Bool {
+        id.range(of: #"^[A-Za-z0-9_-]{1,80}$"#, options: .regularExpression) != nil
+    }
 }
 
 @MainActor
@@ -47,6 +49,7 @@ struct ProjectStore {
         } else if !partial {
             throw HTTPError(400, "name is required")
         }
+        // Compatibility for older clients. New ClickUp settings belong to Cylon.
         if let list = body["clickupListId"] {
             if list.isNull {
                 out["clickupListId"] = .null
@@ -61,12 +64,24 @@ struct ProjectStore {
         if let repos = body["repos"] {
             guard let array = repos.array else { throw HTTPError(400, "repos must be a list") }
             var seen = Set<String>()
+            var labels = Set<String>()
             var clean: [JSON] = []
             for entry in array {
-                guard let role = entry["role"]?.string, ProjectRole.all.contains(role) else {
-                    throw HTTPError(400, "a repo's role must be one of \(ProjectRole.all.joined(separator: ", "))")
+                guard let role = entry["role"]?.string, ProjectRole.valid(role) else {
+                    throw HTTPError(400, "a repo's role must be a stable id of 1 to 80 letters, digits, underscores or hyphens")
                 }
                 guard seen.insert(role).inserted else { throw HTTPError(400, "the \(role) folder is listed twice") }
+                let label: String
+                if let sent = entry["label"] {
+                    guard let text = sent.string?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty, text.count <= 100 else {
+                        throw HTTPError(400, "a repo's label must be 1 to 100 characters")
+                    }
+                    label = text
+                } else if let legacy = ProjectRole.legacyLabels[role] { label = legacy }
+                else { throw HTTPError(400, "a repo's label is required") }
+                guard labels.insert(label.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))).inserted else {
+                    throw HTTPError(400, "repository labels must be unique")
+                }
                 guard let path = entry["path"]?.string?.trimmingCharacters(in: .whitespaces), path.hasPrefix("/") else {
                     throw HTTPError(400, "the \(role) path must be an absolute folder")
                 }
@@ -74,7 +89,7 @@ struct ProjectStore {
                 guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
                     throw HTTPError(400, "the \(role) folder does not exist on this machine: \(path)")
                 }
-                var repo: JSONObject = JSONObject([("role", .string(role)), ("path", .string(path))])
+                var repo: JSONObject = JSONObject([("role", .string(role)), ("label", .string(label)), ("path", .string(path))])
                 if let scripts = entry["scripts"] {
                     guard let list = scripts.array, list.count <= 20, list.allSatisfy({ $0["name"]?.string?.isEmpty == false && $0["command"]?.string?.isEmpty == false }) else {
                         throw HTTPError(400, "scripts must be a list of at most 20 {name, command}")
@@ -83,8 +98,7 @@ struct ProjectStore {
                 }
                 clean.append(.object(repo))
             }
-            // in the order the roles are shown, not the order they were sent
-            out["repos"] = .array(clean.sorted { (ProjectRole.all.firstIndex(of: $0["role"]?.string ?? "") ?? 99) < (ProjectRole.all.firstIndex(of: $1["role"]?.string ?? "") ?? 99) })
+            out["repos"] = .array(clean)
         } else if !partial {
             out["repos"] = .array([])
         }
@@ -104,8 +118,20 @@ struct ProjectStore {
     func update(_ id: String, _ body: JSONObject) throws -> JSONObject {
         var projects = all
         guard let index = projects.firstIndex(where: { $0["id"]?.string == id }) else { throw HTTPError(404, "no such project") }
-        let changes = try Self.clean(body, partial: true)
+        var changes = try Self.clean(body, partial: true)
         let before = projects[index]
+        if let repos = changes["repos"]?.array {
+            let kept = Set(repos.compactMap { $0["role"]?.string })
+            let owners = harness.store.bots + harness.store.groups
+            if owners.contains(where: { $0["plugins"]?["code"]?["projectId"]?.string == id
+                && $0["plugins"]?["code"]?["role"]?.string.map { !kept.contains($0) } == true }) {
+                throw HTTPError(409, "a removed repository is still selected by a bot or channel: change its working repository first")
+            }
+            changes["repos"] = .array(repos.map { repo in
+                let old = before["repos"]?.array?.first { $0["role"] == repo["role"] }?.object ?? JSONObject()
+                return .object(old.merging(repo.object ?? JSONObject()))
+            })
+        }
         for (key, value) in changes { projects[index][key] = value }
         try save(projects)
         // a bot that works in a folder that moved follows it
@@ -145,13 +171,16 @@ struct ProjectStore {
     /// `projects.json`, and the file each project has for the agents: only what an agent needs.
     func save(_ projects: [JSONObject]) throws {
         try FileIO.writeAtomic(JSON.array(projects.map(JSON.object)).data, to: file)
+        for project in projects { try writeAgentFile(project) }
+    }
+
+    /// Refresh old exports as well: Cylon owns ClickUp context, including after an upgrade.
+    func writeAgentFile(_ project: JSONObject) throws {
         try? FileManager.default.createDirectory(at: agentFolder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        for project in projects {
-            guard let id = project["id"]?.string else { continue }
-            var forAgents = JSONObject()
-            for key in ["id", "name", "clickupListId", "repos"] { forAgents[key] = project[key] ?? .null }
-            try FileIO.writeAtomic(JSON.object(forAgents).data, to: agentFile(id))
-        }
+        guard let id = project["id"]?.string else { return }
+        var forAgents = JSONObject()
+        for key in ["id", "name", "repos"] { forAgents[key] = project[key] ?? .null }
+        try FileIO.writeAtomic(JSON.object(forAgents).data, to: agentFile(id))
     }
 
     /// Bots and channels that work on a role whose folder changed move their default folder with it.
@@ -181,47 +210,51 @@ struct ProjectContext: Equatable {
     var projectId: String
     var workingRole: String?
     var workingPath: String?
+    var workingLabel: String?
     /// Linked read-only: every other folder of the project, real paths, with their roles.
-    var readOnly: [(role: String, path: String)]
+    var readOnly: [(role: String, path: String, label: String)]
 
     static func == (a: ProjectContext, b: ProjectContext) -> Bool {
         a.name == b.name && a.projectId == b.projectId && a.workingRole == b.workingRole && a.workingPath == b.workingPath
-            && a.readOnly.map(\.path) == b.readOnly.map(\.path)
+            && a.workingLabel == b.workingLabel && a.readOnly.map(\.path) == b.readOnly.map(\.path)
+            && a.readOnly.map(\.label) == b.readOnly.map(\.label)
     }
 
     /// `role` is the folder the chat works on, when it said; else the project's folder that holds `cwd`.
     static func make(project: JSONObject, role: String?, cwd: String?) -> ProjectContext? {
         guard let id = project["id"]?.string else { return nil }
-        let repos: [(role: String, path: String)] = (project["repos"]?.array ?? []).compactMap {
+        let repos: [(role: String, path: String, label: String)] = (project["repos"]?.array ?? []).compactMap {
             guard let role = $0["role"]?.string, let path = $0["path"]?.string, FileManager.default.fileExists(atPath: path) else { return nil }
-            return (role, ReadOnlyGuard.canonical(path))
+            return (role, ReadOnlyGuard.canonical(path), $0["label"]?.string ?? ProjectRole.legacyLabels[role] ?? role)
         }
         let here = cwd.map(ReadOnlyGuard.canonical)
+        func contains(_ folder: String, _ path: String) -> Bool {
+            path == folder || path.hasPrefix(folder == "/" ? "/" : folder + "/")
+        }
         let working = role.flatMap { wanted in repos.first { $0.role == wanted } }
-            ?? here.flatMap { here in repos.first { here == $0.path || here.hasPrefix($0.path + "/") } }
+            ?? here.flatMap { here in repos.filter { contains($0.path, here) }.max { $0.path.count < $1.path.count } }
         let workingPath = working?.path ?? here
         // a folder that holds the working one is not linked: the chat could not write anywhere in it
         let readOnly = repos.filter { repo in
             if repo.path == working?.path { return false }
-            if let workingPath, workingPath == repo.path || workingPath.hasPrefix(repo.path + "/") { return false }
+            if let workingPath, contains(repo.path, workingPath) { return false }
             return true
         }
-        return ProjectContext(name: project["name"]?.string ?? "", projectId: id, workingRole: working?.role, workingPath: working?.path, readOnly: readOnly)
+        return ProjectContext(name: project["name"]?.string ?? "", projectId: id, workingRole: working?.role, workingPath: working?.path,
+                              workingLabel: working?.label, readOnly: readOnly)
     }
-
-    static let roleNames = ["backend": "Backend", "backoffice": "Backoffice", "app": "App", "bruno": "Bruno collection"]
 
     /// What the agent is told. Engine-side text, so English.
     func prompt(agentFile: String) -> String {
         var text = "This chat belongs to the project \"\(name)\"."
         if let workingRole, let workingPath {
-            text += " You work on its \(Self.roleNames[workingRole] ?? workingRole) folder, \(workingPath)."
+            text += " You work on its \(workingLabel ?? workingRole) folder, \(workingPath)."
         }
         if !readOnly.isEmpty {
             text += " The project's other folders are linked read-only, for context: read them as much as you need, but never create, edit, delete or move anything in them; if a change is needed there, say so instead.\n"
-            text += readOnly.map { "- \(Self.roleNames[$0.role] ?? $0.role): \($0.path)" }.joined(separator: "\n")
+            text += readOnly.map { "- \($0.label): \($0.path)" }.joined(separator: "\n")
         }
-        text += "\nThe project's details (its ClickUp list, its folders and their roles) are in the JSON file at \(agentFile), also in $SWARME_PROJECT_JSON."
+        text += "\nThe project's details (its labeled repositories and their stable ids) are in the JSON file at \(agentFile), also in $SWARME_PROJECT_JSON."
         return text
     }
 }

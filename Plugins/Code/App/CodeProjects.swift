@@ -46,7 +46,7 @@ struct CodeProjectRows: View {
                        subtitle: tr("Le altre cartelle del progetto le legge soltanto.")) {
                 Picker("", selection: Binding(get: { role ?? "" }, set: { set(project: project.id, role: $0.isEmpty ? nil : $0) })) {
                     Text(tr("Nessuna")).tag("")
-                    ForEach(project.repos, id: \.role) { Text(verbatim: ProjectRoles.title($0.role)).tag($0.role) }
+                    ForEach(project.repos, id: \.role) { Text(verbatim: $0.displayLabel).tag($0.role) }
                 }
                 .labelsHidden()
                 .frame(maxWidth: 170)
@@ -96,14 +96,17 @@ struct CodeProjectsSettings: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: project.name).font(.system(size: 13, weight: .medium))
-                            Text(verbatim: project.repos.map { ProjectRoles.title($0.role) }.joined(separator: " · "))
+                            Text(verbatim: project.repos.map(\.displayLabel).joined(separator: " · "))
                                 .font(.system(size: 11.5)).foregroundStyle(Theme.tertiary)
                         }
                         Spacer()
-                        Button(tr("Modifica…")) { editing = project }
+                        Button(tr("Modifica…")) { editing = project }.disabled(!state.engineHasFlexibleProjects(model))
                     }
                 }
-                Button(tr("Nuovo progetto…")) { creating = true }
+                Button(tr("Nuovo progetto…")) { creating = true }.disabled(!state.engineHasFlexibleProjects(model))
+                if !state.engineHasFlexibleProjects(model) {
+                    Text(tr("Aggiorna il motore per gestire repository con etichette personalizzate.")).font(.caption).foregroundStyle(.secondary)
+                }
             }
         } header: {
             Text(tr("Progetti"))
@@ -123,51 +126,66 @@ struct ProjectEditor: View {
     let project: Project?
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-
     @State private var name = ""
-    @State private var listId = ""
-    @State private var paths: [String: String] = [:]
-    @State private var scripts: [String: [ProjectScript]] = [:]
+    @State private var repos: [ProjectRepo] = []
     @State private var browsing: String?
     @State private var saving = false
+    @State private var loading = true
     @State private var error: String?
     @State private var confirmDelete = false
 
-    private var canSave: Bool { !saving && !name.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var duplicateLabels: Bool {
+        let labels = repos.map { ($0.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX")) }
+        return Set(labels).count != labels.count
+    }
+    private var canSave: Bool {
+        !saving && !loading && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !duplicateLabels
+            && repos.allSatisfy { !($0.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !$0.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(project == nil ? tr("Nuovo progetto") : tr("Progetto")).font(.headline)
             Form {
                 TextField(tr("Nome"), text: $name)
-                TextField(tr("ID della lista ClickUp"), text: $listId)
-                Section(tr("Cartelle")) {
-                    ForEach(ProjectRoles.all, id: \.self) { role in
+                Section(tr("Repository")) {
+                    ForEach($repos) { $repo in
                         VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text(verbatim: ProjectRoles.title(role)).frame(width: 110, alignment: .leading)
-                            TextField("", text: Binding(get: { paths[role] ?? "" }, set: { paths[role] = $0 }), prompt: Text(verbatim: "/"))
-                                .font(.system(size: 12, design: .monospaced)).labelsHidden()
-                            Button(tr("Scegli…")) { choose(role) }
-                        }
-                        if paths[role]?.isEmpty == false {
+                            HStack {
+                                TextField(tr("Etichetta"), text: Binding(get: { repo.label ?? "" }, set: { repo.label = $0 }))
+                                    .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 160)
+                                TextField(tr("Cartella"), text: $repo.path, prompt: Text(verbatim: "/"))
+                                    .labelsHidden().textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
+                                    .help(Text(verbatim: repo.path))
+                                Button(tr("Scegli…")) { choose(repo.id) }
+                                Button { repos.removeAll { $0.id == repo.id } } label: { Image(systemName: "minus.circle") }
+                                    .buttonStyle(.plain).help(tr("Rimuovi repository"))
+                            }
                             DisclosureGroup(tr("Script")) {
-                                ForEach(Array((scripts[role] ?? []).indices), id: \.self) { index in
+                                ForEach(Array((repo.scripts ?? []).indices), id: \.self) { index in
                                     HStack {
-                                        TextField(tr("Nome"), text: scriptBinding(role, index, \.name)).frame(width: 90)
-                                        TextField(tr("Comando"), text: scriptBinding(role, index, \.command)).font(.system(size: 11.5, design: .monospaced))
-                                        Button { scripts[role]?.remove(at: index) } label: { Image(systemName: "minus.circle") }.buttonStyle(.plain)
+                                        TextField(tr("Nome"), text: scriptBinding(repo.id, index, \.name)).labelsHidden().frame(width: 90)
+                                        TextField(tr("Comando"), text: scriptBinding(repo.id, index, \.command))
+                                            .labelsHidden().font(.system(size: 11.5, design: .monospaced))
+                                        Button { edit(repo.id) { $0.scripts?.remove(at: index) } } label: { Image(systemName: "minus.circle") }
+                                            .buttonStyle(.plain)
                                     }
                                 }
-                                Button(tr("Aggiungi script")) { scripts[role, default: []].append(ProjectScript(name: "", command: "")) }
-                                    .disabled((scripts[role]?.count ?? 0) >= 20)
+                                Button(tr("Aggiungi script")) { edit(repo.id) { $0.scripts = ($0.scripts ?? []) + [ProjectScript(name: "", command: "")] } }
+                                    .disabled((repo.scripts?.count ?? 0) >= 20)
                             }
                         }
-                        }
                     }
+                    Button(tr("Aggiungi repository")) {
+                        repos.append(ProjectRepo(role: UUID().uuidString.lowercased(), path: "", scripts: [], label: ""))
+                    }.disabled(loading)
                 }
             }
             .formStyle(.grouped)
+            if loading { ProgressView().controlSize(.small) }
+            if duplicateLabels { Text(tr("Le etichette dei repository devono essere diverse.")).font(.caption).foregroundStyle(Theme.warning) }
             if model.isRemote {
                 Text(tr("Le cartelle sono quelle del server: i percorsi non sono quelli di questo Mac."))
                     .font(.system(size: 11.5)).foregroundStyle(Theme.tertiary)
@@ -181,73 +199,77 @@ struct ProjectEditor: View {
                 Button(tr("Salva")) { Task { await save() } }.keyboardShortcut(.defaultAction).disabled(!canSave)
             }
         }
-        .padding(20)
-        .frame(width: 620, height: 600)
-        .onAppear {
-            name = project?.name ?? ""
-            listId = project?.clickupListId ?? ""
-            for repo in project?.repos ?? [] { paths[repo.role] = repo.path; scripts[repo.role] = repo.scripts ?? [] }
-        }
+        .padding(20).frame(width: 720, height: 600)
+        .task { await load() }
         .sheet(item: Binding(get: { browsing.map(Picking.init) }, set: { browsing = $0?.role })) { picking in
-            ServerFolderPicker(state: state, start: paths[picking.role]) { chosen in
-                paths[picking.role] = chosen
+            ServerFolderPicker(state: state, start: repos.first { $0.id == picking.role }?.path) { chosen in
+                edit(picking.role) { $0.path = chosen }
                 browsing = nil
             }
         }
         .confirmationDialog(tr("Eliminare il progetto?"), isPresented: $confirmDelete) {
             Button(tr("Elimina"), role: .destructive) { Task { await delete() } }
-        } message: {
-            Text(tr("I bot e i canali che ne fanno parte restano senza progetto. Le cartelle non vengono toccate."))
-        }
+        } message: { Text(tr("I bot e i canali che ne fanno parte restano senza progetto. Le cartelle non vengono toccate.")) }
     }
 
-    private struct Picking: Identifiable {
-        let role: String
-        var id: String { role }
+    private struct Picking: Identifiable { let role: String; var id: String { role } }
+
+    private func edit(_ id: String, _ change: (inout ProjectRepo) -> Void) {
+        guard let index = repos.firstIndex(where: { $0.id == id }) else { return }
+        change(&repos[index])
+    }
+
+    private func load() async {
+        guard loading else { return }
+        name = project?.name ?? ""
+        if let project {
+            repos = project.repos.map { var repo = $0; repo.label = repo.displayLabel; return repo }
+        } else {
+            let bot = model.selectedBot
+            let current = model.selectedRoom.flatMap { $0.pinnedCwd ?? $0.cwd }
+                ?? bot?.tasks?.first(where: { $0.threadId == bot?.threadId })?.cwd ?? bot?.cwd
+            do {
+                let folder = try await state.folders(model: model, path: current, hidden: false)
+                repos = [ProjectRepo(role: "default", path: folder.path, scripts: [], label: "Default")]
+            } catch {
+                self.error = error.localizedDescription
+                repos = [ProjectRepo(role: "default", path: "", scripts: [], label: "Default")]
+            }
+        }
+        loading = false
     }
 
     private func scriptBinding(_ role: String, _ index: Int, _ key: WritableKeyPath<ProjectScript, String>) -> Binding<String> {
-        Binding(get: { scripts[role]?.indices.contains(index) == true ? scripts[role]![index][keyPath: key] : "" }, set: { value in
-            guard scripts[role]?.indices.contains(index) == true else { return }
-            scripts[role]?[index][keyPath: key] = value
-        })
+        Binding(get: {
+            guard let scripts = repos.first(where: { $0.id == role })?.scripts, scripts.indices.contains(index) else { return "" }
+            return scripts[index][keyPath: key]
+        }, set: { value in edit(role) { if $0.scripts?.indices.contains(index) == true { $0.scripts?[index][keyPath: key] = value } } })
     }
 
-    /// This Mac's own folders through the open panel; a server's through the engine.
     private func choose(_ role: String) {
         if model.isRemote { browsing = role; return }
         let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = false
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = false
         panel.prompt = tr("Scegli")
-        panel.message = ProjectRoles.title(role)
-        if let current = paths[role], FileManager.default.fileExists(atPath: current) { panel.directoryURL = URL(fileURLWithPath: current, isDirectory: true) }
+        panel.message = repos.first { $0.id == role }?.label ?? ""
+        if let path = repos.first(where: { $0.id == role })?.path, !path.isEmpty { panel.directoryURL = URL(fileURLWithPath: path) }
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        paths[role] = url.path
+        edit(role) { $0.path = url.path }
     }
 
     private func save() async {
-        saving = true
-        error = nil
+        saving = true; error = nil
         defer { saving = false }
-        let repos = ProjectRoles.all.compactMap { role -> ProjectRepo? in
-            guard let path = paths[role]?.trimmingCharacters(in: .whitespaces), !path.isEmpty else { return nil }
-            return ProjectRepo(role: role, path: path, scripts: scripts[role] ?? [])
-        }
         do {
-            try await state.saveProject(model: model, id: project?.id, name: name.trimmingCharacters(in: .whitespaces),
-                                        clickupListId: listId.trimmingCharacters(in: .whitespaces), repos: repos)
+            try await state.saveProject(model: model, id: project?.id, name: name.trimmingCharacters(in: .whitespacesAndNewlines), repos: repos)
             dismiss()
         } catch { self.error = error.localizedDescription }
     }
 
     private func delete() async {
         guard let project else { return }
-        do {
-            try await state.deleteProject(model: model, project.id)
-            dismiss()
-        } catch { self.error = error.localizedDescription }
+        do { try await state.deleteProject(model: model, project.id); dismiss() }
+        catch { self.error = error.localizedDescription }
     }
 }
 

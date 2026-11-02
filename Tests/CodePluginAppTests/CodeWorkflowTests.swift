@@ -243,11 +243,11 @@ final class CodeProjectsTests: XCTestCase {
     func testAProjectDecodesWithItsFoldersAndScripts() throws {
         let p = try project(#"{"id":"p","name":"Rossi","clickupListId":"9015","repos":[{"role":"backend","path":"/a","scripts":[{"name":"Test","command":"swift test"}]},{"role":"app","path":"/b"}],"createdAt":1}"#)
         XCTAssertEqual(p.name, "Rossi")
-        XCTAssertEqual(p.clickupListId, "9015")
+        XCTAssertEqual(p.repo("backend")?.displayLabel, "Backend")
         XCTAssertEqual(p.repo("backend")?.scripts?.first?.command, "swift test")
         XCTAssertNil(p.repo("app")?.scripts)
         XCTAssertNil(p.repo("bruno"))
-        XCTAssertNil(try project(#"{"id":"p","name":"R","clickupListId":null,"repos":[]}"#).clickupListId)
+        XCTAssertTrue(try project(#"{"id":"p","name":"R","clickupListId":null,"repos":[]}"#).repos.isEmpty)
     }
 
     func testTheAssignmentReadsTheEnginesData() throws {
@@ -261,9 +261,21 @@ final class CodeProjectsTests: XCTestCase {
         XCTAssertNil(state.assignment(["code": .object(["projectId": .string("gone")])]).project, "a project that is no longer there")
     }
 
-    func testTheRolesAreTheFourTheEngineKnows() {
-        XCTAssertEqual(ProjectRoles.all, ["backend", "backoffice", "app", "bruno"])
+    func testLegacyNamesAndCustomIdsAreBothSupported() {
+        XCTAssertEqual(ProjectRoles.title("my-custom-repo"), "my-custom-repo")
         XCTAssertEqual(ProjectRoles.title("bruno"), "Collection Bruno".replacingOccurrences(of: "Collection Bruno", with: "Bruno collection"))
+    }
+
+    func testCustomLabelsAreIndependentFromStableAssignments() throws {
+        let p = try project(#"{"id":"p","name":"P","repos":[{"role":"repo-id","label":"Data Warehouse","path":"/data","scripts":[{"name":"Test","command":"test"}]}]}"#)
+        XCTAssertEqual(p.repo("repo-id")?.displayLabel, "Data Warehouse")
+        XCTAssertEqual(p.repo("repo-id")?.scripts?.first?.command, "test")
+        let model = AppModel()
+        let state = CodeState()
+        model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.6.0", enabled: true)]
+        XCTAssertFalse(state.engineHasFlexibleProjects(model))
+        model.enginePlugins = [EnginePluginInfo(id: "code", name: "Code", version: "1.7.0", enabled: true)]
+        XCTAssertTrue(state.engineHasFlexibleProjects(model))
     }
 
     func testProjectsNeedAnEngineOfVersion12() {

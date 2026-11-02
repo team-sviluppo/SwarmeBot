@@ -11,6 +11,7 @@ import SwiftUI
 enum CylonRoleTitle {
     static func title(_ role: String) -> String {
         switch role {
+        case "default": return "Default"
         case "backend": return tr("Backend")
         case "backoffice": return tr("Backoffice")
         case "app": return tr("App")
@@ -134,7 +135,9 @@ struct CylonBoardPanel: View {
         } else {
             List {
                 ForEach(Array(board.items.enumerated()), id: \.element.id) { index, item in
-                    CylonBoardRow(rank: index + 1, item: item, onStart: { start(item, replace: false) }, onReplace: { replacing = item },
+                    CylonBoardRow(rank: index + 1, item: item,
+                                  repositoryLabel: state.projects.first { $0.id == projectId }?.repositoryLabel(item.role) ?? CylonRoleTitle.title(item.role),
+                                  onStart: { start(item, replace: false) }, onReplace: { replacing = item },
                                   onRemove: { Task { await state.actOnBoard(model: model, projectId: projectId) { try await $0.removeCylonBoardItem(board.id, item: item.id) } } })
                         .listRowInsets(EdgeInsets(top: 2, leading: 14, bottom: 2, trailing: 12))
                         .listRowSeparatorTint(Theme.hairline.opacity(0.4))
@@ -185,6 +188,7 @@ struct CylonBoardPanel: View {
 private struct CylonBoardRow: View {
     let rank: Int
     let item: CylonBoardWire.Item
+    let repositoryLabel: String
     let onStart: () -> Void
     let onReplace: () -> Void
     let onRemove: () -> Void
@@ -232,7 +236,7 @@ private struct CylonBoardRow: View {
                 .frame(width: 22, height: 22).background(Circle().fill(Theme.raised)).help(tr("Priorità: trascina per cambiarla"))
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(verbatim: CylonRoleTitle.title(item.role)).font(.system(size: 13, weight: .semibold))
+                    Text(verbatim: repositoryLabel).font(.system(size: 13, weight: .semibold))
                     Text(verbatim: item.title ?? item.ticketId).font(.system(size: 12.5)).foregroundStyle(Theme.secondary).lineLimit(1)
                     if item.title != nil { Text(verbatim: item.ticketId).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.tertiary).lineLimit(1) }
                 }
@@ -349,20 +353,23 @@ struct CylonAddTicketSheet: View {
     @State private var busy = false
 
     private var roles: [String] { state.projects.first { $0.id == projectId }?.repos?.map(\.role) ?? [] }
+    private func repositoryLabel(_ role: String) -> String {
+        state.projects.first { $0.id == projectId }?.repositoryLabel(role) ?? CylonRoleTitle.title(role)
+    }
     private var candidates: [Room] { CylonBoardChannels.candidates(rooms: model.state.rooms, projectId: projectId, role: role) }
 
     var body: some View {
         Form {
             Section {
                 Picker(tr("Repo"), selection: $role) {
-                    ForEach(roles, id: \.self) { Text(verbatim: CylonRoleTitle.title($0)).tag($0) }
+                    ForEach(roles, id: \.self) { Text(verbatim: repositoryLabel($0)).tag($0) }
                 }
                 if candidates.count > 1 {
                     Picker(tr("Canale"), selection: $groupId) { ForEach(candidates) { Text(verbatim: "#\($0.name)").tag($0.id) } }
                 } else if let only = candidates.first {
                     LabeledContent(tr("Canale")) { Text(verbatim: "#\(only.name)").foregroundStyle(.secondary) }
                 } else if !role.isEmpty {
-                    Label(tr("Nessun canale con Cylon attivo lavora su %@: creane uno e scegli il progetto e «Lavora su» nelle sue impostazioni.", CylonRoleTitle.title(role)),
+                    Label(tr("Nessun canale con Cylon attivo lavora su %@: creane uno e scegli il progetto e «Lavora su» nelle sue impostazioni.", repositoryLabel(role)),
                           systemImage: "exclamationmark.triangle").font(.system(size: 12)).foregroundStyle(Theme.warning)
                 }
                 TextField(tr("Ticket ClickUp"), text: $ticket, prompt: Text(verbatim: "86c2x9k")).font(.system(size: 12, design: .monospaced))

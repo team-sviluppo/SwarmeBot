@@ -16,7 +16,7 @@ public final class CodeEnginePlugin: EnginePlugin {
 
     public nonisolated var id: String { "code" }
     public nonisolated var name: String { "Code" }
-    public nonisolated var version: String { "1.6.0" }
+    public nonisolated var version: String { "1.7.0" }
     public nonisolated var botFlags: [String] { ["codeMode"] }
     /// Code mode for a whole channel: one folder for every member, one of them working at a time.
     public nonisolated var groupFlags: [String] { ["codeMode"] }
@@ -44,7 +44,7 @@ public final class CodeEnginePlugin: EnginePlugin {
             guard let id = sent.string, store.project(id) != nil else { throw HTTPError(400, "no such project") }
         }
         if let role = data["role"], !role.isNull {
-            guard let name = role.string, ProjectRole.all.contains(name) else { throw HTTPError(400, "role must be one of \(ProjectRole.all.joined(separator: ", "))") }
+            guard let name = role.string, ProjectRole.valid(name) else { throw HTTPError(400, "role must be a repository id") }
             guard let projectId, let project = store.project(projectId) else { throw HTTPError(400, "role needs a project") }
             guard project["repos"]?.array?.contains(where: { $0["role"]?.string == name }) == true else {
                 throw HTTPError(400, "the project has no \(name) folder")
@@ -104,6 +104,7 @@ public final class CodeEnginePlugin: EnginePlugin {
         let store = ProjectStore(harness: harness)
         guard let project = store.project(projectId),
               let context = ProjectContext.make(project: project, role: data["role"]?.string, cwd: turn.cwd) else { return }
+        try? store.writeAgentFile(project)
         let file = store.agentFile(projectId)
         turn.system += (turn.system.isEmpty ? "" : "\n\n") + context.prompt(agentFile: file.path)
         turn.environment["SWARME_PROJECT_JSON"] = file.path
