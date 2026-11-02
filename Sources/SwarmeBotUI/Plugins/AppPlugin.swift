@@ -81,6 +81,18 @@ public enum SettingsScope {
     case global
 }
 
+/// A plugin's draft fields in the project editor. The editor loads and validates
+/// these before saving the project, then saves them with the resulting project id.
+@MainActor
+public protocol PluginProjectSettings: AnyObject {
+    /// The owning plugin's id: disabled plugins contribute neither fields nor writes.
+    var id: String { get }
+    var content: PluginView { get }
+    func load(projectId: String?) async throws
+    func validate() throws
+    func save(projectId: String) async throws
+}
+
 /// Where a bot reply stands in its turn: the last of the turn, and the newest turn's last.
 public struct TurnPosition: Sendable {
     public var isTurnEnd: Bool
@@ -121,6 +133,8 @@ public protocol AppPlugin: AnyObject {
     func commands(_ model: AppModel) async -> [PluginCommand]
     /// Rows of the settings of a bot or channel (the plugin's switch, its options).
     func settingsSections(_ scope: SettingsScope) -> [PluginView]
+    /// A fresh draft for each project editor, including a project being created.
+    func projectSettings(on model: AppModel) -> (any PluginProjectSettings)?
     /// The chat, its folder or its busy state changed: refresh what the plugin shows.
     func chatChanged(_ chat: ChatContext) async
 }
@@ -138,6 +152,7 @@ public extension AppPlugin {
     func chatNavigation(_ chat: ChatContext) -> PluginView? { nil }
     func commands(_ model: AppModel) async -> [PluginCommand] { [] }
     func settingsSections(_ scope: SettingsScope) -> [PluginView] { [] }
+    func projectSettings(on model: AppModel) -> (any PluginProjectSettings)? { nil }
     func chatChanged(_ chat: ChatContext) async {}
 }
 
@@ -224,6 +239,10 @@ public final class PluginHost {
 
     public func settingsSections(_ scope: SettingsScope, on model: AppModel) -> [PluginView] {
         available(on: model).flatMap { $0.settingsSections(scope) }
+    }
+
+    public func projectSettings(on model: AppModel) -> [any PluginProjectSettings] {
+        available(on: model).compactMap { $0.projectSettings(on: model) }
     }
 
     /// Whether any plugin is on for this chat, so the transcript knows to work out its turns.

@@ -3,6 +3,12 @@
 Le note descrivono le differenze visibili agli utenti rispetto alla versione precedente.
 Prima di pubblicare una release, aggiungere una sezione con il numero esatto della versione.
 
+## [Unreleased]
+
+### Correzioni
+
+- Ripristinato l’ID della lista ClickUp nella scheda progetto, sia in creazione sia in modifica, visibile solo quando Cylon è attivo. Il pulsante Salva del progetto salva anche questo valore, mantenendo gli ID già configurati.
+
 ## [0.6.0]
 
 ### Progetti

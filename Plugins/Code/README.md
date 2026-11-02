@@ -37,7 +37,8 @@ A project has a name and repositories, kept in `<data>/plugins/code/projects.jso
 are on its machine. Since plugin 1.7.0 the repository list is arbitrary: each has a stable `role` id, an editable `label`,
 a folder and optional scripts. Renaming a label or reordering the list keeps bot/channel assignments and scripts.
 Existing `backend`, `backoffice`, `app` and `bruno` ids remain valid; old records without labels retain their familiar names.
-ClickUp configuration belongs to the Cylon plugin, not the Code project editor. A bot or a channel belongs to at most one and says which folder it **works on**; the others are linked
+ClickUp configuration is edited in the project sheet when Cylon is enabled; Cylon owns and stores the setting.
+A bot or a channel belongs to at most one and says which folder it **works on**; the others are linked
 **read-only**, for context. In a channel the channel's project counts, not its members'.
 
 | Method | Path | Request | Answer |
@@ -97,7 +98,7 @@ and a "Commit & push" that asks the agent to do it.
   or the engine's home when no chat is selected. Labels are required and unique (case-insensitive).
   Each row keeps its own scripts. *Choose…* opens the Mac's open panel for a local engine, or the **server's** folder
   browser for a remote one. Older engines keep project assignment available but require an update for the new editor.
-- **Settings › Plugins › Cylon**: per-project ClickUp list configuration, visible only while Cylon is enabled.
+- **Settings › Plugins › Code › New project / Edit**: per-project ClickUp list configuration, contributed and saved by Cylon, visible only while Cylon is enabled.
   Existing ClickUp ids are read from their old Code record until saved in Cylon; editing a Code project preserves them.
 - **A bot's settings** (the Code card) and **a channel's settings**: *Project* and *Works on*. Choosing the folder also
   makes it the chat's default folder; a chat can still change folder from the composer. In a channel, its project

@@ -159,11 +159,13 @@ public final class CodeState {
     }
 
     /// Creates or changes a project; the engine's refusal (a folder that is not there…) comes back as the error.
-    func saveProject(model: AppModel, id: String?, name: String, repos: [ProjectRepo]) async throws {
+    func saveProject(model: AppModel, id: String?, name: String, repos: [ProjectRepo]) async throws -> Project {
         guard let client = model.client else { throw URLError(.notConnectedToInternet) }
-        if let id { _ = try await client.updateProject(id, name: name, repos: repos) }
-        else { _ = try await client.createProject(name: name, repos: repos) }
+        let saved: Project
+        if let id { saved = try await client.updateProject(id, name: name, repos: repos) }
+        else { saved = try await client.createProject(name: name, repos: repos) }
         await refreshProjects(model: model)
+        return saved
     }
 
     func deleteProject(model: AppModel, _ id: String) async throws {

@@ -133,6 +133,15 @@ struct ProjectEditor: View {
     @State private var loading = true
     @State private var error: String?
     @State private var confirmDelete = false
+    @State private var pluginSettings: [any PluginProjectSettings] = []
+    @State private var settingsLoadFailed = false
+    // A plugin save can fail after the project was created. Retrying must update
+    // that same project rather than create a second one.
+    @State private var savedProjectId: String?
+
+    private var activePluginSettings: [any PluginProjectSettings] {
+        pluginSettings.filter { model.engineHasPlugin($0.id) }
+    }
 
     private var duplicateLabels: Bool {
         let labels = repos.map { ($0.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -140,7 +149,7 @@ struct ProjectEditor: View {
         return Set(labels).count != labels.count
     }
     private var canSave: Bool {
-        !saving && !loading && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !duplicateLabels
+        !saving && !loading && !settingsLoadFailed && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !duplicateLabels
             && repos.allSatisfy { !($0.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 && !$0.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
@@ -150,6 +159,7 @@ struct ProjectEditor: View {
             Text(project == nil ? tr("Nuovo progetto") : tr("Progetto")).font(.headline)
             Form {
                 TextField(tr("Nome"), text: $name)
+                ForEach(activePluginSettings, id: \.id) { $0.content }
                 Section(tr("Repository")) {
                     ForEach($repos) { $repo in
                         VStack(alignment: .leading, spacing: 8) {
@@ -184,6 +194,7 @@ struct ProjectEditor: View {
                 }
             }
             .formStyle(.grouped)
+            .disabled(loading || saving)
             if loading { ProgressView().controlSize(.small) }
             if duplicateLabels { Text(tr("Le etichette dei repository devono essere diverse.")).font(.caption).foregroundStyle(Theme.warning) }
             if model.isRemote {
@@ -221,6 +232,8 @@ struct ProjectEditor: View {
 
     private func load() async {
         guard loading else { return }
+        savedProjectId = project?.id
+        pluginSettings = PluginHost.shared.projectSettings(on: model)
         name = project?.name ?? ""
         if let project {
             repos = project.repos.map { var repo = $0; repo.label = repo.displayLabel; return repo }
@@ -235,6 +248,12 @@ struct ProjectEditor: View {
                 self.error = error.localizedDescription
                 repos = [ProjectRepo(role: "default", path: "", scripts: [], label: "Default")]
             }
+        }
+        do {
+            for settings in activePluginSettings { try await settings.load(projectId: project?.id) }
+        } catch {
+            self.error = error.localizedDescription
+            settingsLoadFailed = true
         }
         loading = false
     }
@@ -261,7 +280,11 @@ struct ProjectEditor: View {
         saving = true; error = nil
         defer { saving = false }
         do {
-            try await state.saveProject(model: model, id: project?.id, name: name.trimmingCharacters(in: .whitespacesAndNewlines), repos: repos)
+            let settings = activePluginSettings
+            for draft in settings { try draft.validate() }
+            let saved = try await state.saveProject(model: model, id: savedProjectId, name: name.trimmingCharacters(in: .whitespacesAndNewlines), repos: repos)
+            savedProjectId = saved.id
+            for draft in settings where model.engineHasPlugin(draft.id) { try await draft.save(projectId: saved.id) }
             dismiss()
         } catch { self.error = error.localizedDescription }
     }
