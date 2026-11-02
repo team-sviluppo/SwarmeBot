@@ -3,7 +3,7 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
-## [Unreleased]
+## [0.6.1]
 
 ### Fixes
 
