@@ -677,7 +677,22 @@ Linux engines (`scripts/linux-engines-manifest.sh`), tags `vX.Y.Z` and publishes
 engines and `appcast.xml` as a GitHub release (`--no-publish` to skip). Credentials are read from
 `.env.mac-release.local` (git-ignored; start from `.env.mac-release.example`): `MAC_SIGN_IDENTITY`,
 Apple ID or `NOTARY_PROFILE`, `SPARKLE_PUBLIC_KEY`. Forks should also set `RELEASES_REPO` and
-`SPARKLE_FEED_URL` to their own repository.
+optionally `SPARKLE_FEED_URL` to their own public appcast. Downloading updates uses public HTTPS
+URLs, without a GitHub token in the app. Only the Mac publishing releases needs `gh auth login`.
+The release script refuses to publish to a private repository, and bundling rejects feed URLs
+with credentials or query parameters. EdDSA verification remains required for updates.
+
+Before releasing, add a `## [X.Y.Z]` section to [CHANGELOG.md](CHANGELOG.md), with `###` headings
+and user-facing bullet points describing the changes since the previous release. The release
+script requires notes for that exact version and publishes them both in the GitHub release and
+in Sparkle's update window. Re-running publication also refreshes the notes of an existing release.
+The previous version is the highest lower version tag reachable from the release commit; the
+notes include a comparison link. Preview both formats without signing or publishing:
+
+```sh
+python3 -I scripts/release-notes.py --version 0.5.3 --output-dir /tmp/swarme-release-notes
+python3 -I scripts/tests/test_release_notes.py
+```
 
 Sparkle keys are generated once on the Mac that publishes:
 

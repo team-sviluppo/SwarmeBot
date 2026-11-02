@@ -16,7 +16,8 @@
 #   NOTARY_PROFILE=name  a `xcrun notarytool store-credentials` profile
 #   SPARKLE_PUBLIC_KEY=… EdDSA public key from Sparkle's generate_keys; without
 #                      it the updater stays off
-#   SPARKLE_FEED_URL=…  default: the appcast on team-sviluppo/SwarmeBot
+#   SPARKLE_FEED_URL=…  public HTTPS appcast (no credentials or query parameters)
+#                      default: the appcast on team-sviluppo/SwarmeBot
 #   VERSION=0.1.0 BUILD_NUMBER=1
 #   SWARMEBOT_REPO      the SwarmeBot checkout (default ../SwarmeBot)
 set -euo pipefail
@@ -47,6 +48,23 @@ fi
 SWIFT_ARCHS=(--arch arm64)
 APP="$OUT/SwarmeBot.app"
 
+# Update credentials never belong in a distributed bundle. Fail before building
+# if an old/private feed override tries to put a token in Info.plist.
+export SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://github.com/${RELEASES_REPO:-team-sviluppo/SwarmeBot}/releases/latest/download/appcast.xml}"
+python3 -I - <<'PY'
+import os
+from urllib.parse import urlsplit
+try:
+    feed = urlsplit(os.environ["SPARKLE_FEED_URL"])
+    valid = (feed.scheme == "https" and feed.hostname and feed.path
+             and feed.username is None and feed.password is None
+             and not feed.query and not feed.fragment)
+except ValueError:
+    valid = False
+if not valid:
+    raise SystemExit("SPARKLE_FEED_URL must be a public HTTPS URL without credentials, query or fragment")
+PY
+
 cd "$ROOT"
 swift build -c release "${SWIFT_ARCHS[@]}"
 BIN_DIR="$(swift build -c release "${SWIFT_ARCHS[@]}" --show-bin-path)"
@@ -59,7 +77,7 @@ cp "$BIN_DIR/swarme-harness" "$APP/Contents/Helpers/swarme-harness"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION:-0.1.0}" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER:-1}" "$APP/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${SPARKLE_FEED_URL:-https://github.com/team-sviluppo/SwarmeBot/releases/latest/download/appcast.xml}" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :SUFeedURL string $SPARKLE_FEED_URL" "$APP/Contents/Info.plist"
 # check every 6 hours (Updater also checks at every launch), on by default without asking
 /usr/libexec/PlistBuddy -c "Add :SUScheduledCheckInterval integer 21600" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SUEnableAutomaticChecks bool true" "$APP/Contents/Info.plist"

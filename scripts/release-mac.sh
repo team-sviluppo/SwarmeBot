@@ -25,13 +25,14 @@
 # Output: release/SwarmeBot-<version>-arm64.dmg, plus the stable
 # name release/SwarmeBot.dmg (Apple silicon).
 # Unless --no-publish, also a git tag vX.Y.Z pushed to origin, then a zip per
-# arch and appcast.xml uploaded as the GitHub release for that tag.
+# arch and appcast.xml uploaded as the GitHub release for that tag. Curated
+# notes for that exact version must be present in CHANGELOG.md; the same
+# notes are published on GitHub and embedded in Sparkle's update dialog.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="${SWARMEBOT_REPO:-$ROOT/../SwarmeBot}"
 OUT="$ROOT/release"
-RELEASES_REPO="${RELEASES_REPO:-team-sviluppo/SwarmeBot}"
 SKIP_NOTARIZE=0
 PUBLISH=1
 
@@ -70,9 +71,24 @@ load_env() {
 if [[ -f "$ROOT/.env.mac-release.local" ]]; then load_env "$ROOT/.env.mac-release.local"
 elif [[ -f "$REPO/.env.mac-release.local" ]]; then load_env "$REPO/.env.mac-release.local"
 fi
+RELEASES_REPO="${RELEASES_REPO:-team-sviluppo/SwarmeBot}"
 
 # Reject obsolete architecture overrides before signing, Docker or publication.
 [[ "${MAC_ARCHES:-arm64}" == arm64 ]] || die "macOS releases support arm64 only; remove Intel/universal values from --arch or MAC_ARCHES"
+
+# Prepare the notes before any expensive build/signing work. This never publishes.
+PLIST="$ROOT/Resources/Info.plist"
+VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")}"
+BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)}"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "VERSION must look like 1.2.3 (got $VERSION)"
+python3 -I "$ROOT/scripts/release-notes.py" --version "$VERSION" --repo "$RELEASES_REPO" --output-dir "$OUT"
+
+if [[ $PUBLISH == 1 ]]; then
+  command -v gh >/dev/null || die "gh is required to publish (or pass --no-publish)"
+  gh auth status >/dev/null 2>&1 || die "gh is not logged in to an account that can write $RELEASES_REPO"
+  [[ "$(gh repo view "$RELEASES_REPO" --json visibility --jq .visibility)" == PUBLIC ]] \
+    || die "release downloads require a public GitHub repository"
+fi
 
 # --- signing identity ---
 if [[ -z "${MAC_SIGN_IDENTITY:-}" ]]; then
@@ -103,18 +119,10 @@ if [[ $SKIP_NOTARIZE == 0 ]]; then
 fi
 
 # --- version ---
-PLIST="$ROOT/Resources/Info.plist"
-VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")}"
-BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)}"
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "VERSION must look like 1.2.3 (got $VERSION)"
 echo "→ version $VERSION ($BUILD_NUMBER)"
 
 if [[ $PUBLISH == 1 && -z "${SPARKLE_PUBLIC_KEY:-}" ]]; then
   die "set SPARKLE_PUBLIC_KEY (from Sparkle generate_keys) or pass --no-publish"
-fi
-if [[ $PUBLISH == 1 ]]; then
-  command -v gh >/dev/null || die "gh is required to publish (or pass --no-publish)"
-  gh auth status >/dev/null 2>&1 || die "gh is not logged in to a account that can write $RELEASES_REPO"
 fi
 
 # Sparkle's sign_update is not inside the framework SwiftPM fetches.
@@ -231,6 +239,7 @@ if [[ $PUBLISH == 1 ]]; then
 
   pubdate="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
   appcast="$OUT/appcast.xml"
+  notes_html="$(cat "$OUT/release-notes.html")"
   cat > "$appcast" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
@@ -242,6 +251,7 @@ if [[ $PUBLISH == 1 ]]; then
       <sparkle:version>${BUILD_NUMBER}</sparkle:version>
       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[${notes_html}]]></description>
 ${enclosures}    </item>
   </channel>
 </rss>
@@ -274,12 +284,13 @@ EOF
 
   echo "→ publishing $tag on $RELEASES_REPO"
   if gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+    gh release edit "$tag" --repo "$RELEASES_REPO" --notes-file "$OUT/release-notes.md"
     gh release upload "$tag" --repo "$RELEASES_REPO" --clobber \
       "${BUILT[@]}" "${ZIPS[@]}" "${LINUX_ASSETS[@]}" "$appcast"
   else
     gh release create "$tag" --repo "$RELEASES_REPO" --target "$sha" \
       --title "SwarmeBot ${VERSION}" \
-      --notes "SwarmeBot ${VERSION} (${BUILD_NUMBER}) per macOS. Apple silicon: SwarmeBot-${VERSION}-arm64.dmg." \
+      --notes-file "$OUT/release-notes.md" \
       "${BUILT[@]}" "${ZIPS[@]}" "${LINUX_ASSETS[@]}" "$appcast"
   fi
 fi
