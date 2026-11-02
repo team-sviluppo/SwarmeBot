@@ -23,7 +23,8 @@ History you need to read the docs correctly:
 - This repo used to be called `SwarmeBotSwift`; older notes refer to it by that name.
 
 The project language is **Italian** for UI strings, plans and design docs. Code, code comments
-and commit messages are **English**.
+and commit messages are **English**. `CHANGELOG.md` and all release notes (including generated
+GitHub/Sparkle introductions and comparison links) must always be **English**.
 
 The app is localized in English (default) and Italian, chosen in Settings › Generale
 (`SwarmeKit/Localization.swift`). UI strings are written in Italian and wrapped in `tr("…")`; the

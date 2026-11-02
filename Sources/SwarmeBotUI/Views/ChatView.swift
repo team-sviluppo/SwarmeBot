@@ -739,11 +739,11 @@ struct ShimmerText: View {
 /// right, and elapsed time in seconds, minutes and hours as needed.
 struct TypingIndicator: View {
     var bot: Bot?
-    @State private var start = Date()
+    let startedAt: Date
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
-            let t = timeline.date.timeIntervalSince(start)
+            let t = max(0, timeline.date.timeIntervalSince(startedAt))
             HStack(spacing: 10) {
                 if let bot {
                     // 1.6 s there and back over 24 pt, eased at the ends
@@ -840,10 +840,16 @@ private struct LiveTail: View {
             BotBubble(color: speaker?.color) { MarkdownText(source: streaming) }
         }
         // under the streaming reply too: text arriving does not mean the
-        // turn is over, and the indicator keeps one identity (and its clock)
-        if working {
-            TypingIndicator(bot: speaker)
+        // turn is over. The clock belongs to the conversation's state, so it
+        // also survives the view being destroyed when another chat is opened.
+        if working, let startedAt {
+            TypingIndicator(bot: speaker, startedAt: startedAt)
         }
+    }
+
+    private var startedAt: Date? {
+        if let bot = model.selectedBot { return model.state.botWorkingSince[bot.id] }
+        return model.selectedRoom.flatMap { model.state.roomWorkingSince[$0.id] }
     }
 
     /// Who is typing: the selected bot, or the room's busy member.

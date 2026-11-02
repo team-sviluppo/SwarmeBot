@@ -74,14 +74,14 @@ def prepare(root, version, repo, output):
         raise ValueError("repository must be owner/name, without credentials")
     body = section((root / "CHANGELOG.md").read_text(encoding="utf-8"), version)
     previous = previous_version(root, version)
-    introduction = f"Differenze rispetto alla versione {previous}." if previous else "Prima release."
+    introduction = f"Changes since version {previous}." if previous else "First release."
     title = f"SwarmeBot {version}"
     markdown = f"# {title}\n\n{introduction}\n\n{body}\n"
     rendered = f"<h2>{title}</h2>\n<p>{introduction}</p>\n" + render_html(body)
     if previous:
         comparison = f"https://github.com/{repo}/compare/v{previous}...v{version}"
-        markdown += f"\n[Elenco completo delle modifiche]({comparison})\n"
-        rendered += f'\n<p><a href="{comparison}">Elenco completo delle modifiche</a></p>'
+        markdown += f"\n[Full changelog]({comparison})\n"
+        rendered += f'\n<p><a href="{comparison}">Full changelog</a></p>'
     output.mkdir(parents=True, exist_ok=True)
     (output / "release-notes.md").write_text(markdown, encoding="utf-8")
     (output / "release-notes.html").write_text(rendered + "\n", encoding="utf-8")

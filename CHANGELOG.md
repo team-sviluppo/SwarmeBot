@@ -1,43 +1,45 @@
 # Changelog
 
-Le note descrivono le differenze visibili agli utenti rispetto alla versione precedente.
-Prima di pubblicare una release, aggiungere una sezione con il numero esatto della versione.
+Release notes describe user-visible changes since the previous version and must always be written in English.
+Before publishing a release, add a section with its exact version number.
 
 ## [Unreleased]
 
-### Correzioni
+### Fixes
 
-- Ripristinato l’ID della lista ClickUp nella scheda progetto, sia in creazione sia in modifica, visibile solo quando Cylon è attivo. Il pulsante Salva del progetto salva anche questo valore, mantenendo gli ID già configurati.
+- Restore the ClickUp list ID field in both the new project sheet and the project editor, visible only while Cylon is enabled. The project's Save button also saves this value, preserving existing list IDs.
+- Keep the working indicator's elapsed time when switching away from a chat and returning while the same turn is running.
+- Keep the changelog and generated GitHub and Sparkle release notes in English.
 
 ## [0.6.0]
 
-### Progetti
+### Projects
 
-- Ogni progetto può contenere quanti repository servono, ciascuno con un'etichetta personalizzata.
-- Un nuovo progetto parte dalla cartella della chat corrente, con etichetta Default.
-- Rinominare o riordinare i repository mantiene le assegnazioni di bot e canali e gli script del progetto.
-- La lista ClickUp si configura nelle impostazioni del plugin Cylon e compare solo quando il plugin è attivo. Le configurazioni precedenti vengono mantenute.
+- Projects can contain any number of repositories, each with a custom label.
+- New projects start in the current chat's folder with the Default label.
+- Renaming or reordering repositories preserves bot and channel assignments and project scripts.
+- Configure the ClickUp list in the Cylon plugin settings, visible only while the plugin is enabled. Existing settings are preserved.
 
-### Plugin
+### Plugins
 
-- Cylon viene distribuito come plugin privato, incluso automaticamente nelle build quando la raccolta privata è disponibile.
-- Le build dell'app e dei motori possono escludere i plugin privati con l'opzione `--no-private-plugins`.
+- Cylon is distributed as a private plugin and is automatically included in builds when the private plugin repository is available.
+- App and engine builds can exclude private plugins with `--no-private-plugins`.
 
-### Aggiornamenti
+### Updates
 
-- Gli aggiornamenti si scaricano dalla repository pubblica, senza token GitHub nell'app.
-- La finestra di aggiornamento e la release GitHub mostrano le stesse note, con il confronto rispetto alla versione precedente.
+- Updates download from the public repository without a GitHub token in the app.
+- The update window and GitHub release show the same notes, with a comparison against the previous version.
 
 ## [0.5.3]
 
-### Progetti
+### Projects
 
-- Ogni progetto può contenere quanti repository servono, ciascuno con un'etichetta personalizzata.
-- Un nuovo progetto parte dalla cartella della chat corrente, con etichetta Default.
-- Bot e canali continuano a scegliere il repository su cui lavorare. Rinominare un'etichetta mantiene assegnazioni e script.
-- La lista ClickUp si configura nelle impostazioni del plugin Cylon e compare solo quando il plugin è attivo. Le configurazioni precedenti vengono mantenute.
+- Projects can contain any number of repositories, each with a custom label.
+- New projects start in the current chat's folder with the Default label.
+- Bots and channels continue to choose the repository they work in. Renaming a label preserves assignments and scripts.
+- Configure the ClickUp list in the Cylon plugin settings, visible only while the plugin is enabled. Existing settings are preserved.
 
-### Aggiornamenti
+### Updates
 
-- Gli aggiornamenti si scaricano dalla repository pubblica, senza token GitHub nell'app.
-- La finestra di aggiornamento e la release GitHub mostrano lo stesso changelog, con le differenze dalla versione precedente.
+- Updates download from the public repository without a GitHub token in the app.
+- The update window and GitHub release show the same changelog, with changes since the previous version.

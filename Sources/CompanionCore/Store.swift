@@ -48,6 +48,11 @@ public struct CompanionState: Sendable {
     public var libraryRevision: [String: Int] = [:]
     /// Desktop: provisioning state of each bot's cloud computer.
     public var computerState: [String: String] = [:]
+    /// When this client first observed each active turn. Kept with the engine's
+    /// state so rebuilding a chat view, switching tasks or taking over a peer
+    /// cannot restart its elapsed-time indicator. These clocks are not persisted.
+    public private(set) var botWorkingSince: [String: Date] = [:]
+    public private(set) var roomWorkingSince: [String: Date] = [:]
 
     public init() {}
 
@@ -124,7 +129,17 @@ public struct CompanionState: Sendable {
     // MARK: - Hydrating
 
     /// Replace everything from a `GET /api/bots` response.
-    public mutating func hydrate(_ fleet: Fleet) {
+    public mutating func hydrate(_ fleet: Fleet, now: Date = Date()) {
+        let activeBots = Set(fleet.bots.filter(Self.isWorking).map(\.id))
+        let activeRooms = Set(fleet.groups.filter { $0.busyBotId != nil }.map(\.id))
+        botWorkingSince = botWorkingSince.filter { activeBots.contains($0.key) }
+        roomWorkingSince = roomWorkingSince.filter { activeRooms.contains($0.key) }
+        for id in activeBots where botWorkingSince[id] == nil { botWorkingSince[id] = now }
+        for room in fleet.groups where room.busyBotId != nil {
+            if roomWorkingSince[room.id] == nil || rooms.first(where: { $0.id == room.id })?.busyBotId != room.busyBotId {
+                roomWorkingSince[room.id] = now
+            }
+        }
         bots = fleet.bots
         rooms = fleet.groups
         messages.removeAll()
@@ -173,7 +188,7 @@ public struct CompanionState: Sendable {
         apply(streamFrame.frame)
     }
 
-    public mutating func apply(_ frame: Frame) {
+    public mutating func apply(_ frame: Frame, now: Date = Date()) {
         switch frame {
         case .hello:
             // A hello describes the server's latest position, not one this
@@ -217,6 +232,9 @@ public struct CompanionState: Sendable {
             clearStream(threadId)
 
         case let .bot(bot):
+            if Self.isWorking(bot) {
+                if botWorkingSince[bot.id] == nil { botWorkingSince[bot.id] = now }
+            } else { botWorkingSince.removeValue(forKey: bot.id) }
             // Ordinary frames omit messages and must preserve the transcript.
             // Task switches deliberately include the new task's transcript;
             // that is authoritative and must replace the previous context.
@@ -242,6 +260,7 @@ public struct CompanionState: Sendable {
             }
 
         case let .botDeleted(botId):
+            botWorkingSince.removeValue(forKey: botId)
             if let index = bots.firstIndex(where: { $0.id == botId }) {
                 let threadId = bots[index].threadId
                 messages.removeValue(forKey: threadId)
@@ -258,6 +277,11 @@ public struct CompanionState: Sendable {
             }
 
         case let .room(room):
+            if room.busyBotId != nil {
+                if roomWorkingSince[room.id] == nil || rooms.first(where: { $0.id == room.id })?.busyBotId != room.busyBotId {
+                    roomWorkingSince[room.id] = now
+                }
+            } else { roomWorkingSince.removeValue(forKey: room.id) }
             if let index = rooms.firstIndex(where: { $0.id == room.id }) {
                 var merged = room
                 merged.messages = rooms[index].messages
@@ -270,6 +294,7 @@ public struct CompanionState: Sendable {
             }
 
         case let .roomDeleted(groupId):
+            roomWorkingSince.removeValue(forKey: groupId)
             if let index = rooms.firstIndex(where: { $0.id == groupId }) {
                 let threadId = rooms[index].threadId
                 messages.removeValue(forKey: threadId)
@@ -347,6 +372,10 @@ public struct CompanionState: Sendable {
         default:
             break
         }
+    }
+
+    private static func isWorking(_ bot: Bot) -> Bool {
+        bot.busy == true || ["working", "waiting-on-you", "no-signal"].contains(bot.activity ?? "")
     }
 
     private static func upsert<T: Identifiable>(_ list: inout [T], _ item: T) {

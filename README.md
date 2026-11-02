@@ -705,7 +705,8 @@ The release script refuses to publish to a private repository, and bundling reje
 with credentials or query parameters. EdDSA verification remains required for updates.
 
 Before releasing, add a `## [X.Y.Z]` section to [CHANGELOG.md](CHANGELOG.md), with `###` headings
-and user-facing bullet points describing the changes since the previous release. The release
+and user-facing bullet points describing the changes since the previous release. The changelog and
+all generated release notes must always be written in English. The release
 script requires notes for that exact version and publishes them both in the GitHub release and
 in Sparkle's update window. Re-running publication also refreshes the notes of an existing release.
 The previous version is the highest lower version tag reachable from the release commit; the

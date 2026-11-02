@@ -32,7 +32,7 @@ class ReleaseNotesTests(unittest.TestCase):
         self.git("tag", "v9.0.0")  # a newer version is not the previous version
         self.git("tag", "v0.5.3-beta")
         (self.root / "CHANGELOG.md").write_text(
-            "# Changelog\n\n## [0.5.3]\n\n### Progetti\n\n- Cartelle con etichette.\n"
+            "# Changelog\n\n## [0.5.3]\n\n### Projects\n\n- Labeled project folders.\n"
             "\n## [0.5.2]\n\n- An old change, not part of this release.\n", encoding="utf-8")
         self.output = self.root / "out"
 
@@ -44,9 +44,10 @@ class ReleaseNotesTests(unittest.TestCase):
         markdown = (self.output / "release-notes.md").read_text()
         rendered = (self.output / "release-notes.html").read_text()
         for text in (markdown, rendered):
-            self.assertIn("Differenze rispetto alla versione 0.5.2.", text)
-            self.assertIn("Cartelle con etichette.", text)
+            self.assertIn("Changes since version 0.5.2.", text)
+            self.assertIn("Labeled project folders.", text)
             self.assertIn("/compare/v0.5.2...v0.5.3", text)
+            self.assertIn("Full changelog", text)
             self.assertNotIn("An old change", text)
 
     def test_missing_empty_and_duplicate_sections_fail(self):
@@ -66,6 +67,10 @@ class ReleaseNotesTests(unittest.TestCase):
 
     def test_first_release_has_no_comparison(self):
         self.assertIsNone(notes.previous_version(self.root, "0.1.0"))
+        (self.root / "CHANGELOG.md").write_text("## [0.1.0]\n- Initial release.\n")
+        notes.prepare(self.root, "0.1.0", "team-sviluppo/SwarmeBot", self.output)
+        for name in ("release-notes.md", "release-notes.html"):
+            self.assertIn("First release.", (self.output / name).read_text())
 
     def test_unmerged_tags_are_not_used_as_previous_version(self):
         original = self.git("rev-parse", "HEAD").stdout.strip()
@@ -151,7 +156,7 @@ class ReleaseNotesTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         create = next(call for call in calls if call[:3] == ["gh", "release", "create"])
         markdown = Path(create[create.index("--notes-file") + 1]).read_text()
-        self.assertIn("Cartelle con etichette.", markdown)
+        self.assertIn("Labeled project folders.", markdown)
         self.assertIn("0.5.2...v0.5.3", markdown)
         appcast = ET.parse(self.root / "release/appcast.xml")
         description = appcast.findtext("./channel/item/description")
