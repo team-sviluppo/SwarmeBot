@@ -33,16 +33,18 @@ Mutations need `content-type: application/json`.
 
 ### Projects (engine plugin 1.2.0 and later)
 
-A project is a name, a ClickUp list id and the folders of a piece of work with a role each (`backend`,
-`backoffice`, `app`, `bruno`), kept in `<data>/plugins/code/projects.json` on the engine, because the folders are on
-its machine. A bot or a channel belongs to at most one and says which folder it **works on**; the others are linked
+A project has a name and repositories, kept in `<data>/plugins/code/projects.json` on the engine because the folders
+are on its machine. Since plugin 1.7.0 the repository list is arbitrary: each has a stable `role` id, an editable `label`,
+a folder and optional scripts. Renaming a label or reordering the list keeps bot/channel assignments and scripts.
+Existing `backend`, `backoffice`, `app` and `bruno` ids remain valid; old records without labels retain their familiar names.
+ClickUp configuration belongs to the Cylon plugin, not the Code project editor. A bot or a channel belongs to at most one and says which folder it **works on**; the others are linked
 **read-only**, for context. In a channel the channel's project counts, not its members'.
 
 | Method | Path | Request | Answer |
 |---|---|---|---|
-| GET | `/api/projects` | — | `{projects:[{id, name, clickupListId?, repos:[{role, path, scripts?:[{name, command}]}], createdAt}]}` |
-| POST | `/api/projects` | `{name, clickupListId?, repos?}` | 201 `{project}`. 400 for a blank name, an unknown or repeated role, a path that is not an absolute folder **that exists on the engine's machine** |
-| PATCH | `/api/projects/:id` | any of the fields above (`repos` replaces the list) | `{project}`; a bot or channel working on a folder that moved follows it |
+| GET | `/api/projects` | — | `{projects:[{id, name, repos:[{role, label?, path, scripts?:[{name, command}]}], createdAt}]}` |
+| POST | `/api/projects` | `{name, repos?}` | 201 `{project}`. 400 for a blank name, invalid/duplicate repository ids or labels, or a path that is not an absolute folder **that exists on the engine's machine** |
+| PATCH | `/api/projects/:id` | any of the fields above (`repos` replaces the list) | `{project}`; a bot or channel working on a folder that moved follows it. 409 when a removed repository is still assigned: choose another repository first |
 | DELETE | `/api/projects/:id` | — | `{ok}`; whoever belonged to it belongs to none |
 | GET | `/api/fs/dirs` | `?path=&hidden=1` (default: home) | `{path, parent?, home, dirs:[name], truncated}`: the engine machine's folders, for picking where the Mac's open panel cannot |
 
@@ -52,7 +54,7 @@ plugin and a field this version does not know are kept). Choosing a folder to wo
 folder (`cwd`) to it; a channel whose folder is already fixed keeps it.
 
 Before each turn the plugin tells the agent about the project, puts `SWARME_PROJECT_JSON` (the path of
-`<data>/plugins/code/projects/<id>.json`: id, name, ClickUp list, folders with roles) in its environment, and links
+`<data>/plugins/code/projects/<id>.json`: id, name and labeled repositories) in its environment, and links
 the other folders read-only: Claude gets `--add-dir` and a rule against editing there; every engine that asks for a
 permission before writing is refused for a write under them (the engine's permission broker, `ReadOnlyGuard`); Codex
 already writes only in its working folder. Not enforced: a shell command that writes without asking, and an engine
@@ -90,10 +92,13 @@ and a "Commit & push" that asks the agent to do it.
 
 ### Projects in the app (engine plugin 1.2.0 and later)
 
-- **Settings › Plugins › Projects**: the engine's projects, *New project…* / *Edit…*. A project has a name, a ClickUp
-  list id and up to four folders (Backend, Backoffice, App, Bruno collection). *Choose…* opens the Mac's open panel for a
-  local engine, and a browser of the **server's** folders for a remote one (`GET /api/fs/dirs`). The ClickUp list's name
-  is not shown next to the id: that needs ClickUp access the engine does not have yet.
+- **Settings › Plugins › Projects**: the engine's projects, *New project…* / *Edit…*. With Code >= 1.7.0, add or remove
+  as many labeled repositories as needed. A new project starts with **Default** in the selected chat's working folder,
+  or the engine's home when no chat is selected. Labels are required and unique (case-insensitive).
+  Each row keeps its own scripts. *Choose…* opens the Mac's open panel for a local engine, or the **server's** folder
+  browser for a remote one. Older engines keep project assignment available but require an update for the new editor.
+- **Settings › Plugins › Cylon**: per-project ClickUp list configuration, visible only while Cylon is enabled.
+  Existing ClickUp ids are read from their old Code record until saved in Cylon; editing a Code project preserves them.
 - **A bot's settings** (the Code card) and **a channel's settings**: *Project* and *Works on*. Choosing the folder also
   makes it the chat's default folder; a chat can still change folder from the composer. In a channel, its project
   counts, not its members'.

@@ -315,6 +315,10 @@ struct CylonGlobalSettings: View {
             }
             ForEach(state.projects) { project in
                 DisclosureGroup(project.name) {
+                    if let version = model.enginePlugins.first(where: { $0.id == "cylon" })?.version,
+                       version.compare("1.2.0", options: .numeric) != .orderedAscending {
+                        CylonProjectClickUp(project: project)
+                    }
                     ForEach(CylonPhaseKey.all, id: \.self) { phase in
                         Picker(CylonPhaseKey.title(phase), selection: Binding(get: { state.roles[project.id]?[phase] ?? "" }, set: { id in
                             Task { await state.setRole(model: model, project: project.id, phase: phase, botId: id.isEmpty ? nil : id) }
@@ -330,6 +334,12 @@ struct CylonGlobalSettings: View {
         } footer: {
             Text(tr("Un bot per fase, cioè per modello: providers diversi non continuano la stessa sessione. I bot con una parte ricevono le skill della sorgente."))
         }
-        .task { await state.refreshSettings(model: model); await model.refreshSkillSources() }
+        .task {
+            await model.refreshSkillSources()
+            while !Task.isCancelled {
+                await state.refreshSettings(model: model)
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            }
+        }
     }
 }

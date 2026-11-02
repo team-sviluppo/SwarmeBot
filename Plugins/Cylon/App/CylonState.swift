@@ -48,6 +48,7 @@ public final class CylonState {
         do {
             let list = try await client.cylonBoards(projectId: projectId)
             if boards[projectId] != list { boards[projectId] = list }
+            if let catalog = try? await client.cylonProjects(), projects != catalog { projects = catalog }
         } catch { if !Task.isCancelled { boardErrors[projectId] = error.localizedDescription } }
     }
 

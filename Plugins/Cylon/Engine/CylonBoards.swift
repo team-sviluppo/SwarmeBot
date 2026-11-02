@@ -276,7 +276,7 @@ extension CylonEnginePlugin {
             let store = CylonStore(harness: harness)
             guard let current = store.board(request.params["id"] ?? "") else { throw HTTPError(404, "no such board") }
             guard current.items.count < CylonBoards.maxItems else { throw HTTPError(409, "at most \(CylonBoards.maxItems) tickets on a board") }
-            guard let role = body["role"]?.string, role.range(of: #"^[a-z][a-z0-9-]{1,30}$"#, options: .regularExpression) != nil else { throw HTTPError(400, "role is required: the repository's role in the project") }
+            guard let role = body["role"]?.string, role.range(of: #"^[A-Za-z0-9_-]{1,80}$"#, options: .regularExpression) != nil else { throw HTTPError(400, "role is required: the repository's id in the project") }
             guard let raw = body["ticket"]?.string, let ticket = CylonDetect.ticketId(raw) else { throw HTTPError(400, "ticket must be a ClickUp ticket's id or address") }
             let tag = body["tag"]?.string ?? "cylon-plan"
             if tag == "cylon-investigate" { throw HTTPError(400, "a cylon-investigate ticket is outside the flow: it is not put on a board") }

@@ -199,17 +199,19 @@ public struct ProjectScript: Codable, Hashable, Sendable {
     public var command: String
 }
 
-public struct ProjectRepo: Codable, Hashable, Sendable {
+public struct ProjectRepo: Codable, Hashable, Identifiable, Sendable {
     public var role: String
     /// A path on the machine the engine runs on.
     public var path: String
     public var scripts: [ProjectScript]?
+    public var label: String? = nil
+    public var id: String { role }
+    public var displayLabel: String { label ?? ProjectRoles.title(role) }
 }
 
 public struct Project: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var name: String
-    public var clickupListId: String?
     public var repos: [ProjectRepo]
 
     public func repo(_ role: String) -> ProjectRepo? { repos.first { $0.role == role } }
@@ -217,10 +219,10 @@ public struct Project: Codable, Hashable, Identifiable, Sendable {
 
 /// The folders a project can name, and what they are called.
 enum ProjectRoles {
-    static let all = ["backend", "backoffice", "app", "bruno"]
 
     static func title(_ role: String) -> String {
         switch role {
+        case "default": return "Default"
         case "backend": return tr("Backend")
         case "backoffice": return tr("Backoffice")
         case "app": return tr("App")
@@ -245,26 +247,26 @@ extension CompanionClient {
         return try await pluginRequest("GET", "/api/projects", as: Answer.self).projects
     }
 
-    private func projectBody(name: String, clickupListId: String?, repos: [ProjectRepo]) -> [String: Any] {
+    private func projectBody(name: String, repos: [ProjectRepo]) -> [String: Any] {
         [
             "name": name,
-            "clickupListId": (clickupListId?.isEmpty == false ? clickupListId! : NSNull()) as Any,
             "repos": repos.map { repo -> [String: Any] in
                 var out: [String: Any] = ["role": repo.role, "path": repo.path]
+                if let label = repo.label { out["label"] = label }
                 if let scripts = repo.scripts { out["scripts"] = scripts.map { ["name": $0.name, "command": $0.command] } }
                 return out
             },
         ]
     }
 
-    func createProject(name: String, clickupListId: String?, repos: [ProjectRepo]) async throws -> Project {
+    func createProject(name: String, repos: [ProjectRepo]) async throws -> Project {
         struct Answer: Decodable { var project: Project }
-        return try await pluginRequest("POST", "/api/projects", body: projectBody(name: name, clickupListId: clickupListId, repos: repos), as: Answer.self).project
+        return try await pluginRequest("POST", "/api/projects", body: projectBody(name: name, repos: repos), as: Answer.self).project
     }
 
-    func updateProject(_ id: String, name: String, clickupListId: String?, repos: [ProjectRepo]) async throws -> Project {
+    func updateProject(_ id: String, name: String, repos: [ProjectRepo]) async throws -> Project {
         struct Answer: Decodable { var project: Project }
-        return try await pluginRequest("PATCH", "/api/projects/\(id)", body: projectBody(name: name, clickupListId: clickupListId, repos: repos), as: Answer.self).project
+        return try await pluginRequest("PATCH", "/api/projects/\(id)", body: projectBody(name: name, repos: repos), as: Answer.self).project
     }
 
     func deleteProject(_ id: String) async throws {

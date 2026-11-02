@@ -134,6 +134,11 @@ public final class CodeState {
         return true
     }
 
+    func engineHasFlexibleProjects(_ model: AppModel) -> Bool {
+        guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
+        return Self.version(version, atLeast: "1.7.0")
+    }
+
     /// Whether the engine's plugin knows projects.
     func engineHasProjects(_ model: AppModel) -> Bool {
         guard let version = model.enginePlugins.first(where: { $0.id == "code" })?.version else { return false }
@@ -154,10 +159,10 @@ public final class CodeState {
     }
 
     /// Creates or changes a project; the engine's refusal (a folder that is not there…) comes back as the error.
-    func saveProject(model: AppModel, id: String?, name: String, clickupListId: String?, repos: [ProjectRepo]) async throws {
+    func saveProject(model: AppModel, id: String?, name: String, repos: [ProjectRepo]) async throws {
         guard let client = model.client else { throw URLError(.notConnectedToInternet) }
-        if let id { _ = try await client.updateProject(id, name: name, clickupListId: clickupListId, repos: repos) }
-        else { _ = try await client.createProject(name: name, clickupListId: clickupListId, repos: repos) }
+        if let id { _ = try await client.updateProject(id, name: name, repos: repos) }
+        else { _ = try await client.createProject(name: name, repos: repos) }
         await refreshProjects(model: model)
     }
 

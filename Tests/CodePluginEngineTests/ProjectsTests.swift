@@ -87,7 +87,7 @@ final class ProjectsTests: XCTestCase {
         let file = repo.paths.root.appendingPathComponent("plugins/code/projects/\(id).json")
         let json = try JSON.parse(Data(contentsOf: file))
         XCTAssertEqual(json["name"], "Gestionale Rossi")
-        XCTAssertEqual(json["clickupListId"], "901512345678")
+        XCTAssertNil(json["clickupListId"], "ClickUp is exposed only by the enabled Cylon plugin")
         XCTAssertEqual(json["repos"]?.array?.first?["path"]?.string, paths["api"])
         XCTAssertNil(json["createdAt"], "only what an agent needs")
         _ = await repo.callRaw("DELETE", "/api/projects/\(id)")

@@ -2,6 +2,11 @@
 // tables so that they can move with the plugin.
 extension Translations {
     static let code: [String: String] = [
+        "Etichetta": "Label",
+        "Aggiungi repository": "Add repository",
+        "Rimuovi repository": "Remove repository",
+        "Le etichette dei repository devono essere diverse.": "Repository labels must be unique.",
+        "Aggiorna il motore per gestire repository con etichette personalizzate.": "Update the engine to manage repositories with custom labels.",
         "Contesto %@": "Context %@",
         "Contesto della sessione": "Session context",
         "Percentuale non disponibile: il motore non ha ancora comunicato il limite del contesto": "Percentage unavailable: the engine has not reported the context limit yet",

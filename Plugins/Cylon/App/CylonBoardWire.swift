@@ -60,11 +60,15 @@ struct CylonBoardWire: Decodable, Equatable, Identifiable {
 
 /// A project as the board needs it: its name and the repositories (roles) a ticket can belong to.
 struct CylonProject: Decodable, Identifiable, Hashable {
-    struct Repo: Decodable, Hashable { var role: String }
+    struct Repo: Decodable, Hashable { var role: String; var label: String? }
 
     var id: String
     var name: String
     var repos: [Repo]?
+
+    func repositoryLabel(_ role: String) -> String {
+        repos?.first { $0.role == role }?.label ?? CylonRoleTitle.title(role)
+    }
 }
 
 extension CompanionClient {

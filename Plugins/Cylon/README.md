@@ -81,7 +81,7 @@ create or link tickets, and a priority is only an order: it blocks nothing, the 
 {total, done, prOpen, running, notStarted, problems}, busyBots: [{botId, name, channel}]}`, where `flow` is what `GET /groups/:gid/cylon`
 answers for the item's channel.
 
-Kept in `<data>/plugins/cylon/`: `roles.json`, `settings.json`, `pipelines.json`, `boards.json`.
+Kept in `<data>/plugins/cylon/`: `roles.json`, `settings.json`, `pipelines.json`, `boards.json`, and per-project ClickUp settings in `projects.json`.
 
 ## In the app
 
@@ -107,3 +107,21 @@ Kept in `<data>/plugins/cylon/`: `roles.json`, `settings.json`, `pipelines.json`
 Not done: the engine cannot read ClickUp, so the tag is chosen by the person; a phase's end is read from the skills' own closing
 lines and files (`CylonDetect`), which break if a skill changes them; the five skills are not installed by the plugin, they come from
 the source.
+
+### Project ClickUp settings (plugin 1.2.0)
+
+ClickUp list ids are configured per project in **Settings › Plugins › Cylon**, alongside the phase assignments.
+The field disappears when Cylon is disabled. Existing ids in Code projects are used as a compatibility fallback;
+saving here writes Cylon's own setting, and clearing it explicitly overrides the legacy value.
+
+| Method | Path | Request | Answer |
+|---|---|---|---|
+| GET | `/api/cylon/projects/:project` | — | `{clickupListId: string \| null}`; 404 for a missing project |
+| PUT | `/api/cylon/projects/:project` | `{clickupListId: string \| null}` | Updated setting; 400 for invalid ids or unknown fields |
+
+When enabled, Cylon supplies a project context snapshot (including the effective ClickUp list id) through
+`SWARME_PROJECT_JSON`; Code's own export contains generic project data only and is refreshed to remove old ClickUp
+exports. Disabling Cylon stops its routes and turn context while preserving its settings.
+
+Boards support custom repository ids from Code >= 1.7.0 and display their labels. Stable ids keep tickets and channel
+assignments valid after a repository is renamed; the phase roles (Spec, Plan, Run, Review, Pull) stay unchanged.
