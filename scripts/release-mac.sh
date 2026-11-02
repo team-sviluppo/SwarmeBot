@@ -4,7 +4,7 @@
 # with the same Developer ID and notarization credentials.
 #
 #   scripts/release-mac.sh [--version 0.3.0] [--arch arm64]
-#                          [--skip-notarize] [--no-publish]
+#                          [--skip-notarize] [--no-publish] [--no-private-plugins]
 #
 # Credentials, read from .env.mac-release.local in this repo or, failing
 # that, in the Electron checkout (../SwarmeBot/.env.mac-release.local):
@@ -35,11 +35,13 @@ REPO="${SWARMEBOT_REPO:-$ROOT/../SwarmeBot}"
 OUT="$ROOT/release"
 SKIP_NOTARIZE=0
 PUBLISH=1
+PRIVATE_ARGS=()
 
 die() { echo "error: $*" >&2; exit 1; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --no-private-plugins) PRIVATE_ARGS+=("$1") ;;
     --version) VERSION="$2"; shift ;;
     --arch) MAC_ARCHES="$2"; shift ;;
     --skip-notarize) SKIP_NOTARIZE=1 ;;
@@ -144,9 +146,9 @@ ensure_sign_update() {
 
 # the Linux engines remote servers download, pinned by digest in the app
 if [[ "${SKIP_LINUX_ENGINES:-0}" == 1 ]]; then
-  "$ROOT/scripts/linux-engines-manifest.sh" "$VERSION" --skip-build
+  "$ROOT/scripts/linux-engines-manifest.sh" "$VERSION" --skip-build ${PRIVATE_ARGS[@]+"${PRIVATE_ARGS[@]}"}
 else
-  "$ROOT/scripts/linux-engines-manifest.sh" "$VERSION"
+  "$ROOT/scripts/linux-engines-manifest.sh" "$VERSION" ${PRIVATE_ARGS[@]+"${PRIVATE_ARGS[@]}"}
 fi
 LINUX_ASSETS=("$ROOT"/build/linux/release/swarme-harness-linux-*)
 
@@ -164,7 +166,7 @@ for arch in "${ARCHES[@]}"; do
   echo "=== $arch ==="
   SIGN_IDENTITY="$MAC_SIGN_IDENTITY" VERSION="$VERSION" BUILD_NUMBER="$BUILD_NUMBER" \
     SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}" \
-    "$ROOT/scripts/bundle-app.sh" --arch "$swift_arch" --dmg
+    "$ROOT/scripts/bundle-app.sh" --arch "$swift_arch" --dmg ${PRIVATE_ARGS[@]+"${PRIVATE_ARGS[@]}"}
 
   # bundle-app.sh signs with the Hardened Runtime; refuse anything else
   info="$(codesign -dv --verbose=4 "$ROOT/build/SwarmeBot.app" 2>&1)"

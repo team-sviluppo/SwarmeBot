@@ -5,6 +5,7 @@
 #
 #   --with-harness     also copy skills/ from the SwarmeBot checkout into
 #                      the app. The engine itself is swarme-harness, always.
+#   --no-private-plugins  exclude private plugins from both app and engine
 #   --arch arm64       Apple silicon only (default arm64)
 #   --dmg              also produce build/SwarmeBot.dmg
 #   --notarize         submit to Apple and staple (needs SIGN_IDENTITY and
@@ -29,8 +30,10 @@ WITH_HARNESS=0
 ARCH=arm64
 DMG=0
 NOTARIZE=0
+PRIVATE_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --no-private-plugins) PRIVATE_ARGS+=("$1") ;;
     --with-harness) WITH_HARNESS=1 ;;
     --arch) ARCH="$2"; shift ;;
     --dmg) DMG=1 ;;
@@ -66,7 +69,7 @@ if not valid:
 PY
 
 cd "$ROOT"
-swift build -c release "${SWIFT_ARCHS[@]}"
+"$ROOT/scripts/build.sh" ${PRIVATE_ARGS[@]+"${PRIVATE_ARGS[@]}"} -c release "${SWIFT_ARCHS[@]}"
 BIN_DIR="$(swift build -c release "${SWIFT_ARCHS[@]}" --show-bin-path)"
 
 rm -rf "$APP"

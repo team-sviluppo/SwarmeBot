@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the remote engine for Linux servers — docs/plans/2026-10-16-bot-remoto.md §3.6.
 #
-#   scripts/build-linux-engine.sh [aarch64|x86_64 ...]   (default: both)
+#   scripts/build-linux-engine.sh [--no-private-plugins] [aarch64|x86_64 ...]   (default: both)
 #
 # In Docker, on the Swift Ubuntu 24.04 image: glibc 2.39, so the binary runs
 # on Ubuntu 24.04 and 26.04. The Swift runtime is linked in
@@ -18,7 +18,22 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="${SWIFT_LINUX_IMAGE:-swift:6.4-noble}"
 OUT="$ROOT/build/linux"
 mkdir -p "$OUT"
-arches=("$@")
+arches=()
+PRIVATE_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --no-private-plugins) PRIVATE_ARGS+=("$arg") ;;
+    aarch64|x86_64) arches+=("$arg") ;;
+    *) echo "unknown option or arch $arg (aarch64|x86_64)" >&2; exit 2 ;;
+  esac
+done
+# Stage on the host: no private checkout or Python installation is needed
+# inside Docker. Only this generated directory is mounted into the container.
+python3 -I "$ROOT/scripts/prepare-private-plugins.py" ${PRIVATE_ARGS[@]+"${PRIVATE_ARGS[@]}"}
+PRIVATE_MOUNT=()
+if [[ -d "$ROOT/.build/private-plugins" ]]; then
+  PRIVATE_MOUNT=(-v "$ROOT/.build/private-plugins:/private-plugins:ro")
+fi
 [ ${#arches[@]} -eq 0 ] && arches=(aarch64 x86_64)
 for arch in "${arches[@]}"; do
   case "$arch" in
@@ -30,6 +45,7 @@ for arch in "${arches[@]}"; do
   # a named volume per arch keeps the build cache between runs, out of the checkout
   docker run --rm --platform "$platform" \
     -v "$ROOT":/src:ro -v "sbr-linux-build-$arch":/build -v "$OUT":/out \
+    ${PRIVATE_MOUNT[@]+"${PRIVATE_MOUNT[@]}"} \
     "$IMAGE" bash -euo pipefail -c '
       apt-get update -qq >/dev/null
       apt-get install -y -qq libsqlite3-dev >/dev/null
@@ -39,6 +55,10 @@ for arch in "${arches[@]}"; do
       rm -rf /build/src
       mkdir -p /build/src
       tar -C /src --exclude .build --exclude .git --exclude .swiftpm --exclude build --exclude release -cf - . | tar -C /build/src -xf -
+      if [[ -d /private-plugins ]]; then
+        mkdir -p /build/src/.build
+        cp -R /private-plugins /build/src/.build/private-plugins
+      fi
       swift build --package-path /build/src --scratch-path /build/spm --product swarme-harness -c release --static-swift-stdlib
       cp /build/spm/release/swarme-harness /out/swarme-harness-'"$arch"'
       strip /out/swarme-harness-'"$arch"'

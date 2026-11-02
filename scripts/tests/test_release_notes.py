@@ -92,7 +92,7 @@ class ReleaseNotesTests(unittest.TestCase):
                 self.assertIn("public HTTPS URL", result.stderr)
                 self.assertNotIn("secret", result.stdout + result.stderr)
 
-    def pipeline(self, *, existing=False, visibility="PUBLIC"):
+    def pipeline(self, *, existing=False, visibility="PUBLIC", no_private=False):
         scripts = self.root / "scripts"
         scripts.mkdir()
         for name in ("release-mac.sh", "release-notes.py"):
@@ -103,7 +103,7 @@ class ReleaseNotesTests(unittest.TestCase):
             "linux-engines-manifest.sh": 'mkdir -p "$ROOT/build/linux/release"; printf engine > "$ROOT/build/linux/release/swarme-harness-linux-aarch64"',
         }.items():
             path = scripts / name
-            path.write_text('#!/bin/bash\nset -eu\nROOT="$(cd "$(dirname "$0")/.." && pwd)"\n' + commands + "\n")
+            path.write_text('#!/bin/bash\nset -eu\nROOT="$(cd "$(dirname "$0")/.." && pwd)"\n' + f'printf "%s\\n" "$*" > "$ROOT/{name}.args"\n' + commands + "\n")
             path.chmod(0o755)
         commands = self.root / "commands"
         commands.mkdir()
@@ -141,7 +141,7 @@ class ReleaseNotesTests(unittest.TestCase):
                "MAC_SIGN_IDENTITY": "Developer ID Application: Test", "SPARKLE_PUBLIC_KEY": "fixture-public-key",
                "SKIP_LINUX_ENGINES": "1", "QA_COMMAND_LOG": str(log), "QA_REAL_GIT": real_git,
                "QA_VISIBILITY": visibility, "QA_EXISTING_RELEASE": "1" if existing else "0"}
-        result = subprocess.run(["bash", str(scripts / "release-mac.sh"), "--version", "0.5.3", "--skip-notarize"],
+        result = subprocess.run(["bash", str(scripts / "release-mac.sh"), "--version", "0.5.3", "--skip-notarize"] + (["--no-private-plugins"] if no_private else []),
                                 env=env, capture_output=True, text=True)
         calls = [json.loads(line) for line in log.read_text().splitlines()]
         return result, calls
@@ -165,6 +165,12 @@ class ReleaseNotesTests(unittest.TestCase):
         edit = next(call for call in calls if call[:3] == ["gh", "release", "edit"])
         self.assertIn("--notes-file", edit)
         self.assertFalse(any(call[:3] == ["gh", "release", "create"] for call in calls))
+
+    def test_public_release_passes_selection_to_mac_and_linux_builds(self):
+        result, _ = self.pipeline(no_private=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for script in ("bundle-app.sh", "linux-engines-manifest.sh"):
+            self.assertIn("--no-private-plugins", (self.root / (script + ".args")).read_text())
 
     def test_private_release_repository_fails_before_signing_or_publication(self):
         result, calls = self.pipeline(visibility="PRIVATE")

@@ -1,9 +1,13 @@
-// swarme-harness — the Swift engine. A thin shell: everything is in
-// HarnessRunner, and this executable only says which plugins it carries
-// (docs/plans/2026-10-28-code-mode-t3.md §12). An engine without plugins is
-// `HarnessMain.run()`.
+// The engine executable links the public plugins and any prepared private plugins.
 import CodePluginEngine
-import CylonPluginEngine
+import HarnessCore
 import HarnessRunner
+#if SWARMEBOT_PRIVATE_PLUGINS
+import PrivatePluginsEngine
+#endif
 
-HarnessMain.run(plugins: [CodeEnginePlugin(), CylonEnginePlugin()])
+var plugins: [any EnginePlugin] = [CodeEnginePlugin()]
+#if SWARMEBOT_PRIVATE_PLUGINS
+plugins += PrivatePluginsEngine.make()
+#endif
+HarnessMain.run(plugins: plugins)
