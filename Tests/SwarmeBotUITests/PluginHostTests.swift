@@ -55,6 +55,46 @@ final class PluginHostTests: XCTestCase {
         XCTAssertEqual(host.composerAccessories(chat(model)).count, 1)
     }
 
+    private func profileClient(allowed: Bool) -> CompanionClient {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [PluginProfileStub.self]
+        return CompanionClient(connection: Connection(name: "Profile test", host: allowed ? "allowed.invalid" : "denied.invalid", port: 80),
+                               token: nil, session: URLSession(configuration: configuration))
+    }
+
+    func testSavingTheProfileRemovesAndRestoresAllPluginUI() async {
+        let host = PluginHost()
+        host.install([Fake("cylon")])
+        let model = AppModel()
+        model.enginePlugins = [EnginePluginInfo(id: "cylon", name: "Cylon", version: "1", enabled: true)]
+        model.client = profileClient(allowed: false)
+        await model.saveConfig(["profile": ["email": "user@example.com"]])
+        XCTAssertEqual(model.config?.profile?.email, "user@example.com")
+        XCTAssertEqual(model.enginePlugins.map(\.id), ["code"])
+        XCTAssertTrue(host.available(on: model).isEmpty)
+        XCTAssertTrue(host.settingsSections(.global, on: model).isEmpty)
+        XCTAssertTrue(host.composerAccessories(chat(model)).isEmpty)
+        model.client = profileClient(allowed: true)
+        await model.saveConfig(["profile": ["email": "user@hextra.it"]])
+        XCTAssertEqual(host.available(on: model).map(\.id), ["cylon"])
+        XCTAssertEqual(host.settingsSections(.global, on: model).count, 1)
+    }
+
+    func testAProfileEventRefreshesPluginVisibilityInSettings() async throws {
+        let model = AppModel()
+        model.enginePlugins = [EnginePluginInfo(id: "cylon", name: "Cylon", version: "1", enabled: true)]
+        model.client = profileClient(allowed: false)
+        model.settingsFrame(.config)
+        for _ in 0..<100 where model.engineHasPlugin("cylon") {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(model.config?.profile?.email, "user@example.com")
+        XCTAssertEqual(model.enginePlugins.map(\.id), ["code"])
+        model.client = profileClient(allowed: true)
+        await model.refreshConfig()
+        XCTAssertTrue(model.engineHasPlugin("cylon"))
+    }
+
     func testAPluginInTheEngineButNotInThisAppShowsNothing() {
         let host = PluginHost()
         host.install([])
@@ -134,6 +174,29 @@ final class PluginHostTests: XCTestCase {
         XCTAssertEqual(after.ids, ["b1"])
         XCTAssertEqual(after.latest, "b1", "the newest turn is still the bot's, whatever was said about it")
     }
+}
+
+/// Profile and plugin responses from the same engine, without touching a user's engine or settings.
+private final class PluginProfileStub: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let allowed = request.url?.host == "allowed.invalid"
+        let body: String
+        if request.url?.path == "/api/config" {
+            body = #"{"profile":{"name":"Tester","email":"user@\#(allowed ? "hextra.it" : "example.com")"}}"#
+        } else if request.url?.path == "/api/plugins" {
+            let cylon = allowed ? #",{"id":"cylon","enabled":true}"# : ""
+            body = #"{"plugins":[{"id":"code","enabled":true}\#(cylon)]}"#
+        } else {
+            body = "{}"
+        }
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                                           headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }
 
 @MainActor

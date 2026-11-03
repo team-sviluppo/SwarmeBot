@@ -517,7 +517,9 @@ public final class Routes {
             if method == "PUT" || method == "PATCH" {
                 let external = r.query["secretStorage"] == "external"
                 do {
+                    let previouslyActive = harness.plugins.active
                     let reload = try harness.config.save(patch: try r.json(), externalSecrets: external)
+                    await harness.plugins.configurationChanged(previouslyActive: previouslyActive)
                     if reload { await harness.reloadProviders() } else {
                         harness.broadcast(JSONObject([("kind", "config")]).merging(harness.config.status().object!))
                     }

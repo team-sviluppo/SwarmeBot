@@ -11,6 +11,7 @@ extension AppModel {
         guard let client else { return }
         do {
             config = try await client.config()
+            await refreshPlugins()
             loadError = nil
         } catch {
             if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled { return }
@@ -319,6 +320,7 @@ extension AppModel {
     public func saveConfig(_ patch: [String: Any], externalSecrets: Bool = false) async {
         await perform { client in
             self.config = try await client.saveConfig(patch, externalSecrets: externalSecrets)
+            await self.refreshPlugins()
         }
     }
 
