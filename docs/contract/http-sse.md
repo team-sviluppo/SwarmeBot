@@ -302,6 +302,12 @@ Il motore dichiara i plugin collegati in compilazione, così un client mostra l'
 | GET | `/api/plugins` | — | `{plugins:[{id, name, version, enabled, requires?}]}`; `enabled` è falso se l'utente l'ha spento o se manca un plugin richiesto |
 | PUT | `/api/plugins/:id` | JSON obbligatorio, `{enabled}` | come il GET; 404 per un plugin sconosciuto, 400 se `enabled` non è un booleano. La scelta resta in `<data>/plugins.json` |
 
+I plugin che dichiarano domini email consentiti sono omessi dal GET quando l'email del profilo del
+motore manca o non appartiene a un dominio esatto consentito. In quel caso il PUT del toggle e le
+route del plugin rispondono 404; hook e flag sono disabilitati. Il cambio del profilo rivaluta
+subito l'accesso e il consueto evento `config` fa aggiornare anche l'elenco plugin ai client.
+La forma delle risposte e la preferenza on/off salvata non cambiano.
+
 Un plugin spento non serve le sue route (404 come se non ci fossero), non è ascoltato dai turni e i suoi flag su bot e canali non vengono accettati; i dati già scritti restano. Le route che un plugin aggiunge si documentano con il plugin, non qui; le mutazioni (POST/PUT/PATCH) di un plugin richiedono `content-type: application/json` come quelle del nucleo.
 
 ### 2.13 Route interne (bearer `COMMS_TOKEN`, non per la UI)

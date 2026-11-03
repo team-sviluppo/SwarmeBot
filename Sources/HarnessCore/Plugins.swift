@@ -90,6 +90,8 @@ public protocol EnginePlugin: AnyObject {
     nonisolated var version: String { get }
     /// Ids of the plugins this one needs; an engine without them leaves it off.
     nonisolated var requires: [String] { get }
+    /// Empty for unrestricted plugins; otherwise the profile email must belong to one of these exact domains.
+    nonisolated var allowedEmailDomains: [String] { get }
     /// Boolean flags `PATCH /api/bots/:id` and `PATCH /api/groups/:id` accept on top of the core's.
     nonisolated var botFlags: [String] { get }
     nonisolated var groupFlags: [String] { get }
@@ -116,6 +118,7 @@ public protocol EnginePlugin: AnyObject {
 
 public extension EnginePlugin {
     nonisolated var requires: [String] { [] }
+    nonisolated var allowedEmailDomains: [String] { [] }
     nonisolated var botFlags: [String] { [] }
     nonisolated var groupFlags: [String] { [] }
     nonisolated var subcommands: [PluginSubcommand] { [] }
@@ -197,6 +200,7 @@ public final class PluginRegistry {
     private unowned let harness: Harness
     private let file: URL
     private var disabled: Set<String>
+    private var hasStarted = false
 
     init(harness: Harness, plugins: [any EnginePlugin]) {
         self.harness = harness
@@ -222,16 +226,27 @@ public final class PluginRegistry {
         return url
     }
 
-    /// Off by the user, or because a plugin it needs is off or not linked in.
+    /// Restricted plugins are hidden as well as disabled when the profile has no eligible email.
+    func isAvailable(_ id: String) -> Bool {
+        guard let plugin = plugin(id) else { return false }
+        guard !plugin.allowedEmailDomains.isEmpty else { return true }
+        let email = (harness.config.string("profile", "email") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = email.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty,
+              !email.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.contains($0) }) else { return false }
+        return plugin.allowedEmailDomains.contains { $0.caseInsensitiveCompare(String(parts[1])) == .orderedSame }
+    }
+
+    /// Off by the user, the profile policy, or because a plugin it needs is off or not linked in.
     public func isEnabled(_ id: String) -> Bool {
-        guard let plugin = plugin(id), !disabled.contains(id) else { return false }
+        guard let plugin = plugin(id), isAvailable(id), !disabled.contains(id) else { return false }
         return plugin.requires.allSatisfy { isEnabled($0) }
     }
 
     public var active: [any EnginePlugin] { plugins.filter { isEnabled($0.id) } }
 
     public func setEnabled(_ id: String, _ on: Bool) throws {
-        guard plugin(id) != nil else { throw HTTPError(404, "no such plugin") }
+        guard isAvailable(id) else { throw HTTPError(404, "no such plugin") }
         let before = active
         if on { disabled.remove(id) } else { disabled.insert(id) }
         let json: JSON = ["disabled": .strings(disabled.sorted())]
@@ -239,9 +254,19 @@ public final class PluginRegistry {
         for plugin in before where !isEnabled(plugin.id) { plugin.stop(harness) }
     }
 
+    /// Apply profile changes to work that was already running, before clients receive the config event.
+    func configurationChanged(previouslyActive: [any EnginePlugin]) async {
+        for plugin in previouslyActive where !isEnabled(plugin.id) { plugin.stop(harness) }
+        guard hasStarted else { return }
+        let previousIds = Set(previouslyActive.map(\.id))
+        for plugin in plugins where isEnabled(plugin.id) && !previousIds.contains(plugin.id) {
+            await plugin.start(harness)
+        }
+    }
+
     /// `GET /api/plugins`.
     var wire: JSON {
-        .array(plugins.map { plugin in
+        .array(plugins.filter { isAvailable($0.id) }.map { plugin in
             var entry: JSONObject = ["id": .string(plugin.id), "name": .string(plugin.name), "version": .string(plugin.version),
                                      "enabled": .bool(isEnabled(plugin.id))]
             if !plugin.requires.isEmpty { entry["requires"] = .strings(plugin.requires) }
@@ -301,15 +326,19 @@ public final class PluginRegistry {
         let listening = active
         guard !listening.isEmpty else { return }
         Task { @MainActor in
-            for plugin in listening { await plugin.afterTurn(result) }
+            for plugin in listening where isEnabled(plugin.id) { await plugin.afterTurn(result) }
         }
     }
 
     func start() async {
-        for plugin in active { await plugin.start(harness) }
+        hasStarted = true
+        for plugin in plugins where isEnabled(plugin.id) { await plugin.start(harness) }
     }
 
-    func stop() { for plugin in plugins { plugin.stop(harness) } }
+    func stop() {
+        hasStarted = false
+        for plugin in plugins { plugin.stop(harness) }
+    }
 
     /// `swarme-harness <name> …`, before the engine touches anything.
     nonisolated public static func subcommand(_ name: String, in plugins: [any EnginePlugin]) -> PluginSubcommand? {

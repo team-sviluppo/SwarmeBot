@@ -11,15 +11,18 @@ final class PluginTests: XCTestCase {
         nonisolated let name: String
         nonisolated let version = "1.2.0"
         nonisolated let requires: [String]
+        nonisolated let allowedEmailDomains: [String]
         nonisolated let botFlags = ["probeFlag"]
         nonisolated let groupFlags = ["probeGroupFlag"]
         var started = 0
+        var stopped = 0
         var results: [TurnResult] = []
 
-        nonisolated init(id: String, requires: [String] = []) {
+        nonisolated init(id: String, requires: [String] = [], allowedEmailDomains: [String] = []) {
             self.id = id
             self.name = id.capitalized
             self.requires = requires
+            self.allowedEmailDomains = allowedEmailDomains
         }
 
         func routes(_ router: PluginRouter) {
@@ -38,6 +41,7 @@ final class PluginTests: XCTestCase {
 
         func afterTurn(_ result: TurnResult) async { results.append(result) }
         func start(_ harness: Harness) async { started += 1 }
+        func stop(_ harness: Harness) { stopped += 1 }
     }
 
     private func temporaryPaths() -> DataPaths {
@@ -207,5 +211,85 @@ final class PluginTests: XCTestCase {
         let plugins: [any EnginePlugin] = [WithCommand()]
         XCTAssertNotNil(PluginRegistry.subcommand("mcp-x", in: plugins))
         XCTAssertNil(PluginRegistry.subcommand("mcp-y", in: plugins))
+    }
+
+    func testRestrictedPluginsRequireAnExactEmailDomain() async throws {
+        let probe = Probe(id: "restricted", allowedEmailDomains: ["hextra.it"])
+        let (harness, routes) = try engine([probe, Probe(id: "code")])
+        await harness.boot()
+        for email in ["", "person@example.com", "person@sub.hextra.it", "person@nothextra.it", "person@hextra.it.evil", "@hextra.it", "a@b@hextra.it", "two people@hextra.it"] {
+            _ = try harness.config.save(patch: ["profile": ["email": .string(email)]], externalSecrets: false)
+            XCTAssertFalse(harness.plugins.isEnabled("restricted"), email)
+            let list = await call(routes, "GET", "/api/plugins").body?["plugins"]?.array ?? []
+            XCTAssertEqual(list.compactMap { $0["id"]?.string }, ["code"], email)
+            let toggle = await call(routes, "PUT", "/api/plugins/restricted", body: ["enabled": true])
+            XCTAssertEqual(toggle.status, 404, email)
+            let direct = await call(routes, "GET", "/api/threads/t/restricted")
+            XCTAssertEqual(direct.status, 404, email)
+        }
+        for email in ["person@hextra.it", "Person@HEXTRA.IT", "  person@hextra.it\n"] {
+            _ = try harness.config.save(patch: ["profile": ["email": .string(email)]], externalSecrets: false)
+            XCTAssertTrue(harness.plugins.isEnabled("restricted"), email)
+            let direct = await call(routes, "GET", "/api/threads/t/restricted")
+            XCTAssertEqual(direct.status, 200, email)
+        }
+        await harness.shutdown()
+    }
+
+    func testMissingEmailPreventsStartupFlagsDataAndTurnHooks() async throws {
+        let probe = Probe(id: "restricted", allowedEmailDomains: ["hextra.it"])
+        let (harness, _) = try engine([probe])
+        await harness.plugins.start()
+        XCTAssertEqual(probe.started, 0)
+        XCTAssertTrue(harness.plugins.botFlags.isEmpty)
+        XCTAssertTrue(harness.plugins.groupFlags.isEmpty)
+        var setup = TurnSetup(botId: "b", threadId: "t", groupId: nil, driverKind: "claude", bot: JSONObject(), group: nil, cwd: nil)
+        harness.plugins.beforeTurn(&setup)
+        XCTAssertTrue(setup.system.isEmpty)
+        let existing: JSONObject = ["plugins": ["restricted": ["keep": true]]]
+        let data = try harness.plugins.mergedData(["plugins": ["restricted": ["keep": false]]], existing: existing, owner: .bot("b"))
+        XCTAssertNil(data, "hidden plugin data cannot be edited")
+        harness.plugins.afterTurn(TurnResult(threadId: "t", botId: "b", groupId: nil, ok: true, cost: nil))
+        await Task.yield()
+        XCTAssertTrue(probe.results.isEmpty)
+    }
+
+    func testProfileChangesStopWorkAndInvalidateQueuedHooks() async throws {
+        let probe = Probe(id: "restricted", allowedEmailDomains: ["hextra.it"])
+        let dependent = Probe(id: "dependent", requires: ["restricted"])
+        let (harness, routes) = try engine([probe, dependent])
+        await harness.plugins.start()
+        let allowed = await call(routes, "PUT", "/api/config", body: ["profile": ["email": "user@hextra.it"]])
+        XCTAssertEqual(allowed.status, 200)
+        XCTAssertEqual(probe.started, 1)
+        XCTAssertEqual(dependent.started, 1)
+        harness.plugins.afterTurn(TurnResult(threadId: "t", botId: "b", groupId: nil, ok: true, cost: nil))
+        let denied = await call(routes, "PUT", "/api/config", body: ["profile": ["email": "user@example.com"]])
+        XCTAssertEqual(denied.status, 200)
+        XCTAssertEqual(probe.stopped, 1)
+        XCTAssertEqual(dependent.stopped, 1)
+        XCTAssertFalse(harness.plugins.isEnabled("dependent"))
+        await Task.yield()
+        XCTAssertTrue(probe.results.isEmpty, "hooks queued before revocation must recheck access")
+        _ = await call(routes, "PATCH", "/api/config", body: ["profile": ["email": "user@hextra.it"]])
+        XCTAssertEqual(probe.started, 2)
+        XCTAssertEqual(dependent.started, 2)
+    }
+
+    func testProfileChangesPreserveManualDisableAndPluginDataAcrossRestart() async throws {
+        let paths = temporaryPaths()
+        let probe = Probe(id: "restricted", allowedEmailDomains: ["hextra.it"])
+        let (harness, routes) = try engine([probe], paths: paths)
+        _ = await call(routes, "PUT", "/api/config", body: ["profile": ["email": "user@hextra.it"]])
+        try harness.plugins.setEnabled("restricted", false)
+        let data = harness.plugins.directory(for: "restricted").appendingPathComponent("settings.json")
+        try FileIO.writeAtomic(Data("preserved".utf8), to: data)
+        _ = await call(routes, "PUT", "/api/config", body: ["profile": ["email": ""]])
+        let (restarted, restartedRoutes) = try engine([Probe(id: "restricted", allowedEmailDomains: ["hextra.it"])], paths: paths)
+        XCTAssertFalse(restarted.plugins.isEnabled("restricted"))
+        XCTAssertEqual(restarted.plugins.wire.array?.count, 0)
+        _ = await call(restartedRoutes, "PUT", "/api/config", body: ["profile": ["email": "user@hextra.it"]])
+        XCTAssertFalse(restarted.plugins.isEnabled("restricted"), "an eligible email must not undo a manual disable")
+        XCTAssertEqual(try Data(contentsOf: data), Data("preserved".utf8))
     }
 }

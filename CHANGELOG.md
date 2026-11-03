@@ -3,6 +3,12 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
+## [Unreleased]
+
+### Plugins
+
+- Show and enable Cylon only when the engine profile email belongs to `hextra.it`. Other profiles cannot enable it or access its APIs, even when it is installed. Changing the profile email applies the restriction immediately.
+
 ## [0.6.1]
 
 ### Fixes

@@ -61,6 +61,11 @@ def run(binary):
 
         try:
             fleet = start()
+            assert [p["id"] for p in request("GET", "/api/plugins")["plugins"]] == ["code"]
+            request("PUT", "/api/plugins/cylon", dict(enabled=True), expected=404)
+            request("GET", "/api/cylon/settings", expected=404)
+            request("PUT", "/api/config", {"profile": {"email": "qa@HEXTRA.IT"}})
+            assert next(p for p in request("GET", "/api/plugins")["plugins"] if p["id"] == "cylon")["enabled"]
             bot = fleet["bots"][0]["id"]
             repos = []
             for index, label in enumerate(["Default", "API", "Web", "Data", "Docs", "Tools", "Mobile"]):
@@ -96,7 +101,21 @@ def run(binary):
             start()
             assert request("GET", route)["clickupListId"] is None, "clearing must survive restart and override the legacy value"
             assert request("GET", "/api/projects")["projects"][0]["repos"][-2]["label"] == "Public API"
-            print("OK projects: 7 labeled repos, stable assignment, scripts, Cylon migration/toggle/clear, restart")
+            for email in ["qa@example.com", "qa@sub.hextra.it", "qa@nothextra.it", "qa@hextra.it.evil", ""]:
+                request("PATCH", "/api/config", {"profile": {"email": email}})
+                assert "cylon" not in [p["id"] for p in request("GET", "/api/plugins")["plugins"]]
+                request("GET", route, expected=404)
+                request("PUT", route, dict(clickupListId="denied"), expected=404)
+                request("PUT", "/api/plugins/cylon", dict(enabled=True), expected=404)
+                assert len(request("GET", "/api/projects")["projects"][0]["repos"]) == 7
+            engine.terminate()
+            engine.wait(timeout=10)
+            engine = None
+            start()
+            request("GET", route, expected=404)
+            request("PATCH", "/api/config", {"profile": {"email": "qa@hextra.it"}})
+            assert request("GET", route)["clickupListId"] is None
+            print("OK projects: 7 labeled repos, stable assignment, scripts, Cylon migration/toggle/clear, exact email domain policy, revocation, restart")
         finally:
             if engine is not None and engine.poll() is None:
                 engine.terminate()

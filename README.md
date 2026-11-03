@@ -264,6 +264,11 @@ plugins only. Repeat preparation after editing private sources or shared transla
 Each private plugin declares its modules, entry types, dependencies, tests and translation table
 in `Plugins/<Name>/plugin.json` in the private repository; the build generates registration code.
 Cylon and its tests and translations are maintained there.
+Cylon is visible and available only when the connected engine's profile email belongs to the
+exact `hextra.it` domain (case insensitive). Missing emails, other domains and subdomains keep
+it hidden and disabled even when installed; its API routes and turn hooks are unavailable.
+Profile edits take effect in connected clients without restarting. Existing plugin data and
+the user's manual on/off choice are preserved.
 
 On first launch the app creates `~/.swarmebot` and starts the engine. On a machine that already
 has data there, it first makes a one-time full backup to
