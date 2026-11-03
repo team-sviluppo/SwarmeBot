@@ -3,11 +3,12 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
-## [Unreleased]
+## [0.6.2]
 
 ### Plugins
 
-- Show and enable Cylon only when the engine profile email belongs to `hextra.it`. Other profiles cannot enable it or access its APIs, even when it is installed. Changing the profile email applies the restriction immediately.
+- Show and enable Cylon only when the engine profile email belongs to the exact `hextra.it` domain. Missing emails, other domains and subdomains keep it hidden and disabled, even when installed.
+- Apply profile email changes immediately across connected clients, blocking Cylon APIs and turn hooks for ineligible profiles while preserving plugin settings and the manual on/off choice.
 
 ## [0.6.1]
 
