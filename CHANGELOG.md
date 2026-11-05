@@ -3,6 +3,14 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
+## [0.6.4]
+
+### Skills
+
+- Control all installed Cylon skills from a single **Cylon** switch in the bot's details. One save sets the default for every member while preserving other skills and existing per-chat choices.
+- See how many skills are enabled when the group is partially active, and enable the full group or disable all members together.
+- Keep disabled Cylon skills off even when a GitHub source assigns them automatically. Individual skill files and slash commands remain available as usual.
+
 ## [0.6.3]
 
 ### Fixes
