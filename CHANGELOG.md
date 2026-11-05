@@ -3,6 +3,14 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
+## [0.6.3]
+
+### Fixes
+
+- Show a single, localized warning when shared folders are unavailable, with directions to the Sharing settings. Dismissed warnings stay quiet across automatic reconnections until the folders recover; manual refresh still reports current problems.
+- Preserve errors from other actions during automatic shared repository synchronization and clear the folder warning after recovery.
+- Recognize GitHub skill repositories such as Cylon whose skill folders are directly at the repository root when the default `skills` entry is absent. Keep validation of custom paths, existing folders and symbolic links, and preserve installed skills when an update is invalid.
+
 ## [0.6.2]
 
 ### Plugins
