@@ -143,6 +143,9 @@ The shared MCP catalog is also accessible from the folder button in **Settings �
   running local engine. **Refresh from repository** also applies updates without restarting.
   Missing or invalid catalogs keep the last local copies. New catalog entries are never imported
   automatically; existing local connector IDs are never overwritten by an unrelated shared entry.
+  Automatic sync shows each unresolved warning once per app session; a manual refresh always reports
+  current problems. If your sync provider moves a folder, select its current path in Settings → Sharing
+  (and Settings → Skills for a moved skills folder).
 - **Disconnect** stops updates and keeps local copies. Changing folders does not relink copies to
   unrelated definitions with the same ID. Re-select the original folder to edit a shared bot's profile.
 

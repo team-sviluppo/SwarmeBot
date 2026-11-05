@@ -2,6 +2,7 @@
 extension Translations {
     static let settings: [String: String] = [
         "Catalogo condiviso": "Shared catalog",
+        "Cartella condivisa non disponibile. Le copie locali sono conservate. Controlla i percorsi in Impostazioni → Condivisione.": "Shared folder unavailable. Local copies are kept. Check the paths in Settings → Sharing.",
         "Bot condivisi": "Shared bots",
         "Connettori MCP": "MCP connectors",
         "Connettori MCP condivisi": "Shared MCP connectors",

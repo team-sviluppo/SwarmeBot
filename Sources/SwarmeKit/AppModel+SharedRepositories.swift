@@ -33,12 +33,28 @@ extension AppModel {
         catch { lastError = error.localizedDescription; return nil }
     }
 
-    public func syncSharedRepositories() async {
+    public func syncSharedRepositories(automatically: Bool = false) async {
         guard let client else { return }
-        lastError = nil
+        if !automatically { lastError = nil }
         do {
             let problems = try await client.syncSharedRepositories()
-            if !problems.isEmpty { lastError = problems.joined(separator: "\n") }
+            var seen = Set<String>()
+            let unique = problems.filter { seen.insert($0).inserted }
+            let unreported = unique.filter { !sharedRepositorySyncProblems.contains($0) }
+            sharedRepositorySyncProblems = seen
+            if !unique.isEmpty && (!automatically || !unreported.isEmpty) {
+                let warning = unique.map { problem in
+                    if problem == "shared folder is unavailable; local copies have been kept" {
+                        return tr("Cartella condivisa non disponibile. Le copie locali sono conservate. Controlla i percorsi in Impostazioni → Condivisione.")
+                    }
+                    return problem
+                }.joined(separator: "\n")
+                sharedRepositorySyncWarning = warning
+                lastError = warning
+            } else if unique.isEmpty {
+                if lastError == sharedRepositorySyncWarning { lastError = nil }
+                sharedRepositorySyncWarning = nil
+            }
             await refreshMCPConnectors()
         } catch { lastError = error.localizedDescription }
     }

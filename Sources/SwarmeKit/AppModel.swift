@@ -55,6 +55,9 @@ public final class AppModel {
     public var selection: ChatID?
     /// The last error an action produced, for a transient banner.
     public var lastError: String?
+    /// Unresolved catalog warnings already shown during automatic syncs.
+    @ObservationIgnored var sharedRepositorySyncProblems = Set<String>()
+    @ObservationIgnored var sharedRepositorySyncWarning: String?
     /// Config or engines could not be read: settings would show empty fields.
     public var loadError: String?
 
@@ -176,7 +179,7 @@ public final class AppModel {
                     reconnectDelay = 0
                     if case let .hello(helloCursor, resumed) = frame.frame {
                         if !resumed {
-                            if !settingsOnly && !isRemote { await syncSharedRepositories() }
+                            if !settingsOnly && !isRemote { await syncSharedRepositories(automatically: true) }
                             if !settingsOnly { try await hydrate() }
                             cursor = helloCursor
                         }

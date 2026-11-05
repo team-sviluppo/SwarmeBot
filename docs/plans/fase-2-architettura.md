@@ -133,6 +133,20 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Cartelle condivise non disponibili (2026-11-05): OneDrive può spostare una raccolta
+  lasciando in configurazione percorsi che non esistono più. Le copie locali restano
+  disponibili; l'avviso del client indica Impostazioni → Condivisione, deduplica gli
+  errori uguali e rispetta la chiusura durante le riconnessioni automatiche. Un recupero
+  della cartella riabilita la segnalazione per eventuali interruzioni successive;
+  l'aggiornamento manuale mostra sempre i problemi correnti. La sincronizzazione
+  automatica non cancella errori di altre operazioni.
+  Verifica: tre test di regressione del client e build Mac; suite completa di 784 test,
+  14 verifiche opzionali saltate, zero errori alla seconda esecuzione. Il test Code
+  `testAfterAPushTheReviewReadsTheBranchAgainstItsBase` era fallito al primo giro,
+  poi è passato sia da solo sia nella seconda suite. Nessuna modifica al motore
+  o al contratto HTTP/SSE; nessuna parità Node eseguita. I percorsi e i collegamenti
+  delle copie importate dell'utente non sono stati modificati.
+
 - Scelte nei riepiloghi (2026-10-30): una domanda generica o parole come “opzioni” e
   “select” nel messaggio non bastano a rendere selezionabile un elenco. Il parser richiede
   una richiesta esplicita di scelta nella riga adiacente, separa gli elenchi interrotti da
