@@ -13,6 +13,7 @@ final class PluginHostTests: XCTestCase {
         var active = true
         var footer: PluginView?
         var navigation: PluginView?
+        var groups: [PluginSkillGroup] = []
 
         init(_ id: String) {
             self.id = id
@@ -24,6 +25,7 @@ final class PluginHostTests: XCTestCase {
         func replyFooter(_ message: Message, _ chat: ChatContext, _ position: TurnPosition) -> PluginView? { footer }
         func chatNavigation(_ chat: ChatContext) -> PluginView? { navigation }
         func settingsSections(_ scope: SettingsScope) -> [PluginView] { [PluginView(Text(verbatim: id))] }
+        func skillGroups(on model: AppModel) -> [PluginSkillGroup] { groups }
     }
 
     private func chat(_ model: AppModel) -> ChatContext {
@@ -42,6 +44,20 @@ final class PluginHostTests: XCTestCase {
         XCTAssertTrue(host.composerAccessories(chat(model)).isEmpty)
         XCTAssertTrue(host.settingsSections(.global, on: model).isEmpty)
         XCTAssertFalse(host.hasActive(for: chat(model)))
+    }
+
+    func testSkillGroupsFollowPluginAvailabilityWithoutRequiringAnActiveChat() {
+        let host = PluginHost()
+        let plugin = Fake("suite")
+        plugin.active = false
+        plugin.groups = [PluginSkillGroup(id: "suite", title: "Suite", description: "", skillIDs: ["one", "two"])]
+        host.install([plugin])
+        let model = AppModel()
+        XCTAssertTrue(host.skillGroups(on: model).isEmpty)
+        model.enginePlugins = [EnginePluginInfo(id: "suite", name: "Suite", version: "1", enabled: true)]
+        XCTAssertEqual(host.skillGroups(on: model).map(\.skillIDs), [["one", "two"]])
+        model.enginePlugins[0].enabled = false
+        XCTAssertTrue(host.skillGroups(on: model).isEmpty)
     }
 
     func testAPluginTheEngineSwitchedOffShowsNowhere() {

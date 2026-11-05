@@ -1,6 +1,9 @@
 // English for skills: Settings › Skill, the bot's card, the chat chip and the import.
 extension Translations {
     static let skills: [String: String] = [
+        "Abilitate %@ di %@ skill": "%@ of %@ skills enabled",
+        "Gruppo di %@ skill": "Group of %@ skills",
+        "Disattiva tutte": "Disable all",
         // Settings › Skill
         "Skill": "Skills",
         "Nuova skill": "New skill",
