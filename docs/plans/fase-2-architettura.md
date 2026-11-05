@@ -133,6 +133,18 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
 
 ## Lezioni
 
+- Sorgenti skill con cartelle nella radice (2026-11-05): il repository Cylon contiene
+  direttamente `cylon-spec`, `cylon-plan` e le altre skill. Se manca la voce predefinita
+  `skills`, il motore cerca nella radice; percorsi personalizzati errati, directory vuote,
+  manifest non validi, file e link al posto di `skills` restano errori. Il percorso `.`
+  continua a selezionare esplicitamente la radice. La sorgente Cylon dell'utente è stata
+  corretta tramite API e ha installato tutte le 12 skill, senza conflitti, usando il
+  token già nel Vault e senza riavviare il motore. Nessun turno su modelli reali.
+  Verifiche: 20 test delle sorgenti (inclusa la route HTTP), build Mac, suite completa
+  di 787 test con 14 verifiche opzionali saltate e nessun errore; scenario skill HTTP
+  con Claude e Local Endpoint simulati. Nessuna parità Node (sorgenti assenti
+  nel motore di riferimento); nessuna build Linux o iOS eseguita.
+
 - Cartelle condivise non disponibili (2026-11-05): OneDrive può spostare una raccolta
   lasciando in configurazione percorsi che non esistono più. Le copie locali restano
   disponibili; l'avviso del client indica Impostazioni → Condivisione, deduplica gli

@@ -155,6 +155,13 @@ definitions (`id`, `name`, `transport` and the usual command/args or URL fields)
 locally in `config.json` under `sharedRepositories.bots` and `sharedRepositories.connectors`.
 SwarmeBot reads these folders directly; sync or Git operations are handled by your chosen drive or repository.
 
+### Skills from GitHub
+
+GitHub skill sources accept repositories with skill folders directly at the root, such as Cylon.
+The default source folder `skills` uses the repository root when no `skills` entry exists.
+You can also set the source's **Folder** to `.` (or leave it empty) to select the root explicitly.
+Custom folder paths must exist; an existing empty or invalid `skills` folder reports an error.
+
 ### MCP connectors
 - Add **MCP servers** once and hand them to any bot, whatever its agent: they are mounted on
   Claude, Codex and ACP agents, and run in the engine's own loop for API-based engines.

@@ -170,6 +170,72 @@ final class SkillSourceTests: XCTestCase {
         XCTAssertEqual(marked?["source"]?["name"], "acme/skills")
     }
 
+    func testDefaultFolderAcceptsSkillsAtRepositoryRoot() async throws {
+        let harness = try engine()
+        let id = try newSource(harness)
+        github.tarball = try makeTarball([
+            "cylon-spec/SKILL.md": manifest("cylon-spec"),
+            "cylon-plan/SKILL.md": manifest("cylon-plan"),
+            "cylon-plan/scripts/run.sh": "echo plan\n",
+            "docs/README.md": "Not a skill\n",
+            "README.md": "# Cylon\n",
+        ], executables: ["cylon-plan/scripts/run.sh"])
+        let (status, response) = await call(harness, "POST", "/api/skill-sources/\(id)/update", [:])
+        XCTAssertEqual(status, 200)
+        let source = try XCTUnwrap(response?["source"])
+        XCTAssertEqual(source["last"]?["ok"], true, String(describing: source["last"]))
+        XCTAssertEqual(source["last"]?["updated"]?["added"], ["cylon-plan", "cylon-spec"])
+        XCTAssertEqual(harness.skills.list().map(\.id), ["cylon-plan", "cylon-spec"])
+        XCTAssertEqual(harness.skillSources.managed("cylon-plan")?.sourceId, id)
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: harness.skills.directory("cylon-plan").appendingPathComponent("scripts/run.sh").path))
+        let again = try await harness.skillSources.sync(id)
+        XCTAssertEqual(again["last"]?["unchanged"], true)
+        XCTAssertEqual(github.downloads, 1)
+    }
+
+    func testExplicitRootAndMissingCustomFolderStayDistinct() async throws {
+        let harness = try engine()
+        github.tarball = try makeTarball(["cylon-spec/SKILL.md": manifest("cylon-spec")])
+        let custom = try newSource(harness, ["path": "custom-skills"])
+        let missing = try await harness.skillSources.sync(custom)
+        XCTAssertEqual(missing["last"]?["ok"], false)
+        XCTAssertTrue(harness.skills.list().isEmpty, "a wrong custom path must not import root skills")
+        for path in [".", ""] {
+            let rootHarness = try engine()
+            let root = try newSource(rootHarness, ["path": .string(path)])
+            let installed = try await rootHarness.skillSources.sync(root)
+            XCTAssertEqual(installed["path"], "")
+            XCTAssertEqual(installed["last"]?["ok"], true)
+            XCTAssertNotNil(rootHarness.skills.skill("cylon-spec"))
+        }
+    }
+
+    func testExistingDefaultFolderNeverFallsBackToRoot() async throws {
+        let harness = try engine()
+        let id = try newSource(harness)
+        github.tarball = try makeTarball([
+            "skills/alpha/SKILL.md": manifest("alpha"),
+            "cylon-spec/SKILL.md": manifest("cylon-spec"),
+        ])
+        let installed = try await harness.skillSources.sync(id)
+        XCTAssertEqual(installed["last"]?["ok"], true)
+        XCTAssertEqual(harness.skills.list().map(\.id), ["alpha"], "the conventional folder takes precedence")
+        for entries in [["skills/README.md": "No skills", "cylon-spec/SKILL.md": manifest("cylon-spec")],
+                        ["skills": "Not a directory", "cylon-spec/SKILL.md": manifest("cylon-spec")],
+                        ["skills/broken/SKILL.md": "Invalid manifest", "cylon-spec/SKILL.md": manifest("cylon-spec")]] {
+            github.tarball = try makeTarball(entries)
+            let invalid = try await harness.skillSources.sync(id, force: true)
+            XCTAssertEqual(invalid["last"]?["ok"], false)
+            XCTAssertEqual(harness.skills.list().map(\.id), ["alpha"], "a bad update keeps installed skills")
+        }
+        for target in ["/etc", scratch.appendingPathComponent("missing").path] {
+            github.tarball = try makeTarball(["cylon-spec/SKILL.md": manifest("cylon-spec")], links: ["skills": target])
+            let linked = try await harness.skillSources.sync(id, force: true)
+            XCTAssertEqual(linked["last"]?["ok"], false)
+            XCTAssertEqual(harness.skills.list().map(\.id), ["alpha"], "a linked default folder must not select the root")
+        }
+    }
+
     func testAnUpToDateSourceAsksGitHubForTheCommitAndNothingMore() async throws {
         let harness = try engine()
         let id = try newSource(harness)

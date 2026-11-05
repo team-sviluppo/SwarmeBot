@@ -641,7 +641,14 @@ public final class SkillSources {
         let tops = ((try? fm.contentsOfDirectory(atPath: extract.path)) ?? []).filter { !$0.hasPrefix(".") }
         guard tops.count == 1, Self.isDirectory(extract.appendingPathComponent(tops[0])) else { throw SkillSourceError("the download is not a repository") }
         let top = extract.appendingPathComponent(tops[0], isDirectory: true)
-        let base = source.path.isEmpty ? top : top.appendingPathComponent(source.path, isDirectory: true)
+        var base = source.path.isEmpty ? top : top.appendingPathComponent(source.path, isDirectory: true)
+        // Repositories such as Cylon keep their skill folders at the root.
+        // Fall back only when the conventional default is absent; an explicit
+        // custom path or an existing invalid entry must still fail validation.
+        if source.path == "skills", !fm.fileExists(atPath: base.path),
+           !(try fm.contentsOfDirectory(atPath: top.path)).contains("skills") {
+            base = top
+        }
         guard Self.isDirectory(base), ReadOnlyGuard.canonical(base.path).hasPrefix(ReadOnlyGuard.canonical(top.path)) else {
             throw SkillSourceError("the folder \"\(source.path)\" is not in \(source.repo) at \(source.ref)")
         }

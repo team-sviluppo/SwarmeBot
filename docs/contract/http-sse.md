@@ -583,6 +583,9 @@ last?:{checkedAt, ok, error?, unchanged?, held?, rolledBack?, sha?, updated?:{ad
   e 8 MB; link simbolici e file nascosti non vengono presi). Se una sola non è valida non cambia **niente** e l'errore le elenca; altrimenti
   le sostituisce tutte insieme e tiene la versione sostituita. Una skill fatta a mano con lo stesso nome, o di un'altra sorgente, non si tocca
   (`conflicts`). Una skill sparita dal repository sparisce.
+- **Cartella sorgente**: `path` vuoto o `.` seleziona la radice. Il valore predefinito `skills` usa la radice
+  solo se nella radice non esiste una voce `skills`; una cartella vuota, un file, un link o una skill non valida
+  in quella posizione non attivano il ripiego. Gli altri percorsi devono esistere esattamente come indicati.
 - **Torna alla versione precedente**: ripristina la versione sostituita e **non reinstalla** il commit da cui si è tornati finché il repository non
   avanza (`held`); `update` con `force` lo ignora.
 - **Skill gestite**: `GET /api/skills` e `/api/skills/:id` portano `source:{id, name, sha}`; `PUT`, `DELETE` e `POST replace` rispondono 409
