@@ -162,6 +162,12 @@ The default source folder `skills` uses the repository root when no `skills` ent
 You can also set the source's **Folder** to `.` (or leave it empty) to select the root explicitly.
 Custom folder paths must exist; an existing empty or invalid `skills` folder reports an error.
 
+Enabled app plugins can present related skills as a single switch in a bot's details.
+The Cylon plugin groups `cylon` and `cylon-*` under **Cylon**: one save turns all installed members
+on or off by default, including skills assigned automatically by a GitHub source. A partial selection
+shows its enabled count and can be enabled in full or disabled together. Individual skills and chat
+overrides remain available as usual.
+
 ### MCP connectors
 - Add **MCP servers** once and hand them to any bot, whatever its agent: they are mounted on
   Claude, Codex and ACP agents, and run in the engine's own loop for API-based engines.

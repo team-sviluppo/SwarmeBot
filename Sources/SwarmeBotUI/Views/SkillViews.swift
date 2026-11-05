@@ -12,6 +12,9 @@ struct BotSkillsCard: View {
     @Environment(AppModel.self) private var model
 
     private var assigned: [BotSkill] { bot.skills ?? [] }
+    private var choices: [SkillChoice] {
+        SkillChoice.list(model.skills, groups: PluginHost.shared.skillGroups(on: model))
+    }
 
     var body: some View {
         SettingsCard(tr("Skill")) {
@@ -21,35 +24,45 @@ struct BotSkillsCard: View {
                     SettingsLink { Text(tr("Apri")) }
                 }
             } else {
-                ForEach(Array(model.skills.enumerated()), id: \.element.id) { index, skill in
+                ForEach(Array(choices.enumerated()), id: \.element.id) { index, choice in
                     if index > 0 { CardDivider(leading: 48) }
-                    row(skill)
+                    row(choice)
                 }
             }
         }
     }
 
-    private func row(_ skill: Skill) -> some View {
-        let entry = assigned.first { $0.id == skill.id }
-        return SettingRow(icon: skill.hasScripts ? "terminal" : "wand.and.stars", tint: Theme.accentText,
-                          title: skill.name) {
+    private func row(_ choice: SkillChoice) -> some View {
+        let count = choice.assignedCount(in: assigned)
+        let allAssigned = count == choice.skills.count
+        let defaults = choice.defaultOnCount(in: assigned)
+        let partial = choice.isGroup && defaults > 0 && defaults < choice.skills.count
+        let subtitle: String? = !choice.isGroup ? nil : partial
+            ? tr("Abilitate %@ di %@ skill", String(defaults), String(choice.skills.count))
+            : tr("Gruppo di %@ skill", String(choice.skills.count))
+        return SettingRow(icon: choice.hasScripts ? "terminal" : "wand.and.stars", tint: Theme.accentText,
+                          title: choice.title, subtitle: subtitle) {
             HStack(spacing: 10) {
-                if let entry {
-                    Toggle(tr("Accesa nelle nuove chat"), isOn: Binding(get: { entry.defaultOn }, set: { on in
-                        save(assigned.map { $0.id == skill.id ? BotSkill(id: $0.id, defaultOn: on) : $0 })
+                if allAssigned && !choice.isGroup {
+                    Toggle(tr("Accesa nelle nuove chat"), isOn: Binding(get: { defaults == count }, set: { on in
+                        save(choice.settingDefault(on, in: assigned))
                     }))
                     .toggleStyle(.checkbox)
                     .font(.system(size: 11.5))
-                    .help(tr("Se spenta, il bot non la vede finché non la accendi nella chat o la richiami con /%@.", skill.id))
+                    .help(choice.isGroup ? choice.description : tr("Se spenta, il bot non la vede finché non la accendi nella chat o la richiami con /%@.", choice.skills[0].id))
+                } else if partial {
+                    Button(tr("Disattiva tutte")) { save(choice.assigning(false, in: assigned)) }
+                        .buttonStyle(.borderless).font(.system(size: 11))
                 }
-                Toggle("", isOn: Binding(get: { entry != nil }, set: { use in
-                    save(use ? assigned + [BotSkill(id: skill.id, defaultOn: true)] : assigned.filter { $0.id != skill.id })
+                Toggle("", isOn: Binding(get: { choice.isGroup ? defaults == choice.skills.count : allAssigned }, set: { use in
+                    save(choice.assigning(use, in: assigned))
                 }))
                 .toggleStyle(.switch).controlSize(.small).labelsHidden().tint(Theme.accent)
+                .accessibilityLabel(choice.title)
             }
         }
         // the description can run to paragraphs: the row shows the title, hover shows the rest
-        .help(skill.description)
+        .help(choice.description)
     }
 
     private func save(_ list: [BotSkill]) {

@@ -14,6 +14,21 @@ import SwiftUI
 
 public typealias PluginView = AnyView
 
+/// Skills that a plugin presents as one assignment in a bot's settings.
+public struct PluginSkillGroup: Sendable {
+    public let id: String
+    public let title: String
+    public let description: String
+    public let skillIDs: [String]
+
+    public init(id: String, title: String, description: String, skillIDs: [String]) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.skillIDs = skillIDs
+    }
+}
+
 public struct PluginCommand: Identifiable {
     public let id: String
     public let section: String
@@ -133,6 +148,8 @@ public protocol AppPlugin: AnyObject {
     func commands(_ model: AppModel) async -> [PluginCommand]
     /// Rows of the settings of a bot or channel (the plugin's switch, its options).
     func settingsSections(_ scope: SettingsScope) -> [PluginView]
+    /// Related skills controlled together in the bot's skill card.
+    func skillGroups(on model: AppModel) -> [PluginSkillGroup]
     /// A fresh draft for each project editor, including a project being created.
     func projectSettings(on model: AppModel) -> (any PluginProjectSettings)?
     /// The chat, its folder or its busy state changed: refresh what the plugin shows.
@@ -152,6 +169,7 @@ public extension AppPlugin {
     func chatNavigation(_ chat: ChatContext) -> PluginView? { nil }
     func commands(_ model: AppModel) async -> [PluginCommand] { [] }
     func settingsSections(_ scope: SettingsScope) -> [PluginView] { [] }
+    func skillGroups(on model: AppModel) -> [PluginSkillGroup] { [] }
     func projectSettings(on model: AppModel) -> (any PluginProjectSettings)? { nil }
     func chatChanged(_ chat: ChatContext) async {}
 }
@@ -239,6 +257,10 @@ public final class PluginHost {
 
     public func settingsSections(_ scope: SettingsScope, on model: AppModel) -> [PluginView] {
         available(on: model).flatMap { $0.settingsSections(scope) }
+    }
+
+    public func skillGroups(on model: AppModel) -> [PluginSkillGroup] {
+        available(on: model).flatMap { $0.skillGroups(on: model) }
     }
 
     public func projectSettings(on model: AppModel) -> [any PluginProjectSettings] {
