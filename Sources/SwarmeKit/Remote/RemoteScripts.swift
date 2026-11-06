@@ -119,14 +119,30 @@ public enum RemoteScripts {
     user="$1"
     id "$user" >/dev/null 2>&1 || { echo "no such user $user" >&2; exit 2; }
     export DEBIAN_FRONTEND=noninteractive
-    # the engine links the system SQLite and libcurl (URLSession); Caddy fronts it
+    # The distro's bubblewrap uses its AppArmor profile; the bundled fallback
+    # cannot create user namespaces on Ubuntu with the default restriction.
     need=""
     command -v caddy >/dev/null 2>&1 || need="$need caddy"
+    command -v bwrap >/dev/null 2>&1 || need="$need bubblewrap"
     dpkg -s libsqlite3-0 >/dev/null 2>&1 || need="$need libsqlite3-0"
     dpkg -s libcurl4t64 >/dev/null 2>&1 || dpkg -s libcurl4 >/dev/null 2>&1 || need="$need libcurl4t64"
+    # Ubuntu 24.04 keeps the bwrap user-namespace profile in the extra profiles.
+    need_profile=no
+    if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true)" = 1 ] &&
+       [ ! -f /etc/apparmor.d/bwrap-userns-restrict ]; then
+      need_profile=yes
+      dpkg -s apparmor-profiles >/dev/null 2>&1 || need="$need apparmor-profiles"
+      dpkg -s apparmor-utils >/dev/null 2>&1 || need="$need apparmor-utils"
+    fi
     if [ -n "$need" ]; then
       apt-get update -qq
       apt-get install -y -qq $need >/dev/null
+    fi
+    if [ "$need_profile" = yes ]; then
+      if [ ! -f /etc/apparmor.d/bwrap-userns-restrict ]; then
+        install -m 0644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict
+      fi
+      apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
     fi
     getent group caddy >/dev/null 2>&1 || { echo "the caddy package did not create a caddy group" >&2; exit 3; }
     # the engine's sockets: reachable by the user and by Caddy, by nobody else
@@ -544,29 +560,56 @@ public enum RemoteScripts {
 
     // MARK: Coding agents (as the user)
 
-    /// Native Codex $1, release asset $2, pinned archive SHA-256 $3.
-    /// Keep an existing working CLI. Downloads and verification finish before replacing anything.
+    /// Complete native Codex package $1/$2, pinned archive SHA-256 $3.
+    /// Preserve the upstream layout: CLI, Code Mode host, rg and Linux bubblewrap.
+    /// Stage and validate the whole package before publishing executable links.
     public static let installCodex = #"""
     set -eu
     version="$1"; asset="$2"; want="$3"
     case "$version" in *[!0-9.]*|"") echo "not a Codex version" >&2; exit 2 ;; esac
-    case "$asset" in codex-aarch64-apple-darwin|codex-x86_64-apple-darwin|codex-aarch64-unknown-linux-musl|codex-x86_64-unknown-linux-musl) ;; *) echo "not a Codex build" >&2; exit 2 ;; esac
+    case "$asset" in codex-package-aarch64-apple-darwin|codex-package-x86_64-apple-darwin|codex-package-aarch64-unknown-linux-musl|codex-package-x86_64-unknown-linux-musl) ;; *) echo "not a Codex build" >&2; exit 2 ;; esac
     case "$want" in *[!0-9a-f]*|"") echo "not a SHA-256 digest" >&2; exit 2 ;; esac
     [ "${#want}" = 64 ] || { echo "not a SHA-256 digest" >&2; exit 2; }
     export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
-    if v="$(codex --version 2>/dev/null)" && [ -n "$v" ]; then echo "codex=$v"; exit 0; fi
+    complete() {
+      [ -f "$1/codex-package.json" ] && [ -x "$1/bin/codex" ] &&
+        [ -x "$1/bin/codex-code-mode-host" ] && [ -x "$1/codex-path/rg" ] || return 1
+      case "$asset" in *linux*) [ -x "$1/codex-resources/bwrap" ] || return 1 ;; esac
+      "$1/bin/codex-code-mode-host" --help >/dev/null 2>&1
+    }
+    if cli="$(command -v codex)"; then
+      # Resolve executable links, including relative links used by package managers.
+      while [ -L "$cli" ]; do
+        target="$(readlink "$cli")"
+        case "$target" in /*) cli="$target" ;; *) cli="$(dirname "$cli")/$target" ;; esac
+      done
+      if v="$("$cli" --version 2>/dev/null)" && [ -n "$v" ] && complete "$(dirname "$cli")/.."; then
+        echo "codex=$v"; exit 0
+      fi
+    fi
     bin="$HOME/.local/bin"
-    mkdir -p "$bin"
-    tmp="$(mktemp -d "$bin/.codex.XXXXXX")"
-    trap 'rm -rf "$tmp"' EXIT
-    curl -fsSL -o "$tmp/codex.tar.gz" "https://github.com/openai/codex/releases/download/rust-v$version/$asset.tar.gz"
-    if command -v sha256sum >/dev/null 2>&1; then got="$(sha256sum "$tmp/codex.tar.gz" | cut -d' ' -f1)"; else got="$(shasum -a 256 "$tmp/codex.tar.gz" | cut -d' ' -f1)"; fi
+    releases="$HOME/.local/share/swarmebot/codex"
+    mkdir -p "$bin" "$releases"
+    tmp="$(mktemp -d "$releases/$version.XXXXXX")"
+    published=no
+    trap '[ "$published" = yes ] || rm -rf "$tmp"' EXIT
+    curl -fsSL -o "$tmp/package.tar.gz" "https://github.com/openai/codex/releases/download/rust-v$version/$asset.tar.gz"
+    if command -v sha256sum >/dev/null 2>&1; then got="$(sha256sum "$tmp/package.tar.gz" | cut -d' ' -f1)"; else got="$(shasum -a 256 "$tmp/package.tar.gz" | cut -d' ' -f1)"; fi
     [ "$want" = "$got" ] || { echo "Codex: the download does not match SHA-256" >&2; exit 4; }
-    tar -xzf "$tmp/codex.tar.gz" -C "$tmp" "$asset"
-    chmod 755 "$tmp/$asset"
-    "$tmp/$asset" --version >/dev/null
-    mv -f "$tmp/$asset" "$bin/codex"
-    echo "codex=$("$bin/codex" --version)"
+    tar -xzf "$tmp/package.tar.gz" -C "$tmp"
+    chmod 755 "$tmp/bin/codex" "$tmp/bin/codex-code-mode-host" "$tmp/codex-path/rg"
+    case "$asset" in *linux*) chmod 755 "$tmp/codex-resources/bwrap" ;; esac
+    complete "$tmp" || { echo "Codex: the package is incomplete" >&2; exit 3; }
+    v="$("$tmp/bin/codex" --version)"
+    [ "$v" = "codex-cli $version" ] || { echo "Codex: unexpected package version" >&2; exit 3; }
+    rm -f "$tmp/package.tar.gz"
+    ln -s "$tmp/bin/codex-code-mode-host" "$tmp/host-link"
+    ln -s "$tmp/bin/codex" "$tmp/cli-link"
+    # Keep the package if publication is interrupted: neither executable link may dangle.
+    published=yes
+    mv -f "$tmp/host-link" "$bin/codex-code-mode-host"
+    mv -f "$tmp/cli-link" "$bin/codex"
+    echo "codex=$v"
     """#
 
     /// auth.json only, private and atomic, with the previous login kept as a private backup.

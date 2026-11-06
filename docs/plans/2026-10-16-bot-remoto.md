@@ -423,6 +423,41 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
 
 ## 14. Avanzamento
 
+### Comandi negli harness remoti (2026-11-06)
+
+- Il caso Mailup Website usava Codex 0.165.0 su Ubuntu: mancava
+  `codex-code-mode-host`, quindi il modello terminava senza strumenti. `--version`
+  non dimostra che il runtime sia completo.
+- L'installer condiviso dei server usa ora `codex-package-*` ufficiali, SHA-256
+  fissati per Linux musl e macOS, ARM e Intel. Conserva il layout completo con CLI,
+  host, `codex-path/rg` e `codex-resources/bwrap` su Linux. Verifica e avvia i
+  componenti prima di pubblicare i link; ripara installazioni incomplete, mantiene
+  quelle complete e conserva le directory precedenti per i processi ancora attivi.
+- La preparazione Ubuntu installa `bubblewrap` dal sistema. Quando la restrizione
+  AppArmor dei namespace è attiva e manca il profilo bwrap, installa i profili extra
+  e carica soltanto quello richiesto, come previsto per Ubuntu 24.04. Nessuna
+  disattivazione globale di AppArmor o modifica dei permessi dei bot.
+- Il driver mostra `warning` e `configWarning` attraverso `runtime.error` esistente,
+  senza terminare il turno e senza mescolare avvisi di conversazioni diverse.
+  [Prerequisiti ufficiali della sandbox](https://learn.chatgpt.com/docs/sandboxing#prerequisites).
+- Sul server configurato è stato installato il pacchetto completo senza modificare
+  login o repository dei bot. Un turno effimero con gpt-6.1-terra ha eseguito
+  `printf` e creato il file atteso in una directory temporanea, rimossa al termine.
+  Ubuntu richiede ancora il pacchetto di sistema `bubblewrap` per usare il profilo
+  AppArmor già presente: la prova ha approvato soltanto il comando richiesto fuori
+  dalla sandbox. Tre prove reali hanno usato complessivamente 135.339 token input
+  (108.032 da cache) e 535 output; il protocollo non ha riportato un costo monetario.
+  Installazione del pacchetto in attesa dell'amministratore (sudo
+  richiede password). Non eseguiti clone o accessi a GitHub per conto di Mailup.
+- Verifica: prima suite completa riuscita (796 test, 14 integrazioni opzionali
+  saltate, zero errori); test mirati ripetuti dopo il passaggio al pacchetto completo
+  e ai prerequisiti Linux. La seconda suite completa è stata interrotta con il
+  cambio di richiesta, senza errori osservati. Scenari HTTP/SSE isolati Codex
+  `interactions`, Claude, pi/omp e ACP Gemini riusciti. Nessun checkout Node
+  disponibile per il confronto di parità. Nessuna build Linux/iOS, UI o prova
+  reale degli altri abbonamenti. I motori esclusivamente API mantengono le loro
+  capacità: questa correzione riguarda l'installazione degli harness di coding.
+
 ### Codex nella gestione dei server (2026-10-28)
 
 - La procedura guidata e «Configura Claude Code, Codex e omp» installano anche Codex; il controllo

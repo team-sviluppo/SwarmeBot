@@ -279,6 +279,13 @@ Contratto da rispettare: `docs/contract/http-sse.md` (congelato su SwarmeBot `1c
   Il Node saltava sempre, e il membro occupato perdeva il turno senza che chi scriveva potesse farci niente. Gli ospiti di un altro motore
   restano saltati subito. Lo scenario `rooms` (non rieseguito: manca il checkout Node) diverge solo se un membro è occupato altrove.
 
+- Codex remoto (2026-11-06): una CLI che risponde a `--version` può comunque
+  essere priva di shell. Usare il pacchetto ufficiale completo, con host Code Mode,
+  rg e sandbox; su Ubuntu serve anche il `bubblewrap` di sistema con il suo profilo
+  AppArmor. Le notifiche `warning`/`configWarning` devono arrivare in chat anche se
+  `turn/completed` dichiara successo. Divergenza voluta dal vecchio motore Node,
+  verificata nello scenario Codex `interactions` (confronto Node non disponibile).
+
 ## Non verificato dal vivo
 
 - Box reale (ascii.dev) e boxAgent: verificati contro `parity/fake_box.py`, non contro il provider (serve un token `box_`).

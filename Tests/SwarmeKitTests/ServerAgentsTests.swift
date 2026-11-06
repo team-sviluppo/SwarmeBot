@@ -20,10 +20,10 @@ final class ServerAgentsTests: XCTestCase {
 
     func testCodexReleaseMatchesServerArchitecture() throws {
         for (os, arch, asset) in [
-            ("ubuntu", "x86_64", "codex-x86_64-unknown-linux-musl"),
-            ("ubuntu", "aarch64", "codex-aarch64-unknown-linux-musl"),
-            ("macos", "arm64", "codex-aarch64-apple-darwin"),
-            ("macos", "x86_64", "codex-x86_64-apple-darwin")
+            ("ubuntu", "x86_64", "codex-package-x86_64-unknown-linux-musl"),
+            ("ubuntu", "aarch64", "codex-package-aarch64-unknown-linux-musl"),
+            ("macos", "arm64", "codex-package-aarch64-apple-darwin"),
+            ("macos", "x86_64", "codex-package-x86_64-apple-darwin")
         ] {
             let release = try XCTUnwrap(CodexConfig.release(for: RemoteProbe(values: ["os": os, "arch": arch])))
             XCTAssertEqual(release.asset, asset)
@@ -79,40 +79,98 @@ final class ServerAgentsTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: auth), data)
     }
 
-    func testCodexInstallerChecksDigestBeforeReplacingAndIsRepeatable() async throws {
+    func testCodexInstallerRepairsIncompletePackagesWithoutPublishingFailedDownloads() async throws {
         let home = try directory()
         let bin = home.appendingPathComponent(".local/bin")
         let payload = home.appendingPathComponent("payload")
-        for dir in [bin, payload] { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
-        let asset = "codex-aarch64-unknown-linux-musl"
+        for dir in [bin, payload.appendingPathComponent("bin"), payload.appendingPathComponent("codex-path"), payload.appendingPathComponent("codex-resources")] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        let asset = "codex-package-aarch64-unknown-linux-musl"
         let archive = home.appendingPathComponent("release.tar.gz")
-        let binary = payload.appendingPathComponent(asset)
-        try Data("#!/bin/sh\necho 'codex-cli fixture'\n".utf8).write(to: binary)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
-        let packed = try await ProcessRunner.run("/usr/bin/tar", ["-czf", archive.path, "-C", payload.path, asset])
-        XCTAssertEqual(packed.status, 0, packed.stderr)
-        let digest = try await ProcessRunner.run("/usr/bin/shasum", ["-a", "256", archive.path]).text.split(separator: " ").first.map(String.init)!
-        let initial = Data("#!/bin/sh\nexit 1\n".utf8)
+        let binary = payload.appendingPathComponent("bin/codex")
+        let host = payload.appendingPathComponent("bin/codex-code-mode-host")
+        let cliData = Data("#!/bin/sh\necho 'codex-cli 0.165.0'\n".utf8)
+        let hostData = Data("#!/bin/sh\n[ \"$1\" = --help ]\n".utf8)
+        try cliData.write(to: binary)
+        try hostData.write(to: host)
+        try Data("{}".utf8).write(to: payload.appendingPathComponent("codex-package.json"))
+        for relative in ["codex-path/rg", "codex-resources/bwrap"] {
+            let file = payload.appendingPathComponent(relative)
+            try Data("#!/bin/sh\nexit 0\n".utf8).write(to: file)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        }
+        func pack(includeSandbox: Bool = true) async throws -> String {
+            let entries = ["bin", "codex-path", "codex-package.json"] + (includeSandbox ? ["codex-resources"] : [])
+            let result = try await ProcessRunner.run("/usr/bin/tar", ["-czf", archive.path, "-C", payload.path] + entries)
+            XCTAssertEqual(result.status, 0, result.stderr)
+            return try await ProcessRunner.run("/usr/bin/shasum", ["-a", "256", archive.path]).text.split(separator: " ").first.map(String.init)!
+        }
         let installed = bin.appendingPathComponent("codex")
-        try initial.write(to: installed)
+        let installedHost = bin.appendingPathComponent("codex-code-mode-host")
+        // Regression: a standalone CLI answers --version while its tool runtime is missing.
+        try cliData.write(to: installed)
+        let oldHost = Data("#!/bin/sh\nexit 1\n".utf8)
+        try oldHost.write(to: installedHost)
         let curl = bin.appendingPathComponent("curl")
-        // curl -fsSL -o destination URL; no network or real credentials in this test.
         try Data("#!/bin/sh\ncp \"$FIXTURE_ARCHIVE\" \"$3\"\n".utf8).write(to: curl)
-        for file in [installed, curl] { try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path) }
+        for file in [installed, installedHost, curl] {
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        }
+        let fixtures = ["FIXTURE_ARCHIVE": archive.path]
+        _ = try await pack()
         let bad = try await script(RemoteScripts.installCodex, home: home,
-                                   arguments: [CodexConfig.version, asset, String(repeating: "0", count: 64)],
-                                   extra: ["FIXTURE_ARCHIVE": archive.path])
+            arguments: [CodexConfig.version, asset, String(repeating: "0", count: 64)], extra: fixtures)
         XCTAssertEqual(bad.status, 4)
-        XCTAssertEqual(try Data(contentsOf: installed), initial)
-        let good = try await script(RemoteScripts.installCodex, home: home, arguments: [CodexConfig.version, asset, digest],
-                                    extra: ["FIXTURE_ARCHIVE": archive.path])
+        XCTAssertEqual(try Data(contentsOf: installed), cliData)
+        XCTAssertEqual(try Data(contentsOf: installedHost), oldHost)
+        // A verified archive can still be incomplete: keep the existing installation intact.
+        let incompleteDigest = try await pack(includeSandbox: false)
+        let incomplete = try await script(RemoteScripts.installCodex, home: home,
+            arguments: [CodexConfig.version, asset, incompleteDigest], extra: fixtures)
+        XCTAssertNotEqual(incomplete.status, 0)
+        XCTAssertEqual(try Data(contentsOf: installedHost), oldHost)
+        // A host that cannot start must not be published either.
+        try oldHost.write(to: host)
+        let brokenDigest = try await pack()
+        let broken = try await script(RemoteScripts.installCodex, home: home,
+            arguments: [CodexConfig.version, asset, brokenDigest], extra: fixtures)
+        XCTAssertNotEqual(broken.status, 0)
+        XCTAssertEqual(try Data(contentsOf: installedHost), oldHost)
+        try hostData.write(to: host)
+        let digest = try await pack()
+        let good = try await script(RemoteScripts.installCodex, home: home,
+            arguments: [CodexConfig.version, asset, digest], extra: fixtures)
         XCTAssertEqual(good.status, 0, good.stderr)
-        XCTAssertEqual(good.text, "codex=codex-cli fixture\n")
-        // An installed working CLI must be reused without downloading anything.
+        XCTAssertEqual(good.text, "codex=codex-cli 0.165.0\n")
+        XCTAssertEqual(try Data(contentsOf: installedHost), hostData)
+        let target = try FileManager.default.destinationOfSymbolicLink(atPath: installed.path)
+        let package = URL(fileURLWithPath: target).deletingLastPathComponent().deletingLastPathComponent()
+        for relative in ["bin/codex", "bin/codex-code-mode-host", "codex-path/rg", "codex-resources/bwrap"] {
+            XCTAssertTrue(FileManager.default.isExecutableFile(atPath: package.appendingPathComponent(relative).path))
+        }
+        // A complete installation is reused without a download.
         let again = try await script(RemoteScripts.installCodex, home: home, arguments: [CodexConfig.version, asset, digest])
         XCTAssertEqual(again.status, 0, again.stderr)
         XCTAssertEqual(again.text, good.text)
-        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: bin.path).contains(where: { $0.hasPrefix(".codex.") }))
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: installed.path), target)
+        // Removing just the runtime must trigger repair even though --version still succeeds.
+        try FileManager.default.removeItem(at: package.appendingPathComponent("bin/codex-code-mode-host"))
+        let repaired = try await script(RemoteScripts.installCodex, home: home,
+            arguments: [CodexConfig.version, asset, digest], extra: fixtures)
+        XCTAssertEqual(repaired.status, 0, repaired.stderr)
+        XCTAssertEqual(try Data(contentsOf: installedHost), hostData)
+        let releases = home.appendingPathComponent(".local/share/swarmebot/codex")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: releases.path).count, 2)
+        // macOS packages have the same runtime layout and do not require bubblewrap.
+        let macDigest = try await pack(includeSandbox: false)
+        let macHome = try directory()
+        let macBin = macHome.appendingPathComponent(".local/bin")
+        try FileManager.default.createDirectory(at: macBin, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: curl, to: macBin.appendingPathComponent("curl"))
+        let mac = try await script(RemoteScripts.installCodex, home: macHome,
+            arguments: [CodexConfig.version, "codex-package-aarch64-apple-darwin", macDigest], extra: fixtures)
+        XCTAssertEqual(mac.status, 0, mac.stderr)
     }
 
     func testCodexScriptsAreValidShellAndRejectUnsupportedBuilds() async throws {
