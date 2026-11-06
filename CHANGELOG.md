@@ -5,6 +5,11 @@ Before publishing a release, add a section with its exact version number.
 
 ## [Unreleased]
 
+### Remote servers
+
+- Check and update installed Codex, Claude Code and omp harnesses automatically when SwarmeBot starts. Wait while bots are working, retry when they finish, and show each server's result in Remote Servers settings.
+- Check for updates manually from the server's Actions menu. Keep logins and configuration, preserve newer versions, and verify official Codex and omp downloads before installing them.
+
 ### Fixes
 
 - Install the complete Codex runtime on remote Linux and macOS servers so bots can execute commands. Repair incomplete installations even when the CLI still reports its version, and install Linux sandbox prerequisites during server setup.

@@ -46,6 +46,7 @@ extension AppModel {
         if case let .remote(id) = engineChoice, !remoteEngines.contains(where: { $0.id == id }) { select(engine: .local) }
         syncPeers()
         syncSettingsModels()
+        checkRemoteHarnessUpdates()
     }
 
     /// The engine a sidebar row belongs to, for the engines not shown.

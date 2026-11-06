@@ -423,6 +423,46 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
 
 ## 14. Avanzamento
 
+### Aggiornamenti automatici degli harness remoti (2026-11-06)
+
+- All'avvio dell'app il modello principale controlla ogni server amministrato da
+  questo Mac, una sola volta per sessione. Anche i server aggiunti dopo l'avvio
+  entrano nel controllo. Le finestre di impostazioni usano lo stesso monitor,
+  senza avviare lavori duplicati. Il controllo non aspetta l'avvio del motore locale.
+- Aggiorna soltanto gli harness già installati dalla configurazione del server:
+  Codex, Claude Code e omp. La CLI pi generica e gli harness installati con altri
+  package manager non sono aggiornati da questo flusso. Nessuna copia di login o
+  configurazioni, nessun riavvio del motore SwarmeBot e nessuna chiamata a modelli.
+- Codex e omp risolvono la release stabile ufficiale via GitHub Releases e
+  verificano il digest SHA-256 dell'asset per OS e architettura. Un controllo
+  condivide le risposte fra server; il comando manuale può ricaricarle. Rifiutati
+  draft, prerelease, versioni malformate, asset mancanti e digest assenti o errati.
+  Non si torna a una versione precedente. Il pacchetto Codex completo viene
+  riparato anche quando la versione coincide con quella disponibile.
+- Claude usa `claude update`, rispettando canale e policy del suo updater nativo:
+  [documentazione ufficiale](https://code.claude.com/docs/en/setup#update-claude-code).
+- Prima del controllo, prima di ogni harness e dopo la lettura della release si
+  legge la flotta via HTTPS. Bot occupati, in attesa di risposta o senza segnale
+  rinviano il lavoro; nuovo tentativo ogni 30 secondi finché l'app resta aperta.
+  Un errore di rete o autorizzazione non viene interpretato come server libero.
+  Se un harness fallisce, gli esiti degli altri restano visibili.
+- Impostazioni › Server remoti mostra controllo, rinvio con i nomi dei bot,
+  versioni e singoli errori. Azioni › «Controlla e aggiorna gli harness» ripete il
+  controllo. I comandi concorrenti di configurazione/installazione sono disabilitati
+  mentre il monitor sta lavorando o attende la flotta.
+- Dimenticare un server o chiudere l'app annulla i tentativi successivi. Gli
+  aggiornamenti di file già iniziati restano atomici e non eliminano i vecchi
+  pacchetti che potrebbero essere ancora usati da processi avviati in precedenza.
+- Verifica finale: build riuscita, 806 test con 14 integrazioni opzionali saltate,
+  zero errori; 22 test mirati di installer, monitor, release e localizzazione.
+  Il primo giro completo ha avuto un timeout in un test preesistente del plugin
+  Code; quel test è poi passato isolato e nel giro completo ripetuto. Schermata
+  nativa delle impostazioni controllata con un server HTTP fittizio e un bot
+  occupato, app e motore isolati su porte dedicate; clic nel menu non provati.
+- Non è stato aggiornato il software di altri server reali durante lo sviluppo
+  della funzione. La riparazione della CLI sul server configurato resta descritta
+  nella sezione seguente; il pacchetto di sistema bubblewrap richiede ancora sudo.
+
 ### Comandi negli harness remoti (2026-11-06)
 
 - Il caso Mailup Website usava Codex 0.165.0 su Ubuntu: mancava

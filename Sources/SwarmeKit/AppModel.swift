@@ -71,6 +71,8 @@ public final class AppModel {
     /// Which engine the window shows: this Mac's, or a remote one (AppModel+Remote.swift).
     public internal(set) var engineChoice: EngineChoice = .local
     public internal(set) var remoteEngines: [RemoteEngine] = []
+    public let remoteHarnessUpdates = RemoteHarnessUpdateMonitor()
+    @ObservationIgnored let harnessReleaseSource = HarnessReleaseSource()
     /// The engines not shown, streaming for the sidebar (EnginePeer.swift).
     public internal(set) var peers: [EngineChoice: EnginePeer] = [:]
     @ObservationIgnored let remoteStore = RemoteEngineStore()
@@ -119,10 +121,12 @@ public final class AppModel {
         // a remote engine does not wait for the local one to boot
         if case .remote = engineChoice { connectToChoice() }
         syncPeers()
+        checkRemoteHarnessUpdates()
         Task { await launcher.start() }
     }
 
     public func shutdown() {
+        remoteHarnessUpdates.stop()
         streamTask?.cancel()
         streamTask = nil
         for peer in peers.values { peer.stop() }

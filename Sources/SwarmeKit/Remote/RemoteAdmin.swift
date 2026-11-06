@@ -28,6 +28,7 @@ public struct RemoteProbe: Equatable, Sendable {
     public var claude: String? { values["claude"] }
     public var codex: String? { values["codex"] }
     public var pi: String? { values["pi"] }
+    public var omp: String? { values["omp"] }
     public var caddy: String? { values["caddy"] }
     public var serviceActive: Bool { values["service"] == "active" }
     /// The iOS app's push relay runs next to the engine (docs/push-relay.md).

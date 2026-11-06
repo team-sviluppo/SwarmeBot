@@ -171,6 +171,16 @@ final class ServerAgentsTests: XCTestCase {
         let mac = try await script(RemoteScripts.installCodex, home: macHome,
             arguments: [CodexConfig.version, "codex-package-aarch64-apple-darwin", macDigest], extra: fixtures)
         XCTAssertEqual(mac.status, 0, mac.stderr)
+        // Automatic updates replace complete older packages instead of treating --version as success.
+        try Data("#!/bin/sh\necho 'codex-cli 0.167.0'\n".utf8).write(to: binary)
+        let newerDigest = try await pack()
+        let upgraded = try await script(RemoteScripts.installCodex, home: home,
+            arguments: ["0.167.0", asset, newerDigest, "update"], extra: fixtures)
+        XCTAssertEqual(upgraded.status, 0, upgraded.stderr)
+        XCTAssertEqual(upgraded.text, "codex=codex-cli 0.167.0\n")
+        let current = try await script(RemoteScripts.installCodex, home: home,
+            arguments: ["0.167.0", asset, newerDigest, "update"])
+        XCTAssertEqual(current.status, 0, current.stderr)
     }
 
     func testCodexScriptsAreValidShellAndRejectUnsupportedBuilds() async throws {

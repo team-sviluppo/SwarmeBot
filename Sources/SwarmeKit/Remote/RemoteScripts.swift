@@ -54,6 +54,7 @@ public enum RemoteScripts {
     v="$(claude --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "claude=$v"
     v="$(codex --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "codex=$v"
     v="$(pi --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "pi=$v"
+    v="$(omp --version 2>/dev/null | head -n1)"; [ -n "$v" ] && echo "omp=$v"
     command -v node >/dev/null 2>&1 && echo "node=$(node --version 2>/dev/null)"
     command -v caddy >/dev/null 2>&1 && echo "caddy=$(caddy version 2>/dev/null | cut -d' ' -f1)"
     if command -v systemctl >/dev/null 2>&1; then
@@ -566,6 +567,8 @@ public enum RemoteScripts {
     public static let installCodex = #"""
     set -eu
     version="$1"; asset="$2"; want="$3"
+    mode="${4:-install}"
+    case "$mode" in install|update) ;; *) echo "not a Codex install mode" >&2; exit 2 ;; esac
     case "$version" in *[!0-9.]*|"") echo "not a Codex version" >&2; exit 2 ;; esac
     case "$asset" in codex-package-aarch64-apple-darwin|codex-package-x86_64-apple-darwin|codex-package-aarch64-unknown-linux-musl|codex-package-x86_64-unknown-linux-musl) ;; *) echo "not a Codex build" >&2; exit 2 ;; esac
     case "$want" in *[!0-9a-f]*|"") echo "not a SHA-256 digest" >&2; exit 2 ;; esac
@@ -583,7 +586,8 @@ public enum RemoteScripts {
         target="$(readlink "$cli")"
         case "$target" in /*) cli="$target" ;; *) cli="$(dirname "$cli")/$target" ;; esac
       done
-      if v="$("$cli" --version 2>/dev/null)" && [ -n "$v" ] && complete "$(dirname "$cli")/.."; then
+      if v="$("$cli" --version 2>/dev/null)" && [ -n "$v" ] && complete "$(dirname "$cli")/.." &&
+         { [ "$mode" = install ] || [ "$v" = "codex-cli $version" ]; }; then
         echo "codex=$v"; exit 0
       fi
     fi
@@ -642,6 +646,15 @@ public enum RemoteScripts {
     echo "claude=$("$claude" --version 2>/dev/null | head -n 1 | cut -d" " -f1)"
     """#
 
+    /// The native updater respects Claude's configured release channel and policies.
+    public static let updateClaude = #"""
+    set -eu
+    export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+    cli="$(command -v claude)"
+    "$cli" update >&2
+    echo "claude=$("$cli" --version)"
+    """#
+
     /// omp $1 (a version, 18.12.3) in ~/.local/bin as $2 (`omp-linux-x64`…), checked
     /// against the release's SHA256SUMS.txt. Nothing to do when that version is there.
     public static let installOmp = #"""
@@ -655,12 +668,18 @@ public enum RemoteScripts {
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT
     base="https://github.com/can1357/oh-my-pi/releases/download/v$version"
-    curl -fsSL -o "$tmp/SHA256SUMS.txt" "$base/SHA256SUMS.txt"
+    want="${3:-}"
+    if [ -z "$want" ]; then
+      curl -fsSL -o "$tmp/SHA256SUMS.txt" "$base/SHA256SUMS.txt"
+      want="$(grep " \*\{0,1\}$asset\$" "$tmp/SHA256SUMS.txt" | cut -d' ' -f1)"
+    fi
+    case "$want" in *[!0-9a-f]*|"") echo "not a SHA-256 digest" >&2; exit 2 ;; esac
+    [ "${#want}" = 64 ] || { echo "not a SHA-256 digest" >&2; exit 2; }
     curl -fsSL -o "$tmp/$asset" "$base/$asset"
-    want="$(grep " \*\{0,1\}$asset\$" "$tmp/SHA256SUMS.txt" | cut -d' ' -f1)"
     if command -v sha256sum >/dev/null 2>&1; then got="$(sha256sum "$tmp/$asset" | cut -d' ' -f1)"; else got="$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)"; fi
     [ -n "$want" ] && [ "$want" = "$got" ] || { echo "omp $version: the download does not match SHA256SUMS.txt" >&2; exit 4; }
     chmod 755 "$tmp/$asset"
+    [ "$("$tmp/$asset" --version)" = "omp/$version" ] || { echo "omp: unexpected package version" >&2; exit 3; }
     mv -f "$tmp/$asset" "$bin/omp"
     echo "omp=$("$bin/omp" --version)"
     """#
