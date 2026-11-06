@@ -20,10 +20,10 @@ public enum CodexConfig {
     static func release(for probe: RemoteProbe) -> (asset: String, sha256: String)? {
         guard let arch = probe.engineArch else { return nil }
         switch (probe.isMac, arch) {
-        case (true, "aarch64"): return ("codex-aarch64-apple-darwin", "78ea9c178d2dc8fde71d6494df3b9eab902fd6d6de0a84e65234220d93bb6144")
-        case (true, "x86_64"): return ("codex-x86_64-apple-darwin", "f46451741936ebdf5201b8becd0820a41be2a01d271b98703e0d9a1670c99993")
-        case (false, "aarch64"): return ("codex-aarch64-unknown-linux-musl", "6522e056d0be7f531da915c9a81ae05bc70811b782542499cc0a9776d3abf5d3")
-        case (false, "x86_64"): return ("codex-x86_64-unknown-linux-musl", "be635d3486a5bd060d0fff582ae6d30160280c31344dd85719707fa920e187f0")
+        case (true, "aarch64"): return ("codex-package-aarch64-apple-darwin", "34d12384d90f8e09b0b9abaabf2a0ac02a52093b131504aeaf282107f54a44b2")
+        case (true, "x86_64"): return ("codex-package-x86_64-apple-darwin", "792ecab0596006bd9f286430b2790aa487fd40fca2f351ca313ad85991720226")
+        case (false, "aarch64"): return ("codex-package-aarch64-unknown-linux-musl", "c8b2844fdef57498572db960344aee8c836ce9f75c203379da0a9c3a334fc3b7")
+        case (false, "x86_64"): return ("codex-package-x86_64-unknown-linux-musl", "e97c4463d7f146692a955d7b0e1c8cf48f97cd4d616cd45c5dcab2e8d9743316")
         default: return nil
         }
     }

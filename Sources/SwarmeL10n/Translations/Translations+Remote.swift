@@ -1,6 +1,16 @@
 // English for remote servers: Settings › Server remoti, setup, pairing, devices, remote admin.
 extension Translations {
     static let remote: [String: String] = [
+        "Release ufficiale di %@ non valida per questo server": "The official %@ release is not valid for this server",
+        "Controllo degli aggiornamenti di %@ non riuscito": "Could not check for %@ updates",
+        "Versione installata di %@ non riconosciuta": "The installed %@ version is not recognized",
+        "Controllo e aggiornamento degli harness…": "Checking and updating harnesses…",
+        "Aggiornamento rimandato: stanno lavorando %@": "Update deferred: %@ are working",
+        "Nessun harness gestito installato": "No managed harnesses installed",
+        "%@: controllo completato (%@)": "%@: check completed (%@)",
+        "%@: %@ → %@": "%@: %@ → %@",
+        "Controlla e aggiorna gli harness": "Check and update harnesses",
+        "A ogni avvio controllo e aggiorno Codex, Claude Code e omp già installati. Se i bot stanno lavorando, attendo che finiscano.": "At each launch, check and update installed Codex, Claude Code and omp. If bots are working, wait for them to finish.",
         "Relay delle notifiche push: %@": "Push notification relay: %@",
         "Ospita il relay delle notifiche push…": "Host the Push Notification Relay…",
         "Relay delle notifiche push su %@": "Push Notification Relay on %@",

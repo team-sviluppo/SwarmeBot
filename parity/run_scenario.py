@@ -480,6 +480,12 @@ def main():
             settle(completed + 2)
             messages = request(port, "GET", "/api/bots")[1]["bots"][0]["messages"]
             assert any("MCP fake: tools/list timed out" in m.get("tool", {}).get("name", "") for m in messages)
+            assert request(port, "POST", f"/api/bots/{bot_id}/messages", {"text": "RUNTIME_WARNINGS"})[0] == 202
+            settle(completed + 3)
+            warnings = [f["event"]["message"] for f in frames if f.get("kind") == "runtime" and f["event"]["type"] == "runtime.error"]
+            assert "Code Mode host executable was not found" in warnings, warnings
+            assert "Sandbox prerequisite missing\nUsing the bundled runtime" in warnings, warnings
+            assert "Unrelated warning" not in warnings, warnings
         if os.environ.get("SCENARIO") == "usage":
             assert DRIVER == "codex"
             bot_id = bot["id"]

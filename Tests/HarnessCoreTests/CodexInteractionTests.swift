@@ -56,6 +56,22 @@ final class CodexInteractionTests: XCTestCase {
         XCTAssertTrue(args.contains("mcp_servers.fake.enabled=true"))
     }
 
+    func testRuntimeWarningsAreVisibleWithoutEndingTheTurnOrLeakingOtherThreads() async throws {
+        let instance = instance()
+        var events: [RuntimeEvent] = []
+        instance.onEvent { events.append($0) }
+        _ = try await instance.sendTurn(SendTurnInput(threadId: "t", text: "RUNTIME_WARNINGS"))
+        for _ in 0..<100 where instance.hasSession(threadId: "t") { try await Task.sleep(nanoseconds: 20_000_000) }
+        let warnings = events.compactMap { event -> String? in
+            if case let .runtimeError(message, _) = event.body { return message }
+            return nil
+        }
+        XCTAssertEqual(warnings, ["Sandbox prerequisite missing\nUsing the bundled runtime", "Code Mode host executable was not found"])
+        XCTAssertTrue(events.contains { if case .textCompleted("Runtime warnings test") = $0.body { return true }; return false })
+        XCTAssertTrue(events.contains { if case .turnCompleted(ok: true, stopReason: _, cost: _, denials: _, usage: _) = $0.body { return true }; return false })
+        await instance.dispose()
+    }
+
     func testClaudeContextWindowUsesTheActualModelAndRejectsUnknownLimits() {
         let result: JSON = ["modelUsage": ["main": ["contextWindow": 200_000], "helper": ["contextWindow": 100_000]]]
         XCTAssertEqual(ClaudeInstance.contextWindow(result, model: "main"), 200_000)

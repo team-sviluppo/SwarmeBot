@@ -586,6 +586,17 @@ final class CodexTurn {
         guard !settled else { return }
         let p = message["params"] ?? .null
         let method = message["method"]?.string
+        // Missing runtime components arrive as warnings, even when the turn
+        // completes successfully. Surface the cause instead of only the model's refusal.
+        if method == "warning" || method == "configWarning" {
+            if let source = p["threadId"]?.string, source != providerThreadId { return }
+            let parts = [p["message"]?.string ?? p["summary"]?.string, p["details"]?.string]
+                .compactMap { $0 }.filter { !$0.isEmpty }
+            if !parts.isEmpty {
+                emit(.runtimeError(message: String(parts.joined(separator: "\n").prefix(2000)), setup: false))
+            }
+            return
+        }
         if method == "thread/started", let thread = p["thread"], let id = thread["id"]?.string,
            let parent = thread["parentThreadId"]?.string,
            parent == providerThreadId || subtasks.tasks[parent] != nil {

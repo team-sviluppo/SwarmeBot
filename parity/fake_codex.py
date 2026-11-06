@@ -143,6 +143,11 @@ def run_turn(params):
     elif "MCP_FAILURE" in text:
         note("mcpServer/startupStatus/updated", {"threadId": params["threadId"], "name": "fake", "status": "failed", "error": "tools/list timed out"})
         message("Connector startup failed", [])
+    elif "RUNTIME_WARNINGS" in text:
+        note("configWarning", {"summary": "Sandbox prerequisite missing", "details": "Using the bundled runtime"})
+        note("warning", {"threadId": "unrelated-thread", "message": "Unrelated warning"})
+        note("warning", {"threadId": params["threadId"], "message": "Code Mode host executable was not found"})
+        message("Runtime warnings test", [])
     elif "SCELTA_TESTO" in text:
         message("Quale soluzione preferisci?\nA) Correggere il problema\nB) Aggiungere una funzione\nC) Approfondire prima", [])
     elif "DOMANDA" in text:

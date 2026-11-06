@@ -44,6 +44,11 @@ struct RemoteServersPane: View {
                                         .textSelection(.enabled)
                                 }
                                 EngineUpdateLine(engine: engine)
+                                if let updates = model.remoteHarnessStatus(for: engine) {
+                                    Text(updates.text).font(.system(size: 11))
+                                        .foregroundStyle(updates.phase == .failed ? Color.red : Color.secondary)
+                                        .textSelection(.enabled)
+                                }
                                 if configuring == engine.id {
                                     HStack(spacing: 6) {
                                         ProgressView().controlSize(.small)
@@ -62,10 +67,12 @@ struct RemoteServersPane: View {
                             if let identity = model.identity(for: engine) {
                                 Divider()
                                 Button(tr("Configura Claude Code, Codex e omp")) { configureAgents(engine) }
-                                    .disabled(configuring != nil)
+                                    .disabled(configuring != nil || model.remoteHarnessStatus(for: engine)?.running == true)
+                                Button(tr("Controlla e aggiorna gli harness")) { model.checkRemoteHarnessUpdates(engine, force: true) }
+                                    .disabled(model.remoteHarnessStatus(for: engine)?.running == true || configuring != nil)
                                 Button(tr("Login di Claude sul server…")) { claudeLoginFor = engine }
                                 Button(tr("Codex sul server…")) { codexFor = engine }
-                                    .disabled(configuring != nil)
+                                    .disabled(configuring != nil || model.remoteHarnessStatus(for: engine)?.running == true)
                                 Button(tr("Copia la configurazione di pi…")) { piCopyFor = engine }
                                 Button(tr("Ospita il relay delle notifiche push…")) { pushRelayFor = engine }
                                 Button(tr("Apri un terminale sul server")) { try? model.openTerminal(identity) }
@@ -79,7 +86,10 @@ struct RemoteServersPane: View {
             } header: {
                 Text(tr("Server remoti"))
             } footer: {
-                Text(tr("Il Mac amministra il server via ssh; la chat passa sempre in HTTPS con un token di questo dispositivo."))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(tr("Il Mac amministra il server via ssh; la chat passa sempre in HTTPS con un token di questo dispositivo."))
+                    Text(tr("A ogni avvio controllo e aggiorno Codex, Claude Code e omp già installati. Se i bot stanno lavorando, attendo che finiscano."))
+                }
             }
             Section {
                 Button(tr("Aggiungi un server…")) { adding = true }

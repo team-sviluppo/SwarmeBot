@@ -423,6 +423,86 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
 
 ## 14. Avanzamento
 
+### Aggiornamenti automatici degli harness remoti (2026-11-06)
+
+- All'avvio dell'app il modello principale controlla ogni server amministrato da
+  questo Mac, una sola volta per sessione. Anche i server aggiunti dopo l'avvio
+  entrano nel controllo. Le finestre di impostazioni usano lo stesso monitor,
+  senza avviare lavori duplicati. Il controllo non aspetta l'avvio del motore locale.
+- Aggiorna soltanto gli harness già installati dalla configurazione del server:
+  Codex, Claude Code e omp. La CLI pi generica e gli harness installati con altri
+  package manager non sono aggiornati da questo flusso. Nessuna copia di login o
+  configurazioni, nessun riavvio del motore SwarmeBot e nessuna chiamata a modelli.
+- Codex e omp risolvono la release stabile ufficiale via GitHub Releases e
+  verificano il digest SHA-256 dell'asset per OS e architettura. Un controllo
+  condivide le risposte fra server; il comando manuale può ricaricarle. Rifiutati
+  draft, prerelease, versioni malformate, asset mancanti e digest assenti o errati.
+  Non si torna a una versione precedente. Il pacchetto Codex completo viene
+  riparato anche quando la versione coincide con quella disponibile.
+- Claude usa `claude update`, rispettando canale e policy del suo updater nativo:
+  [documentazione ufficiale](https://code.claude.com/docs/en/setup#update-claude-code).
+- Prima del controllo, prima di ogni harness e dopo la lettura della release si
+  legge la flotta via HTTPS. Bot occupati, in attesa di risposta o senza segnale
+  rinviano il lavoro; nuovo tentativo ogni 30 secondi finché l'app resta aperta.
+  Un errore di rete o autorizzazione non viene interpretato come server libero.
+  Se un harness fallisce, gli esiti degli altri restano visibili.
+- Impostazioni › Server remoti mostra controllo, rinvio con i nomi dei bot,
+  versioni e singoli errori. Azioni › «Controlla e aggiorna gli harness» ripete il
+  controllo. I comandi concorrenti di configurazione/installazione sono disabilitati
+  mentre il monitor sta lavorando o attende la flotta.
+- Dimenticare un server o chiudere l'app annulla i tentativi successivi. Gli
+  aggiornamenti di file già iniziati restano atomici e non eliminano i vecchi
+  pacchetti che potrebbero essere ancora usati da processi avviati in precedenza.
+- Verifica finale: build riuscita, 806 test con 14 integrazioni opzionali saltate,
+  zero errori; 22 test mirati di installer, monitor, release e localizzazione.
+  Il primo giro completo ha avuto un timeout in un test preesistente del plugin
+  Code; quel test è poi passato isolato e nel giro completo ripetuto. Schermata
+  nativa delle impostazioni controllata con un server HTTP fittizio e un bot
+  occupato, app e motore isolati su porte dedicate; clic nel menu non provati.
+- Non è stato aggiornato il software di altri server reali durante lo sviluppo
+  della funzione. La riparazione della CLI sul server configurato resta descritta
+  nella sezione seguente; dopo l’installazione di bubblewrap da parte
+  dell’amministratore è stata verificata anche l’esecuzione dentro la sandbox.
+
+### Comandi negli harness remoti (2026-11-06)
+
+- Il caso Mailup Website usava Codex 0.165.0 su Ubuntu: mancava
+  `codex-code-mode-host`, quindi il modello terminava senza strumenti. `--version`
+  non dimostra che il runtime sia completo.
+- L'installer condiviso dei server usa ora `codex-package-*` ufficiali, SHA-256
+  fissati per Linux musl e macOS, ARM e Intel. Conserva il layout completo con CLI,
+  host, `codex-path/rg` e `codex-resources/bwrap` su Linux. Verifica e avvia i
+  componenti prima di pubblicare i link; ripara installazioni incomplete, mantiene
+  quelle complete e conserva le directory precedenti per i processi ancora attivi.
+- La preparazione Ubuntu installa `bubblewrap` dal sistema. Quando la restrizione
+  AppArmor dei namespace è attiva e manca il profilo bwrap, installa i profili extra
+  e carica soltanto quello richiesto, come previsto per Ubuntu 24.04. Nessuna
+  disattivazione globale di AppArmor o modifica dei permessi dei bot.
+- Il driver mostra `warning` e `configWarning` attraverso `runtime.error` esistente,
+  senza terminare il turno e senza mescolare avvisi di conversazioni diverse.
+  [Prerequisiti ufficiali della sandbox](https://learn.chatgpt.com/docs/sandboxing#prerequisites).
+- Sul server configurato è stato installato il pacchetto completo senza modificare
+  login o repository dei bot. Un turno effimero con gpt-6.1-terra ha eseguito
+  `printf` e creato il file atteso in una directory temporanea, rimossa al termine.
+  Le prime prove hanno richiesto l'approvazione fuori dalla sandbox perché
+  mancava il pacchetto di sistema bubblewrap. Dopo l'installazione da parte
+  dell'amministratore, `/usr/bin/bwrap` 0.11.1 avvia correttamente i namespace con
+  il profilo AppArmor già presente. Un nuovo turno effimero Codex in
+  `workspace-write` ha eseguito lo stesso `printf`: exit code 0, file corretto,
+  nessuna richiesta di approvazione e nessun avviso di sandbox. La prova rifiutava
+  qualsiasi richiesta di uscita dalla protezione. Ultimo turno: 30.996 token input
+  (27.392 da cache), 44 output. Totale delle quattro prove: 166.335 input
+  (135.424 da cache), 579 output; nessun costo monetario riportato dal protocollo.
+  Non eseguiti clone o accessi a GitHub per conto di Mailup.
+- Verifica: prima suite completa riuscita (796 test, 14 integrazioni opzionali
+  saltate, zero errori); test mirati ripetuti dopo il passaggio al pacchetto completo
+  e ai prerequisiti Linux. La seconda suite completa è stata interrotta con il
+  cambio di richiesta, senza errori osservati. Scenari HTTP/SSE isolati Codex
+  `interactions`, Claude, pi/omp e ACP Gemini riusciti. Nessun checkout Node
+  disponibile per il confronto di parità. Nessuna build Linux/iOS, UI o prova
+  reale degli altri abbonamenti. I motori esclusivamente API mantengono le loro
+  capacità: questa correzione riguarda l'installazione degli harness di coding.
+
 ### Codex nella gestione dei server (2026-10-28)
 
 - La procedura guidata e «Configura Claude Code, Codex e omp» installano anche Codex; il controllo
