@@ -461,7 +461,8 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
   occupato, app e motore isolati su porte dedicate; clic nel menu non provati.
 - Non è stato aggiornato il software di altri server reali durante lo sviluppo
   della funzione. La riparazione della CLI sul server configurato resta descritta
-  nella sezione seguente; il pacchetto di sistema bubblewrap richiede ancora sudo.
+  nella sezione seguente; dopo l’installazione di bubblewrap da parte
+  dell’amministratore è stata verificata anche l’esecuzione dentro la sandbox.
 
 ### Comandi negli harness remoti (2026-11-06)
 
@@ -483,12 +484,16 @@ motore remoto; funzioni tra motori diversi; esempi di proxy DMZ e tunnel rovesci
 - Sul server configurato è stato installato il pacchetto completo senza modificare
   login o repository dei bot. Un turno effimero con gpt-6.1-terra ha eseguito
   `printf` e creato il file atteso in una directory temporanea, rimossa al termine.
-  Ubuntu richiede ancora il pacchetto di sistema `bubblewrap` per usare il profilo
-  AppArmor già presente: la prova ha approvato soltanto il comando richiesto fuori
-  dalla sandbox. Tre prove reali hanno usato complessivamente 135.339 token input
-  (108.032 da cache) e 535 output; il protocollo non ha riportato un costo monetario.
-  Installazione del pacchetto in attesa dell'amministratore (sudo
-  richiede password). Non eseguiti clone o accessi a GitHub per conto di Mailup.
+  Le prime prove hanno richiesto l'approvazione fuori dalla sandbox perché
+  mancava il pacchetto di sistema bubblewrap. Dopo l'installazione da parte
+  dell'amministratore, `/usr/bin/bwrap` 0.11.1 avvia correttamente i namespace con
+  il profilo AppArmor già presente. Un nuovo turno effimero Codex in
+  `workspace-write` ha eseguito lo stesso `printf`: exit code 0, file corretto,
+  nessuna richiesta di approvazione e nessun avviso di sandbox. La prova rifiutava
+  qualsiasi richiesta di uscita dalla protezione. Ultimo turno: 30.996 token input
+  (27.392 da cache), 44 output. Totale delle quattro prove: 166.335 input
+  (135.424 da cache), 579 output; nessun costo monetario riportato dal protocollo.
+  Non eseguiti clone o accessi a GitHub per conto di Mailup.
 - Verifica: prima suite completa riuscita (796 test, 14 integrazioni opzionali
   saltate, zero errori); test mirati ripetuti dopo il passaggio al pacchetto completo
   e ai prerequisiti Linux. La seconda suite completa è stata interrotta con il
