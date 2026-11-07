@@ -179,6 +179,14 @@ final class RemoteSession: Identifiable {
 
     // MARK: - Doing
 
+    /// Shared with the Mac: update the bot only after the server saves it.
+    func setShowToolCalls(_ botId: String, _ show: Bool) async {
+        await perform { client in
+            let bot = try await client.patchBot(botId, BotPatch(showToolCalls: show))
+            self.state.apply(.bot(bot))
+        }
+    }
+
     private func perform(_ body: (CompanionClient) async throws -> Void) async {
         guard let client else { return }
         do {

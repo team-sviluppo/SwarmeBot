@@ -17,6 +17,7 @@ struct LocalBotEditor: View {
     @State private var addingServer = false
     @State private var images = false
     @State private var instructions = ""
+    @State private var showToolCalls = true
     @State private var connectorIds: Set<String> = []
     @State private var phoneTools: Set<PhoneToolGroup> = []
     @State private var models: [String] = []
@@ -75,6 +76,11 @@ struct LocalBotEditor: View {
                 if kind == .endpoint { endpointSection }
                 Section(tr("Istruzioni")) {
                     TextField(tr("Istruzioni di sistema (facoltative)"), text: $instructions, axis: .vertical).lineLimit(3...10)
+                }
+                Section {
+                    Toggle(tr("Mostra gli strumenti in chat"), isOn: $showToolCalls)
+                } footer: {
+                    Text(tr("Mostra le chiamate agli strumenti e i relativi risultati nella conversazione."))
                 }
                 Section {
                     ForEach(PhoneToolGroup.allCases) { group in
@@ -210,6 +216,7 @@ struct LocalBotEditor: View {
         modelId = existing.endpoint?.model ?? ""
         images = existing.endpoint?.images ?? false
         instructions = existing.instructions
+        showToolCalls = existing.showsToolCalls
         connectorIds = Set(existing.connectorIds)
         phoneTools = Set(existing.phoneTools ?? [])
     }
@@ -222,6 +229,7 @@ struct LocalBotEditor: View {
         if bot.kind != kind { bot.sessionId = nil }
         bot.kind = kind
         bot.instructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        bot.showToolCalls = showToolCalls
         bot.connectorIds = model.local.connectors.map(\.id).filter(connectorIds.contains)
         bot.phoneTools = phoneTools.isEmpty ? nil : PhoneToolGroup.allCases.filter(phoneTools.contains)
         if kind == .endpoint {

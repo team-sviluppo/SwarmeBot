@@ -73,6 +73,14 @@ struct LocalBot: Codable, Hashable, Identifiable, Sendable {
     /// A reply came while its chat was not on screen.
     var unread: Bool?
 
+    /// Presentation only; nil keeps older bots showing their tool calls.
+    var showToolCalls: Bool?
+    var showsToolCalls: Bool { showToolCalls ?? true }
+
+    func chatMessages(_ messages: [LocalMessage]) -> [LocalMessage] {
+        showsToolCalls ? messages : messages.filter { !$0.isToolCall }
+    }
+
     /// Where a bot kept its key before servers.
     var apiKeyAccount: String { "bot.\(id).apiKey" }
     /// Where the shown chat's messages are kept (`LocalMessage.botId`).
@@ -118,6 +126,9 @@ struct LocalMessage: Codable, Hashable, Identifiable, Sendable {
     /// A guest's reply: its engine's id for it, so the next turn there does
     /// not copy it twice (`ref`).
     var guestRef: String?
+
+    /// Keep failures visible even when ordinary tool activity is hidden.
+    var isToolCall: Bool { role == .tool && tool?.ok != false }
 }
 
 /// A channel on the phone: its bots, and guests from the paired servers (a
