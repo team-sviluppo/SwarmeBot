@@ -10,6 +10,50 @@ final class LocalTests: XCTestCase {
         return try LocalStore(folder: folder)
     }
 
+    func testToolVisibilityPersistsWithoutChangingHistory() throws {
+        let store = try temporaryStore()
+        let local = LocalBots(store: store)
+        var bot = LocalBot(id: "b", name: "Bot", kind: .apple, createdAt: Date())
+        // Decoding a saved bot without the new key preserves the previous default.
+        let legacy = try JSONDecoder().decode(LocalBot.self, from: JSONEncoder().encode(bot))
+        XCTAssertTrue(legacy.showsToolCalls)
+        let messages = [
+            LocalMessage(id: "call", botId: "b", role: .tool, text: "", at: Date(timeIntervalSince1970: 1),
+                         tool: LocalToolCall(name: "Read", ok: nil)),
+            LocalMessage(id: "result", botId: "b", role: .tool, text: "", at: Date(timeIntervalSince1970: 2),
+                         tool: LocalToolCall(name: "Read", ok: true, output: "result")),
+            LocalMessage(id: "failure", botId: "b", role: .tool, text: "", at: Date(timeIntervalSince1970: 3),
+                         tool: LocalToolCall(name: "Read", ok: false, output: "error")),
+            LocalMessage(id: "note", botId: "b", role: .note, text: "Note", at: Date(timeIntervalSince1970: 4)),
+            LocalMessage(id: "reply", botId: "b", role: .bot, text: "Reply", at: Date(timeIntervalSince1970: 5)),
+        ]
+        messages.forEach(store.save)
+        XCTAssertEqual(bot.chatMessages(messages), messages)
+        bot.showToolCalls = false
+        local.save(bot)
+        let reopened = LocalBots(store: try LocalStore(folder: store.folder))
+        let saved = try XCTUnwrap(reopened.bot(bot.id))
+        XCTAssertFalse(saved.showsToolCalls)
+        XCTAssertEqual(saved.chatMessages(messages).map(\.id), ["failure", "note", "reply"])
+        XCTAssertEqual(reopened.chat(bot.id).messages, messages)
+        bot.showToolCalls = true
+        XCTAssertEqual(bot.chatMessages(messages), messages)
+    }
+
+    func testRoomToolVisibilityUsesTheSendingBot() throws {
+        let local = LocalBots(store: try temporaryStore())
+        var hidden = LocalBot(id: "hidden", name: "Hidden", kind: .apple, createdAt: Date())
+        hidden.showToolCalls = false
+        local.save(hidden)
+        local.save(LocalBot(id: "visible", name: "Visible", kind: .apple, createdAt: Date()))
+        let messages = ["hidden", "visible", "unknown"].map { sender in
+            LocalMessage(id: sender, botId: "room", role: .tool, text: "", at: Date(),
+                         tool: LocalToolCall(name: "Read", ok: true), from: sender)
+        }
+        XCTAssertEqual(local.roomMessages(messages, in: nil).map(\.id), ["visible", "unknown"])
+        XCTAssertEqual(messages.count, 3)
+    }
+
     func testStoreKeepsBotsMessagesAndConnectors() throws {
         let store = try temporaryStore()
         var bot = LocalBot(id: "b1", name: "Prova", kind: .endpoint, createdAt: Date(timeIntervalSince1970: 1_000))

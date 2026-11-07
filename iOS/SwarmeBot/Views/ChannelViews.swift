@@ -228,6 +228,7 @@ struct LocalRoomView: View {
 
     private var room: LocalRoom? { model.local.room(roomId) }
     private var chat: LocalRoomChat { model.local.roomChat(roomId) }
+    private var messages: [LocalMessage] { model.local.roomMessages(chat.messages, in: room) }
     private var members: [RoomMember] { room.map(model.local.members) ?? [] }
     private var screenKey: String { Notifier.key(phoneRoom: roomId) }
 
@@ -244,7 +245,7 @@ struct LocalRoomView: View {
                     .padding(.top, 80)
                     .padding(.horizontal, 24)
                 }
-                ForEach(chat.messages) { message in
+                ForEach(messages) { message in
                     row(message).id(message.id)
                 }
                 if chat.busy, let speaker = chat.speaker.flatMap(chat.member) {
@@ -263,7 +264,7 @@ struct LocalRoomView: View {
             .padding(.vertical, 8)
         }
         .scrollDismissesKeyboard(.interactively)
-        .stickToBottom(last: chat.messages.last?.id)
+        .stickToBottom(last: messages.last?.id)
         .safeAreaInset(edge: .bottom) {
             ComposerBar(text: $draft, placeholder: tr("Scrivi nel canale"), takesImages: false, photo: $photo, busy: chat.busy,
                         send: {

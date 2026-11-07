@@ -23,6 +23,7 @@ struct LocalChatView: View {
 
     private var bot: LocalBot? { model.local.bot(botId) }
     private var chat: LocalChat { model.local.chat(botId) }
+    private var messages: [LocalMessage] { bot?.chatMessages(chat.messages) ?? chat.messages }
     private var color: String { bot?.paletteColor ?? "blue" }
     private var targets: [TagTarget] { model.tagTargets(excluding: .phone(botId)) }
 
@@ -71,7 +72,7 @@ struct LocalChatView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 80)
                 }
-                ForEach(chat.messages) { message in
+                ForEach(messages) { message in
                     LocalMessageRow(message: message, color: color, image: chat.image).id(message.id)
                 }
                 if chat.busy {
@@ -89,7 +90,7 @@ struct LocalChatView: View {
             .padding(.vertical, 8)
         }
         .scrollDismissesKeyboard(.interactively)
-        .stickToBottom(last: chat.messages.last?.id)
+        .stickToBottom(last: messages.last?.id)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 4) {
                 if let attachError {
@@ -119,6 +120,14 @@ struct LocalChatView: View {
                 Menu {
                     Button(tr("Nuova chat"), systemImage: "square.and.pencil") { model.local.newChat(botId) }
                     Button(tr("Chat precedenti"), systemImage: "clock.arrow.circlepath") { showChats = true }
+                    Toggle(tr("Mostra gli strumenti in chat"), isOn: Binding(
+                        get: { bot?.showsToolCalls ?? true },
+                        set: { show in
+                            guard var bot else { return }
+                            bot.showToolCalls = show
+                            model.local.save(bot)
+                        }
+                    ))
                     Button(tr("Modifica il bot"), systemImage: "slider.horizontal.3") { editing = true }
                     Divider()
                     Button(tr("Elimina il bot"), systemImage: "trash", role: .destructive) { deleting = bot }

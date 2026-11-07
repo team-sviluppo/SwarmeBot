@@ -44,6 +44,19 @@ enum RoomMember {
 }
 
 extension LocalBots {
+    /// Each sender keeps its own preference; history and model context stay intact.
+    func roomMessages(_ messages: [LocalMessage], in room: LocalRoom?) -> [LocalMessage] {
+        messages.filter { message in
+            guard message.isToolCall, let sender = message.from else { return true }
+            if let bot = bot(sender) { return bot.showsToolCalls }
+            if let guest = room?.guests?.first(where: { $0.memberId == sender }),
+               let bot = remoteSession?(guest.peerId)?.state.bot(guest.botId) {
+                return bot.showsToolCalls
+            }
+            return true
+        }
+    }
+
     func room(_ id: String) -> LocalRoom? { rooms.first { $0.id == id } }
 
     /// A room's members, in order: the phone's bots, then the guests.

@@ -20,6 +20,7 @@ struct ChatView: View {
     @Environment(AppModel.self) private var model
     @State private var showChats = false
     @State private var deletingRoom = false
+    @State private var savingToolVisibility = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -61,6 +62,17 @@ struct ChatView: View {
                     if let bot {
                         Button(tr("Nuova chat"), systemImage: "square.and.pencil") { Task { await session.newChat(bot.id) } }
                         Button(tr("Chat precedenti"), systemImage: "clock.arrow.circlepath") { showChats = true }
+                        Toggle(tr("Mostra gli strumenti in chat"), isOn: Binding(
+                            get: { bot.showsToolCalls },
+                            set: { show in
+                                savingToolVisibility = true
+                                Task {
+                                    await session.setShowToolCalls(bot.id, show)
+                                    savingToolVisibility = false
+                                }
+                            }
+                        ))
+                        .disabled(!session.isLive || savingToolVisibility)
                     }
                     if busy {
                         Button(tr("Ferma"), systemImage: "stop.circle") { Task { await session.interrupt(chat) } }
@@ -89,6 +101,14 @@ struct ChatView: View {
                            onOpen: { id in Task { await session.openChat(bot.id, threadId: id) } },
                            onDelete: { id in Task { await session.deleteChat(bot.id, threadId: id) } })
             }
+        }
+        .alert(tr("Errore"), isPresented: Binding(
+            get: { session.lastError != nil },
+            set: { if !$0 { session.lastError = nil } }
+        )) {
+            Button(tr("OK")) { session.lastError = nil }
+        } message: {
+            Text(verbatim: session.lastError ?? "")
         }
         .task(id: threadId) {
             guard let threadId else { return }
