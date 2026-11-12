@@ -3,6 +3,13 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
+## [0.6.6]
+
+### Automations
+
+- Keep an automation's results in one conversation with the new **Output in the same chat** option. Each run continues in the latest `[AUTOMAZIONE]` chat for that automation and makes it the bot's current chat; a new one is opened only when none exists.
+- Automations without the option, and webhook runs, still open a new chat for every run. The setting moves with a bot transferred to another engine.
+
 ## [0.6.5]
 
 ### Remote servers
