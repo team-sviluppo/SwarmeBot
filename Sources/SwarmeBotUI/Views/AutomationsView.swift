@@ -187,6 +187,7 @@ struct RoutineDraft: Identifiable {
     /// interval: "minutes", "hours" or "days"
     var unit = "minutes"
     var duration = 30
+    var sameChat = false
 
     /// What the engine accepts for an interval: 5 minutes to 7 days.
     var intervalIsValid: Bool {
@@ -219,6 +220,7 @@ struct RoutineDraft: Identifiable {
         }
         weekdays = Set(routine.schedule.weekdays ?? [])
         duration = routine.durationMinutes ?? 30
+        sameChat = routine.sameChat ?? false
     }
 
     var scheduleIsComplete: Bool {
@@ -237,7 +239,9 @@ struct RoutineDraft: Identifiable {
         case .interval: schedule = .interval(every: every, unit: unit)
         case .daily: schedule = .daily(String(format: "%02d:%02d", parts.hour ?? 9, parts.minute ?? 0), weekdays: weekdays.sorted())
         }
-        return RoutineInput(name: name, prompt: prompt, botId: botId, enabled: enabled, schedule: schedule, durationMinutes: duration)
+        var input = RoutineInput(name: name, prompt: prompt, botId: botId, enabled: enabled, schedule: schedule, durationMinutes: duration)
+        input.sameChat = sameChat
+        return input
     }
 }
 
@@ -295,6 +299,10 @@ private struct RoutineEditor: View {
                 }
             }
             Stepper(tr("Durata massima: %@ min", String(draft.duration)), value: $draft.duration, in: 5...240, step: 5)
+            Toggle(isOn: $draft.sameChat) {
+                Text(tr("Output nella stessa chat"))
+                Text(tr("Ogni esecuzione continua nell'ultima chat [AUTOMAZIONE] di questa automazione invece di aprirne una nuova."))
+            }
             Toggle(tr("Attiva"), isOn: $draft.enabled)
             }
         }

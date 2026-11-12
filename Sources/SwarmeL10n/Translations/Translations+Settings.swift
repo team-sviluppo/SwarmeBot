@@ -335,6 +335,9 @@ extension Translations {
         "Ora": "Time",
         "D L M M G V S": "S M T W T F S",
         "Durata massima: %@ min": "Maximum duration: %@ min",
+        "Output nella stessa chat": "Output in the same chat",
+        "Ogni esecuzione continua nell'ultima chat [AUTOMAZIONE] di questa automazione invece di aprirne una nuova.":
+            "Each run continues in this automation's latest [AUTOMAZIONE] chat instead of opening a new one.",
         "Attiva": "Enabled",
         "Nessun webhook": "No webhooks",
         "Un URL privato che, quando riceve un POST, dà un compito a un bot.": "A private URL that gives a bot a task when it receives a POST.",

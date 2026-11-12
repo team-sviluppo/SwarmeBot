@@ -58,6 +58,7 @@ public enum BotTransfer {
         var input = RoutineInput(name: routine.name, prompt: routine.prompt, botId: botId, enabled: enabled,
                                  schedule: routine.schedule, durationMinutes: routine.durationMinutes)
         input.runOn = routine.runOn ?? "maus"
+        input.sameChat = routine.sameChat ?? false
         return input
     }
 

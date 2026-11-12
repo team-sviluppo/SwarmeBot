@@ -64,6 +64,8 @@ public struct Routine: Codable, Hashable, Identifiable, Sendable {
     public var enabled: Bool
     public var schedule: RoutineSchedule
     public var durationMinutes: Int?
+    /// Runs go on in the newest "[AUTOMAZIONE] <name>" chat instead of opening a new one.
+    public var sameChat: Bool?
     public var nextRunAt: Double?
     public var createdAt: Double?
     public var updatedAt: Double?
@@ -102,6 +104,8 @@ public struct RoutineInput: Sendable {
     public var durationMinutes: Int?
     /// "maus" (the engine itself) or "cloud".
     public var runOn = "maus"
+    /// Runs go on in the newest "[AUTOMAZIONE] <name>" chat instead of opening a new one.
+    public var sameChat = false
 
     public init(name: String, prompt: String, botId: String, enabled: Bool, schedule: RoutineSchedule, durationMinutes: Int? = nil) {
         self.name = name
@@ -119,7 +123,7 @@ public struct RoutineInput: Sendable {
     var json: [String: Any] {
         var out: [String: Any] = [
             "name": name, "prompt": prompt, "botId": botId, "enabled": enabled,
-            "runOn": runOn, "schedule": schedule.json,
+            "runOn": runOn, "schedule": schedule.json, "sameChat": sameChat,
         ]
         if let durationMinutes { out["durationMinutes"] = durationMinutes }
         return out
