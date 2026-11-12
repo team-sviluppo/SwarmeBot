@@ -109,6 +109,43 @@ final class RoutineRunChatTests: XCTestCase {
         XCTAssertEqual(created.map(\.title), ["[AUTOMAZIONE] Report", "[AUTOMAZIONE] Inbox"])
         XCTAssertEqual(created.map(\.activate), [true, true])
     }
+
+    func testSameChatReusesTheAutomationChatAndOpensOneOnlyWhenMissing() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var chats: [String: String] = [:] // title → newest thread
+        var created: [String] = []
+        var started: [String] = []
+        let manager = RoutineManager(file: dir.appendingPathComponent("routines.json"), host: .init(
+            emit: { _ in },
+            botState: { _ in "ready" },
+            createTask: { _, title, _ in created.append(title); chats[title] = "thread-\(created.count)"; return chats[title] },
+            reuseTask: { _, title in chats[title] },
+            startTurn: { _, thread, _, _, _, _ in started.append(thread) },
+            interruptTurn: { _, _, _ in }
+        ))
+        let routine = try manager.create(["name": "Report", "prompt": "Write it", "botId": "bot", "sameChat": true,
+                                          "schedule": ["type": "once", "at": .number(nowMillis() + 3_600_000)]])
+        XCTAssertEqual(routine["sameChat"], true)
+        let id = routine["id"]!.string!
+        for _ in 0..<2 {
+            _ = manager.runNow(id)
+            manager.tick()
+            manager.handleRuntimeEvent(RuntimeEvent(provider: "fake", threadId: started.last!, .turnCompleted(ok: true, stopReason: nil, cost: nil, denials: nil, usage: nil)))
+        }
+        XCTAssertEqual(created, ["[AUTOMAZIONE] Report"], "the first run opens the chat, the second goes on in it")
+        XCTAssertEqual(started, ["thread-1", "thread-1"])
+
+        // switched off: back to a chat per run, and the key leaves the record
+        let off = try XCTUnwrap(try manager.update(id, ["sameChat": false]))
+        XCTAssertNil(off["sameChat"])
+        _ = manager.runNow(id)
+        manager.tick()
+        XCTAssertEqual(created.count, 2)
+        // a routine without the option is written as before
+        XCTAssertNil(try manager.create(["name": "Plain", "prompt": "p", "botId": "bot",
+                                         "schedule": ["type": "once", "at": .number(nowMillis() + 3_600_000)]])["sameChat"])
+    }
 }
 
 @MainActor

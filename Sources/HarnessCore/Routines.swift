@@ -25,6 +25,8 @@ public final class RoutineManager {
         public var emit: (JSONObject) -> Void
         public var botState: (String) -> String // ready · busy · missing
         public var createTask: (_ botId: String, _ title: String, _ activate: Bool) -> String?
+        /// The bot's newest chat with this exact title, made its live one; nil when it has none.
+        public var reuseTask: (_ botId: String, _ title: String) -> String? = { _, _ in nil }
         /// throws what the dispatch refuses synchronously; later failures come back via onDispatchError
         public var startTurn: (_ botId: String, _ threadId: String, _ prompt: String, _ runOn: String, _ trigger: String,
                                _ onDispatchError: @escaping (String) -> Void) throws -> Void
@@ -153,11 +155,14 @@ public final class RoutineManager {
         let runOn = input["runOn"]?.string ?? "maus"
         guard runOn == "maus" || runOn == "cloud" else { throw InputError(message: "Choose where this routine runs") }
         let minutes = (input["durationMinutes"]?.double).flatMap { $0.isFinite && $0 != 0 ? $0 : nil } ?? 30
-        return JSONObject([
+        var clean = JSONObject([
             ("name", .string(name)), ("prompt", .string(prompt)), ("botId", .string(botId)), ("runOn", .string(runOn)),
             ("enabled", .bool(input["enabled"]?.bool != false)), ("schedule", try Self.cleanSchedule(input["schedule"])),
             ("durationMinutes", .number(min(240, max(15, minutes.rounded(.toNearestOrAwayFromZero))))),
         ])
+        // written only when on, so a routine without it reads as before
+        if input["sameChat"]?.bool == true { clean["sameChat"] = true }
+        return clean
     }
 
     func initialOccurrence(_ schedule: JSON, now: Double) -> JSON {
@@ -202,13 +207,14 @@ public final class RoutineManager {
     public func update(_ id: String, _ patch: JSONObject) throws -> JSONObject? {
         guard let index = routines.firstIndex(where: { $0["id"]?.string == id }) else { return nil }
         var merged = JSONObject()
-        for key in ["name", "prompt", "botId", "runOn", "enabled", "schedule", "durationMinutes"] {
+        for key in ["name", "prompt", "botId", "runOn", "enabled", "schedule", "durationMinutes", "sameChat"] {
             let value = patch[key].flatMap { $0.isNull ? nil : $0 } ?? routines[index][key]
             if let value { merged[key] = value }
         }
         let clean = try sanitize(merged)
         if host.botState(clean["botId"]?.string ?? "") == "missing" { throw InputError(message: "That bot no longer exists") }
         for (key, value) in clean { routines[index][key] = value }
+        if clean["sameChat"] == nil { routines[index]["sameChat"] = Optional<JSON>.none }
         routines[index]["nextRunAt"] = clean["enabled"]?.bool == true ? initialOccurrence(clean["schedule"]!, now: nowMillis()) : .null
         routines[index]["updatedAt"] = .number(nowMillis())
         if patch["enabled"]?.bool == false {
@@ -379,9 +385,12 @@ public final class RoutineManager {
                 continue
             }
             // every run opens its own chat and makes it the bot's live one, so its
-            // result is what the user sees on opening the bot; the title says it is unattended
+            // result is what the user sees on opening the bot; the title says it is unattended.
+            // A routine with `sameChat` goes on in the newest chat with its title instead.
             let title = Self.automationTitlePrefix + (runs[index]["routineName"]?.string ?? "")
-            guard let threadId = host.createTask(botId, title, true) else {
+            let sameChat = runs[index]["triggerSource"]?.string != "webhook"
+                && routines.first(where: { $0["id"] == runs[index]["routineId"] })?["sameChat"]?.bool == true
+            guard let threadId = (sameChat ? host.reuseTask(botId, title) : nil) ?? host.createTask(botId, title, true) else {
                 fail(index, "Could not create a task for this run")
                 continue
             }

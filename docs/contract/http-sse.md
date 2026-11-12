@@ -199,7 +199,7 @@ La **selezione del modello per bot** non ha una route dedicata: si fa con `PATCH
 | Metodo | Path | Request | Risposta | React | CC |
 |---|---|---|---|---|---|
 | GET | `/api/routines` | `from?`, `to?` (epoch ms, filtro runs) | `{routines: Routine[], runs: RoutineRun[]}` | ✅ | ❌ |
-| POST | `/api/routines` | `RoutineInput {name, prompt, botId, runOn?:"maus"\|"cloud", enabled?, schedule:{type:"once",at}\|{type:"daily",time:"HH:MM",weekdays:number[]}\|{type:"interval",every:number,unit:"minutes"\|"hours"\|"days"}, durationMinutes?}` (`interval` is Swift-only, added after the Node engine: 5 min – 7 days, integer `every`, `unit` defaults to `minutes`) | 201 `{routine}` + frame `routine` | ✅ | ❌ |
+| POST | `/api/routines` | `RoutineInput {name, prompt, botId, runOn?:"maus"\|"cloud", enabled?, schedule:{type:"once",at}\|{type:"daily",time:"HH:MM",weekdays:number[]}\|{type:"interval",every:number,unit:"minutes"\|"hours"\|"days"}, durationMinutes?, sameChat?:boolean}` (`interval` is Swift-only, added after the Node engine: 5 min – 7 days, integer `every`, `unit` defaults to `minutes`; so is `sameChat`: each run goes on in the bot's newest chat titled `[AUTOMAZIONE] <name>`, made live, and opens one only when there is none) | 201 `{routine}` + frame `routine` | ✅ | ❌ |
 | PATCH | `/api/routines/:id` | `Partial<RoutineInput>` | `{routine}` / 404 | ✅ | ❌ |
 | DELETE | `/api/routines/:id` | — | `{ok:true}` + frame `routine.deleted` | ✅ | ❌ |
 | POST | `/api/routines/:id/run` | — | 201 `{run}` | ✅ | ❌ |
@@ -486,7 +486,7 @@ mancano **`xai`**, **`vps`**, **`opencodeGo`**, **`localEndpoint`**, **`rooms`**
 
 ### 4.6 Routine / Webhook (assenti in Swift)
 
-`Routine{id, name, prompt, botId, runOn:"maus"|"cloud", enabled, schedule, durationMinutes, nextRunAt: number|null, createdAt, updatedAt}`.
+`Routine{id, name, prompt, botId, runOn:"maus"|"cloud", enabled, schedule, durationMinutes, sameChat?: true, nextRunAt: number|null, createdAt, updatedAt}` (`sameChat` is written only when on; `PATCH` with `false` removes it).
 `RoutineRun{id, routineId, routineName, prompt?, durationMinutes?, botId, runOn, scheduledFor, status:"queued"|"running"|"waiting"|"completed"|"failed"|"cancelled"|"missed", manual, triggerSource?:"schedule"|"manual"|"webhook", webhookId?, deliveryId?, threadId?, startedAt?, finishedAt?, output?, error?, cost?, denials?, createdAt, seenAt?}`.
 `WebhookTrigger{id, endpointId, name, prompt, botId, runOn, enabled, createdAt, updatedAt, lastReceivedAt?, lastRunId?, deliveryCount, verificationPending?, verifiedAt?, verificationSample?{receivedAt, eventName?, contentType?, preview}, eventTypes?}`.
 `WebhookAttempt{id, webhookId, receivedAt, outcome:"accepted"|"captured"|"duplicate"|"ignored"|"rejected", statusCode, eventName?, preview?, deliveryId?, runId?, reason?}`.

@@ -23,6 +23,13 @@ extension Harness {
                 if let bot = self.store.bot(botId) { self.broadcast(["kind": "bot", "bot": .object(self.wireBot(bot))]) }
                 return task["threadId"]?.string
             },
+            reuseTask: { [weak self] botId, title in
+                guard let self, let threadId = self.store.tasks(botId).filter({ $0["title"]?.string == title })
+                    .max(by: { ($0["createdAt"]?.double ?? 0) < ($1["createdAt"]?.double ?? 0) })?["threadId"]?.string,
+                      let bot = self.store.switchTask(botId, threadId) else { return nil }
+                self.broadcast(["kind": "bot", "bot": .object(self.wireBot(bot))])
+                return threadId
+            },
             startTurn: { [weak self] botId, threadId, prompt, runOn, trigger, onDispatchError in
                 try self?.startTurn(botId: botId, text: prompt, threadId: threadId, options: TurnOptions(
                     onDispatchError: onDispatchError, runOn: runOn, automationSource: trigger))
