@@ -6,9 +6,13 @@ import SwiftUI
 /// composer under it.
 struct ChatView: View {
     @Environment(AppModel.self) private var model
+    /// Files and images dropped anywhere on the chat go to the composer.
+    @State private var drop: ChatDrop?
+    @State private var dropTargeted = false
 
     var body: some View {
         if let threadId = model.selectedThreadId {
+            let writable = model.selectedRoom?.guest == nil
             VStack(spacing: 0) {
                 ChatHeader()
                 TranscriptView(threadId: threadId)
@@ -20,7 +24,7 @@ struct ChatView: View {
                         .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                         .padding(.bottom, 24).padding(.top, 8)
                 } else {
-                    ComposerView(threadId: threadId)
+                    ComposerView(threadId: threadId, drop: $drop, dropTargeted: $dropTargeted)
                         .frame(maxWidth: Theme.transcriptMaxWidth)
                         .padding(.horizontal, 32)
                         .padding(.bottom, 24)
@@ -28,6 +32,13 @@ struct ChatView: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            .onDrop(of: ComposerImage.dropTypes, isTargeted: writable ? $dropTargeted : .constant(false)) { providers in
+                guard writable else { return false }
+                drop = ChatDrop(providers: providers)
+                return true
+            }
+            .overlay { if dropTargeted { ChatDropOverlay() } }
+            .animation(Theme.quick, value: dropTargeted)
         }
     }
 }

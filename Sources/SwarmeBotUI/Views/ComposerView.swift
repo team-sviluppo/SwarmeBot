@@ -11,6 +11,10 @@ import UniformTypeIdentifiers
 /// so switching chats does not throw away a half-written message.
 struct ComposerView: View {
     let threadId: String
+    /// A drop on the chat around the composer, taken here and cleared.
+    @Binding var drop: ChatDrop?
+    /// Files or images are being dragged over the chat (the field included).
+    @Binding var dropTargeted: Bool
     @Environment(AppModel.self) private var model
     @State private var drafts: [String: String] = [:]
     @State private var attachments: [String: [ComposerAttachment]] = [:]
@@ -19,7 +23,6 @@ struct ComposerView: View {
     /// One 20 pt line: taller, the field outgrows the bottom-aligned buttons
     /// and its first line rides above the "+".
     @State private var height: CGFloat = 20
-    @State private var dropTargeted = false
     /// Bumped to put the caret in the text field.
     @State private var focusRequest = 0
     /// The server path being edited, for a bot on a remote engine.
@@ -58,7 +61,13 @@ struct ComposerView: View {
                 .help(tr("Allega file o immagini (oppure trascinali qui, o incolla)"))
                 ComposerTextView(
                     text: draft, height: $height, placeholder: placeholder, focusRequest: focusRequest, onSubmit: submit,
-                    onPasteImage: { data, mime in add(.init(name: tr("Immagine incollata"), kind: .image(data, mime: mime))) },
+                    onPasteImage: { addImage($0, name: tr("Immagine incollata")) },
+                    onPasteFiles: { $0.forEach(addFile) },
+                    onDropAttachments: { files, image in
+                        files.forEach(addFile)
+                        if let image { addImage(image, name: tr("Immagine")) }
+                    },
+                    onDragTargeted: { dropTargeted = $0 },
                     onLongPaste: { text in
                         guard text.utf8.count > pasteChipThreshold else { return false }
                         add(.init(name: tr("Testo incollato"), kind: .paste(text)))
@@ -103,7 +112,11 @@ struct ComposerView: View {
             .contextMenu {
                 Button(tr("Allega file o immagini…"), action: pickFiles)
             }
-            .onDrop(of: [.fileURL, .image], isTargeted: $dropTargeted, perform: drop)
+            .onChange(of: drop) { _, dropped in
+                guard let dropped else { return }
+                drop = nil
+                take(dropped.providers)
+            }
             let queued = model.visibleTranscript(threadId).filter { $0.queued == true }.count
             if queued > 0 || (busy && canSend) {
                 HStack {
@@ -293,8 +306,10 @@ struct ComposerView: View {
         // a plugin may take it (a file inside the repository becomes a reference, not an upload)
         if PluginHost.shared.unclaimedFiles([url], ChatContext.current(model)).isEmpty { return }
         let type = UTType(filenameExtension: url.pathExtension)
-        if let type, let mime = Self.imageMime(type), let data = try? Data(contentsOf: url), data.count <= 10_000_000 {
-            add(.init(name: url.lastPathComponent, kind: .image(data, mime: mime)))
+        // any image macOS reads (HEIC, TIFF…) goes up converted, so the bot sees it on a server too
+        if let type, type.conforms(to: .image), let data = try? Data(contentsOf: url),
+           let image = ComposerImage.normalize(data, type: type) {
+            add(.init(name: url.lastPathComponent, kind: .image(image.data, mime: image.mime)))
         } else if model.isRemote {
             // a file goes by path, and this Mac's paths do not exist on the server
             model.lastError = tr("Su un server remoto si allegano solo immagini: copia %@ sul server e indica il percorso nel messaggio", url.lastPathComponent)
@@ -303,32 +318,33 @@ struct ComposerView: View {
         }
     }
 
-    static func imageMime(_ type: UTType) -> String? {
-        if type.conforms(to: .png) { return "image/png" }
-        if type.conforms(to: .jpeg) { return "image/jpeg" }
-        if type.conforms(to: .gif) { return "image/gif" }
-        if type.conforms(to: .webP) { return "image/webp" }
-        return nil
+    /// An image without a file (pasted, or dragged from a browser or Preview).
+    private func addImage(_ data: Data, name: String) {
+        guard let image = ComposerImage.normalize(data) else {
+            model.lastError = tr("Immagine non leggibile o più grande di 10 MB")
+            return
+        }
+        add(.init(name: name, kind: .image(image.data, mime: image.mime)))
     }
 
-    private func drop(_ providers: [NSItemProvider]) -> Bool {
-        var handled = false
+    /// Files first; else the image, in the first type a supported engine
+    /// takes as is, or any image type to convert.
+    private func take(_ providers: [NSItemProvider]) {
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-                handled = true
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url else { return }
                     DispatchQueue.main.async { addFile(url) }
                 }
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.png.identifier) {
-                handled = true
-                provider.loadDataRepresentation(forTypeIdentifier: UTType.png.identifier) { data, _ in
-                    guard let data else { return }
-                    DispatchQueue.main.async { add(.init(name: tr("Immagine"), kind: .image(data, mime: "image/png"))) }
-                }
+                continue
+            }
+            let types = provider.registeredTypeIdentifiers.compactMap(UTType.init).filter { $0.conforms(to: .image) }
+            guard let type = types.first(where: { ComposerImage.mime($0) != nil }) ?? types.first else { continue }
+            provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in
+                guard let data else { return }
+                DispatchQueue.main.async { addImage(data, name: tr("Immagine")) }
             }
         }
-        return handled
     }
 
     // MARK: Mentions
@@ -730,7 +746,14 @@ struct ComposerTextView: NSViewRepresentable {
     /// A new value puts the caret in the field.
     var focusRequest = 0
     let onSubmit: () -> Void
-    var onPasteImage: ((Data, String) -> Void)? = nil
+    /// Image bytes as pasted; the caller converts them.
+    var onPasteImage: ((Data) -> Void)? = nil
+    /// Files copied in the Finder.
+    var onPasteFiles: (([URL]) -> Void)? = nil
+    /// Files or an image dropped on the field itself, which would otherwise
+    /// type their path into the text.
+    var onDropAttachments: (([URL], Data?) -> Void)? = nil
+    var onDragTargeted: ((Bool) -> Void)? = nil
     /// Return true to take the paste out of the text field (a chip instead).
     var onLongPaste: ((String) -> Bool)? = nil
 
@@ -787,6 +810,9 @@ struct ComposerTextView: NSViewRepresentable {
         // Closures capture the current thread. Setting them only in
         // makeNSView left every later chat pasting into the first bot.
         field.onPasteImage = onPasteImage
+        field.onPasteFiles = onPasteFiles
+        field.onDropAttachments = onDropAttachments
+        field.onDragTargeted = onDragTargeted
         field.onLongPaste = onLongPaste
         if field.string != text {
             field.string = text
@@ -848,26 +874,70 @@ final class PlaceholderTextView: NSTextView {
     static let baselineOffset: CGFloat = 2
 
     var placeholder = ""
-    var onPasteImage: ((Data, String) -> Void)?
+    var onPasteImage: ((Data) -> Void)?
+    var onPasteFiles: (([URL]) -> Void)?
+    var onDropAttachments: (([URL], Data?) -> Void)?
+    var onDragTargeted: ((Bool) -> Void)?
     var onLongPaste: ((String) -> Bool)?
 
-    /// Images on the pasteboard become attachments; very long text becomes
-    /// a chip; everything else pastes as plain text.
+    /// Files copied in the Finder and images on the pasteboard become
+    /// attachments; very long text becomes a chip; everything else pastes
+    /// as plain text.
     override func paste(_ sender: Any?) {
         let board = NSPasteboard.general
-        if let onPasteImage, board.string(forType: .string) == nil {
-            if let png = board.data(forType: .png) {
-                onPasteImage(png, "image/png")
+        if let found = ComposerImage.attachments(on: board) {
+            if !found.files.isEmpty, let onPasteFiles {
+                onPasteFiles(found.files)
                 return
             }
-            if let tiff = board.data(forType: .tiff), let rep = NSBitmapImageRep(data: tiff),
-               let png = rep.representation(using: .png, properties: [:]) {
-                onPasteImage(png, "image/png")
+            // text copied from a web page may carry an image too: the text wins
+            if let image = found.image, let onPasteImage, board.string(forType: .string) == nil {
+                onPasteImage(image)
                 return
             }
         }
         if let text = board.string(forType: .string), onLongPaste?(text) == true { return }
         pasteAsPlainText(sender)
+    }
+
+    // MARK: Drops on the field
+
+    /// A drag carrying files or an image is the composer's, not text to insert.
+    private func carriesAttachments(_ info: NSDraggingInfo) -> Bool {
+        onDropAttachments != nil && ComposerImage.attachments(on: info.draggingPasteboard) != nil
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard carriesAttachments(sender) else { return super.draggingEntered(sender) }
+        onDragTargeted?(true)
+        return .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        carriesAttachments(sender) ? .copy : super.draggingUpdated(sender)
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        onDragTargeted?(false)
+        super.draggingExited(sender)
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        carriesAttachments(sender) ? true : super.prepareForDragOperation(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard carriesAttachments(sender), let found = ComposerImage.attachments(on: sender.draggingPasteboard) else {
+            return super.performDragOperation(sender)
+        }
+        onDragTargeted?(false)
+        onDropAttachments?(found.files, found.image)
+        return true
+    }
+
+    override func concludeDragOperation(_ sender: NSDraggingInfo?) {
+        if let sender, carriesAttachments(sender) { return }
+        super.concludeDragOperation(sender)
     }
 
     override func draw(_ dirtyRect: NSRect) {
