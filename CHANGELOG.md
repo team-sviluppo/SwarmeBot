@@ -3,6 +3,14 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
+## [0.7.0]
+
+### Chat
+
+- Drop files and images anywhere on a chat to attach them. A "Drop to attach" overlay shows where they go, and dropping on the text field no longer types the file's path.
+- Attach images dragged from a browser, Preview or Photos. TIFF, HEIC and other image formats are converted automatically, so they also reach bots on remote servers.
+- Paste files copied in the Finder to attach them instead of pasting their names.
+
 ## [0.6.6]
 
 ### Automations
