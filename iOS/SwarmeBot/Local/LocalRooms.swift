@@ -128,6 +128,8 @@ final class LocalRoomChat {
     @ObservationIgnored private var turn: Task<Void, Never>?
     /// The server a guest is speaking on, to stop its turn there too.
     @ObservationIgnored private var guestSpeaking: RemoteSession?
+    /// Keeps the app running while the round does, off screen too.
+    @ObservationIgnored private var background: TurnInBackground?
 
     init(roomId: String, owner: LocalBots) {
         self.roomId = roomId
@@ -154,6 +156,11 @@ final class LocalRoomChat {
         guard !responders.isEmpty else { return }
         busy = true
         lastError = nil
+        // the round goes over the network unless every speaker is on the phone's own models
+        let remote = responders.contains { if case let .phone(bot) = $0 { bot.kind == .endpoint } else { true } }
+        if remote {
+            background = TurnInBackground.begin(title: room.name, subtitle: tr("Sta rispondendo…")) { [weak self] in self?.stop() }
+        }
         turn = Task { [weak self] in
             guard let self else { return }
             var spoken = Set<String>()
@@ -165,6 +172,8 @@ final class LocalRoomChat {
             self.speaker = nil
             self.busy = false
             self.turn = nil
+            self.background?.end()
+            self.background = nil
             if let (name, reply) = last { self.owner?.roomReplied(self.roomId, speaker: name, text: reply) }
         }
     }
@@ -215,8 +224,12 @@ final class LocalRoomChat {
                               tools: owner.toolBox(for: bot))
         let roomId = roomId
         let sink = TurnSink(
-            delta: { [weak self] piece in self?.streaming += piece },
+            delta: { [weak self] piece in
+                self?.streaming += piece
+                self?.background?.advance()
+            },
             toolStarted: { [weak self] title, arguments in
+                self?.background?.advance()
                 let message = LocalMessage(id: newId(), botId: roomId, role: .tool, text: "", at: Date(),
                                            tool: LocalToolCall(name: title, ok: nil, input: arguments, output: nil), from: bot.id)
                 self?.append(message)

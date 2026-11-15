@@ -12,6 +12,7 @@ extension Translations {
         "Connessione al server persa.": "Lost the connection to the server.",
         "Connessione…": "Connecting…",
         "Consenti": "Allow",
+        "Sta rispondendo…": "Replying…",
         "Fine": "Done",
         "Indirizzo del server non valido.": "The server address is not valid.",
         "Inquadra il QR che il Mac mostra in Impostazioni › server › Abbina telefono.": "Scan the QR code the Mac shows in Settings › server › Pair Phone.",

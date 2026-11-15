@@ -15,7 +15,7 @@ enum Theme {
     static let secondary = Color(dark: "#FCFCFC", darkAlpha: 0.6, light: "#18181B", lightAlpha: 0.62)
     static let tertiary = Color(dark: "#FCFCFC", darkAlpha: 0.42, light: "#18181B", lightAlpha: 0.45)
     static let accent = Color(dark: "#1084FE", light: "#0A74E6")
-    static let bubbleBot = Color(dark: "#1F1F1F", light: "#F0F0F3")
+    static let bubbleUser = Color(dark: "#2E2E2E", light: "#E8E8EC")
     static let success = Color(dark: "#38D591", light: "#12A06A")
     static let danger = Color(dark: "#FF5667", light: "#E0334A")
     static let warning = Color(dark: "#FF9800", light: "#D97F00")

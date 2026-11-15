@@ -15,6 +15,7 @@ import Foundation
 import Network
 import Observation
 import OSLog
+import UIKit
 
 private let log = Logger(subsystem: "it.hextra.swarmebot", category: "remote")
 
@@ -187,8 +188,13 @@ final class RemoteSession: Identifiable {
         }
     }
 
+    /// An action on the engine. The app leaving the screen right after
+    /// (a message sent, then the phone locked) doesn't cut it: iOS gives it
+    /// the time to finish.
     private func perform(_ body: (CompanionClient) async throws -> Void) async {
         guard let client else { return }
+        let time = BackgroundTime("server request")
+        defer { time.end() }
         do {
             try await body(client)
         } catch {
@@ -273,11 +279,23 @@ final class RemoteSession: Identifiable {
         }
     }
 
+    /// Housekeeping the chat does by itself, often just as the app comes
+    /// back from the background, when the old connection is gone and the
+    /// first request fails with "the network connection was lost": tried
+    /// again once, and never an error on screen.
     func markRead(_ chat: ChatRef) async {
-        await perform { client in
-            switch chat {
-            case let .bot(id): try await client.markRead(botId: id)
-            case let .room(id): try await client.markRead(roomId: id)
+        guard let client else { return }
+        for attempt in 0..<2 {
+            do {
+                switch chat {
+                case let .bot(id): try await client.markRead(botId: id)
+                case let .room(id): try await client.markRead(roomId: id)
+                }
+                return
+            } catch {
+                if (error as? APIError)?.isUnauthorized == true { status = .unpaired }
+                guard case .transport = error as? APIError, attempt == 0 else { return }
+                try? await Task.sleep(for: .seconds(1))
             }
         }
     }
@@ -383,4 +401,24 @@ final class RemoteSession: Identifiable {
 enum ChatRef: Hashable, Sendable {
     case bot(String)
     case room(String)
+}
+
+/// Time iOS grants to finish something after the app leaves the screen
+/// (about half a minute), given back as soon as it's done.
+@MainActor
+final class BackgroundTime {
+    private var id: UIBackgroundTaskIdentifier = .invalid
+
+    init(_ name: String) {
+        id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            // iOS calls it on the main thread, just before suspending the app
+            MainActor.assumeIsolated { self?.end() }
+        }
+    }
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
+    }
 }

@@ -1,5 +1,5 @@
 // The pieces both chats share, in the Mac app's look (Grok style): mascot
-// avatars, the user's bubble in the bot's colour, the bot's in grey, the
+// avatars, the bot's bubble in its colour, the user's in grey, the
 // activity line, the floating composer pill.
 import CompanionCore
 import PhotosUI
@@ -70,7 +70,7 @@ struct ChatTitlePill<Avatar: View>: View {
     }
 }
 
-/// One message as a bubble: the user's in the bot's colour on the right, the bot's grey on the left.
+/// One message as a bubble, as on the Mac: the user's grey on the right, the bot's in its colour on the left.
 struct ChatBubble: View {
     let text: String
     let isUser: Bool
@@ -97,7 +97,7 @@ struct ChatBubble: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
-            .background(isUser ? SwarmePalette.bubble(color) : Theme.bubbleBot, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(isUser ? Theme.bubbleUser : SwarmePalette.bubble(color), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             if !isUser { Spacer(minLength: 32) }
         }
     }

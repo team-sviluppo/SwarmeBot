@@ -102,7 +102,8 @@ targets:
         SwarmeBotPushRelay: $(SWARMEBOT_PUSH_RELAY)
         # `fetch`: the app refresh that checks the servers' bots with the app closed (Notifier)
         UIBackgroundModes: [remote-notification, fetch]
-        BGTaskSchedulerPermittedIdentifiers: [it.hextra.swarmebot.refresh]
+        # `.turn.*`: a phone bot's reply going on with the app in the background (TurnInBackground)
+        BGTaskSchedulerPermittedIdentifiers: [it.hextra.swarmebot.refresh, $(SWARMEBOT_BUNDLE_ID).turn.*]
         # settings exported from the Mac (plan §7)
         CFBundleDocumentTypes:
           - CFBundleTypeName: SwarmeBot configuration

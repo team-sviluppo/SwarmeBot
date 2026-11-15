@@ -294,6 +294,8 @@ final class LocalChat {
 
     @ObservationIgnored private weak var owner: LocalBots?
     @ObservationIgnored private var turn: Task<Void, Never>?
+    /// Keeps the app running while the turn does, off screen too.
+    @ObservationIgnored private var background: TurnInBackground?
 
     init(key: String, botId: String, owner: LocalBots) {
         self.key = key
@@ -340,11 +342,18 @@ final class LocalChat {
         let input = TurnInput(bot: bot, server: owner.server(for: bot), history: history, latest: latest, images: images,
                               tools: owner.toolBox(for: bot))
         let driver = owner.driver(bot.kind)
+        if bot.kind == .endpoint {
+            background = TurnInBackground.begin(title: bot.name, subtitle: tr("Sta rispondendo…")) { [weak self] in self?.stop() }
+        }
         turn = Task { [weak self] in
             guard let self else { return }
             let sink = TurnSink(
-                delta: { [weak self] piece in self?.streaming += piece },
+                delta: { [weak self] piece in
+                    self?.streaming += piece
+                    self?.background?.advance()
+                },
                 toolStarted: { [weak self] title, arguments in
+                    self?.background?.advance()
                     let message = LocalMessage(id: newId(), botId: chatKey, role: .tool, text: "", at: Date(),
                                                tool: LocalToolCall(name: title, ok: nil, input: arguments, output: nil))
                     self?.append(message)
@@ -387,6 +396,8 @@ final class LocalChat {
         streaming = ""
         busy = false
         turn = nil
+        background?.end(success: !interrupted)
+        background = nil
     }
 
     func stop() {
