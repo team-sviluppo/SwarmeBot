@@ -900,6 +900,20 @@ final class PlaceholderTextView: NSTextView {
         pasteAsPlainText(sender)
     }
 
+    /// A plain-text view enables Paste only for types it can insert as text,
+    /// so with just an image on the pasteboard (a screenshot) ⌘V beeped and
+    /// never reached `paste(_:)`.
+    override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(paste(_:)), isEditable, Self.canPasteImage(from: .general, handler: onPasteImage) {
+            return true
+        }
+        return super.validateUserInterfaceItem(item)
+    }
+
+    static func canPasteImage(from board: NSPasteboard, handler: ((Data) -> Void)?) -> Bool {
+        handler != nil && ComposerImage.attachments(on: board)?.image != nil
+    }
+
     // MARK: Drops on the field
 
     /// A drag carrying files or an image is the composer's, not text to insert.

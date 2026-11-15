@@ -30,6 +30,23 @@ final class ComposerDropTests: XCTestCase {
         XCTAssertNil(ComposerImage.normalize(Data(count: ComposerImage.maxBytes + 1), type: .png))
     }
 
+    func testAnImageOnlyPasteboardEnablesPasteWhenTheComposerTakesImages() {
+        let board = NSPasteboard(name: .init("swarme-test-\(UUID().uuidString)"))
+        defer { board.releaseGlobally() }
+        board.clearContents()
+        board.setData(bitmap(.png), forType: .png)
+        XCTAssertTrue(PlaceholderTextView.canPasteImage(from: board, handler: { _ in }))
+        XCTAssertFalse(PlaceholderTextView.canPasteImage(from: board, handler: nil))
+        // plain NSTextView would refuse this board: the reason for the override
+        let plain = NSTextView(frame: .zero)
+        plain.isRichText = false
+        XCTAssertNil(board.availableType(from: plain.readablePasteboardTypes))
+
+        board.clearContents()
+        board.setString("just text", forType: .string)
+        XCTAssertFalse(PlaceholderTextView.canPasteImage(from: board, handler: { _ in }))
+    }
+
     func testAPasteboardYieldsFilesBeforeImagesAndNothingForText() throws {
         let board = NSPasteboard(name: .init("swarme-test-\(UUID().uuidString)"))
         defer { board.releaseGlobally() }
