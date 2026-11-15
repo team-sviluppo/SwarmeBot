@@ -3,6 +3,12 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
+## [0.7.1]
+
+### Fixes
+
+- Paste screenshots and images copied from Preview or other apps into the message field with ⌘V to attach them. Before, Paste was unavailable when the clipboard held only an image.
+
 ## [0.7.0]
 
 ### Chat
