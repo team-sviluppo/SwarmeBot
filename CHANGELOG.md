@@ -3,6 +3,12 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
+## [0.7.2]
+
+### Chat
+
+- Find text in a chat with ⌘F (Edit › Find in Chat). The bar counts every match in the open chat, ignoring case and accents, and starts from the most recent one. Press Return or ⌘G to go to older matches and Shift-Return or ⇧⌘G to come back, and Esc to close it. Every match is highlighted in yellow and the current one in orange. Bot replies are searched as they appear on screen, including code blocks and tables, and long messages open by themselves when the match is in their hidden part.
+
 ## [0.7.1]
 
 ### Fixes
