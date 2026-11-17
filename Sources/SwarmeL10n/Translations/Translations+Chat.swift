@@ -2,6 +2,15 @@
 extension Translations {
     static let chat: [String: String] = [
         "Altro": "Other",
+        "Trova nella chat": "Find in Chat",
+        "Trova nella chat…": "Find in Chat…",
+        "Trova precedente": "Find Previous",
+        "Trova successivo": "Find Next",
+        "Risultato successivo (⏎)": "Next Match (⏎)",
+        "Risultato precedente (⇧⏎)": "Previous Match (⇧⏎)",
+        "Chiudi (esc)": "Close (esc)",
+        "Nessun risultato": "No matches",
+        "%@ di %@": "%@ of %@",
         "Mostra tutte le opzioni": "Show all options",
         "Riduci le opzioni": "Collapse options",
         "Cartella di lavoro non disponibile": "Working folder unavailable",

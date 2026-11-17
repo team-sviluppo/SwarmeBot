@@ -16,15 +16,25 @@ import SwarmeKit
 
 struct MarkdownText: View {
     let source: String
+    /// Find in chat's marks for this reply (ChatFind.swift).
+    @Environment(\.findHighlight) private var highlight
 
     var body: some View {
+        let segments = Self.segments(Markdown.blocks(source))
+        // where each segment's occurrences start among the reply's
+        let starts = highlight.map { highlight in
+            segments.reduce(into: [0]) { starts, segment in
+                starts.append(starts.last! + FindText.pieces(of: segment).reduce(0) { $0 + FindText.count(highlight.query, in: $1) })
+            }
+        }
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(Self.segments(Markdown.blocks(source)).enumerated()), id: \.offset) { item in
+            ForEach(Array(segments.enumerated()), id: \.offset) { item in
+                let mark = starts.flatMap { highlight?.shifted(by: $0[item.offset]) }
                 switch item.element {
                 case let .prose(blocks):
-                    ProseText(blocks: blocks)
+                    ProseText(blocks: blocks, highlight: mark)
                 case let .block(block):
-                    view(for: block)
+                    view(for: block, highlight: mark)
                 }
             }
         }
@@ -32,12 +42,12 @@ struct MarkdownText: View {
 
     /// Runs of prose blocks, which one text view draws so that a selection
     /// can cross them, and the blocks that need a view of their own.
-    private enum Segment {
+    enum Segment {
         case prose([MarkdownBlock])
         case block(MarkdownBlock)
     }
 
-    private static func segments(_ blocks: [MarkdownBlock]) -> [Segment] {
+    static func segments(_ blocks: [MarkdownBlock]) -> [Segment] {
         var out: [Segment] = []
         var run: [MarkdownBlock] = []
         for block in blocks {
@@ -55,10 +65,10 @@ struct MarkdownText: View {
     }
 
     @ViewBuilder
-    private func view(for block: MarkdownBlock) -> some View {
+    private func view(for block: MarkdownBlock, highlight: FindHighlight?) -> some View {
         switch block {
         case let .code(language, text):
-            CodeBlock(language: language, text: text)
+            CodeBlock(language: language, text: text, highlight: highlight)
 
         case .rule:
             Rectangle().fill(Theme.ink.opacity(0.3)).frame(height: 1).padding(.vertical, 2)
@@ -67,25 +77,36 @@ struct MarkdownText: View {
             // At its natural width when it fits; otherwise long cells wrap,
             // at narrower and narrower caps, and only a table that still
             // does not fit scrolls sideways, like a code block.
+            let marks = cellMarks(header: header, rows: rows, highlight: highlight)
             ViewThatFits(in: .horizontal) {
-                table(header: header, alignments: alignments, rows: rows, cap: nil)
-                table(header: header, alignments: alignments, rows: rows, cap: 220)
-                table(header: header, alignments: alignments, rows: rows, cap: 150)
+                table(header: header, alignments: alignments, rows: rows, cap: nil, marks: marks)
+                table(header: header, alignments: alignments, rows: rows, cap: 220, marks: marks)
+                table(header: header, alignments: alignments, rows: rows, cap: 150, marks: marks)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    table(header: header, alignments: alignments, rows: rows, cap: 150)
+                    table(header: header, alignments: alignments, rows: rows, cap: 150, marks: marks)
                 }
             }
 
         case .paragraph, .heading, .bullet, .ordered, .quote:
-            ProseText(blocks: [block])
+            ProseText(blocks: [block], highlight: highlight)
         }
     }
 
-    private func table(header: [String], alignments: [MarkdownAlignment], rows: [[String]], cap: CGFloat?) -> some View {
+    /// Each cell's marks, header first, then row by row: the order find counts them in.
+    private func cellMarks(header: [String], rows: [[String]], highlight: FindHighlight?) -> [FindHighlight?] {
+        guard let highlight else { return Array(repeating: nil, count: header.count + rows.count * header.count) }
+        var start = 0
+        return (header + rows.flatMap { $0 }).map { text in
+            defer { start += FindText.count(highlight.query, in: FindText.inline(text)) }
+            return highlight.shifted(by: start)
+        }
+    }
+
+    private func table(header: [String], alignments: [MarkdownAlignment], rows: [[String]], cap: CGFloat?, marks: [FindHighlight?]) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
                 ForEach(Array(header.enumerated()), id: \.offset) { column, text in
-                    cell(text, alignment: alignments[column], cap: cap)
+                    cell(text, alignment: alignments[column], cap: cap, highlight: marks[column])
                         .fontWeight(.semibold)
                         .background(Theme.ink.opacity(0.08))
                         .gridColumnAlignment(alignments[column].horizontal)
@@ -95,7 +116,7 @@ struct MarkdownText: View {
                 Rectangle().fill(Theme.ink.opacity(0.25)).frame(height: 1)
                 GridRow {
                     ForEach(Array(row.enumerated()), id: \.offset) { column, text in
-                        cell(text, alignment: alignments[column], cap: cap)
+                        cell(text, alignment: alignments[column], cap: cap, highlight: marks[header.count * (index + 1) + column])
                     }
                 }
             }
@@ -107,9 +128,9 @@ struct MarkdownText: View {
 
     /// Every cell fills its column and its row, so the header's tint and
     /// the alignment cover the whole cell, not just its text.
-    private func cell(_ text: String, alignment: MarkdownAlignment, cap: CGFloat?) -> some View {
+    private func cell(_ text: String, alignment: MarkdownAlignment, cap: CGFloat?, highlight: FindHighlight?) -> some View {
         CappedWidth(cap: cap ?? .infinity) {
-            inline(text)
+            inline(text, highlight: highlight)
                 .font(.system(size: Theme.bodySize))
                 .lineSpacing(Theme.bodyLineSpacing)
                 .multilineTextAlignment(alignment.text)
@@ -127,15 +148,19 @@ struct MarkdownText: View {
     /// Falling back to the raw string on a parse failure is the point: a
     /// half-typed link mid-stream should show as the characters the model has
     /// sent so far, not vanish until it closes the bracket.
-    private func inline(_ text: String) -> Text {
+    private func inline(_ text: String, highlight: FindHighlight?) -> Text {
         if let attributed = Self.parsed(text) {
-            return Text(attributed)
+            return Text(FindText.marked(attributed, highlight))
         }
-        return Text(text)
+        guard highlight != nil else { return Text(text) }
+        return Text(FindText.marked(AttributedString(text), highlight))
     }
 
+    /// The characters a run of prose is laid out as; find counts in the same (tests).
+    static func proseCharacters(_ blocks: [MarkdownBlock]) -> String { ProseTextView.render(blocks).string }
+
     /// The inline run as drawn, nil when it does not parse (yet).
-    fileprivate static func parsed(_ text: String) -> AttributedString? {
+    static func parsed(_ text: String) -> AttributedString? {
         (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))).map(styled)
     }
 
@@ -202,6 +227,7 @@ private extension MarkdownAlignment {
 private struct CodeBlock: View {
     let language: String?
     let text: String
+    var highlight: FindHighlight?
     @State private var copied = false
 
     var body: some View {
@@ -227,7 +253,7 @@ private struct CodeBlock: View {
             .padding(.vertical, 4)
             .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline.opacity(0.3)).frame(height: 1) }
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(text)
+                Text(FindText.marked(AttributedString(text), highlight))
                     .font(.system(size: 13, design: .monospaced))
                     .lineSpacing(4)
                     .textSelection(.enabled)
@@ -249,6 +275,7 @@ private struct CodeBlock: View {
 /// and open through SwiftUI's `openURL`, which the reply's file links hook.
 private struct ProseText: NSViewRepresentable {
     let blocks: [MarkdownBlock]
+    var highlight: FindHighlight?
 
     func makeNSView(context: Context) -> ProseTextView {
         let view = ProseTextView(usingTextLayoutManager: false)
@@ -273,7 +300,7 @@ private struct ProseText: NSViewRepresentable {
 
     func updateNSView(_ view: ProseTextView, context: Context) {
         context.coordinator.openURL = context.environment.openURL
-        view.show(blocks)
+        view.show(blocks, highlight: highlight)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView view: ProseTextView, context: Context) -> CGSize? {
@@ -300,15 +327,45 @@ private extension NSAttributedString.Key {
 
 private final class ProseTextView: NSTextView {
     private var blocks: [MarkdownBlock] = []
+    private var highlight: FindHighlight?
     /// Sizes by proposed width; SwiftUI asks the same few widths many times.
     private var sizes: [CGFloat: CGSize] = [:]
 
-    func show(_ new: [MarkdownBlock]) {
-        guard new != blocks else { return }
+    func show(_ new: [MarkdownBlock], highlight newHighlight: FindHighlight?) {
+        guard new != blocks || newHighlight != highlight else { return }
+        let current = newHighlight?.current
+        let moved = current != nil && (current != highlight?.current || newHighlight?.query != highlight?.query)
+        if new != blocks { sizes = [:] }
         blocks = new
-        sizes = [:]
-        textStorage?.setAttributedString(Self.render(new))
+        highlight = newHighlight
+        // the marks only colour characters: the sizes measured still hold
+        let text = NSMutableAttributedString(attributedString: Self.render(new))
+        if let newHighlight {
+            for (index, range) in FindText.ranges(of: newHighlight.query, in: text.string).enumerated() {
+                let span = NSRange(range, in: text.string)
+                text.addAttributes([.backgroundColor: index == current ? FindText.currentColor : FindText.matchColor,
+                                    .foregroundColor: NSColor.black], range: span)
+                if index == current, moved { reveal(span) }
+            }
+        }
+        textStorage?.setAttributedString(text)
         needsDisplay = true
+    }
+
+    /// The current match of a reply taller than the transcript may be out of
+    /// sight with the reply centred: once the transcript has scrolled to the
+    /// reply, bring the match itself into view.
+    private func reveal(_ span: NSRange) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, let manager = layoutManager, let container = textContainer,
+                  span.upperBound <= (textStorage?.length ?? 0) else { return }
+            let glyphs = manager.glyphRange(forCharacterRange: span, actualCharacterRange: nil)
+            let box = manager.boundingRect(forGlyphRange: glyphs, in: container)
+                .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+            guard let clip = enclosingScrollView?.contentView else { return }
+            let visible = convert(clip.documentVisibleRect, from: clip.documentView ?? clip)
+            if !visible.contains(box) { scrollToVisible(box.insetBy(dx: 0, dy: -80)) }
+        }
     }
 
     /// Laid out on its own TextKit stack, not the view's: measuring a width
@@ -344,7 +401,7 @@ private final class ProseTextView: NSTextView {
 
     // MARK: Rendering
 
-    private static func render(_ blocks: [MarkdownBlock]) -> NSAttributedString {
+    fileprivate static func render(_ blocks: [MarkdownBlock]) -> NSAttributedString {
         let out = NSMutableAttributedString()
         for (index, block) in blocks.enumerated() {
             let last = index == blocks.count - 1

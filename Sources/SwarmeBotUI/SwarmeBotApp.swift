@@ -105,6 +105,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 switch open {
                 case "palette": self.model.showPalette = true
                 case "newroom": self.model.showNewRoom = true
+                case "find":
+                    ChatFind.shared.query = ProcessInfo.processInfo.environment["SWARMEBOT_FIND"] ?? ""
+                    ChatFind.shared.open()
                 default:
                     Task { @MainActor in
                         if let command = await PluginHost.shared.commands(self.model).first(where: { $0.id == open }) { command.action() }
@@ -221,6 +224,17 @@ struct AppCommands: Commands {
         CommandGroup(after: .sidebar) {
             Button(tr("Vai a… / Cerca")) { model.showPalette = true }
                 .keyboardShortcut("k")
+        }
+        // before AppKit's Find submenu, so ⌘F reaches the chat even from the composer
+        CommandGroup(before: .textEditing) {
+            Button(tr("Trova nella chat…")) { ChatFind.shared.open() }
+                .keyboardShortcut("f")
+            // the count runs from the newest match, so "next" is up the transcript
+            Button(tr("Trova successivo")) { ChatFind.shared.older() }
+                .keyboardShortcut("g")
+            Button(tr("Trova precedente")) { ChatFind.shared.newer() }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+            Divider()
         }
         CommandGroup(after: .appInfo) {
             Button(tr("Controlla aggiornamenti…")) { Updater.shared.checkForUpdates() }
