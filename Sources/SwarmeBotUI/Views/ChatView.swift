@@ -9,6 +9,7 @@ struct ChatView: View {
     /// Files and images dropped anywhere on the chat go to the composer.
     @State private var drop: ChatDrop?
     @State private var dropTargeted = false
+    @State private var find = ChatFind.shared
 
     var body: some View {
         if let threadId = model.selectedThreadId {
@@ -17,6 +18,15 @@ struct ChatView: View {
                 ChatHeader()
                 TranscriptView(threadId: threadId)
                     .id(threadId)
+                    .overlay(alignment: .topTrailing) {
+                        if find.isOpen {
+                            FindBar(threadId: threadId)
+                                .padding(.top, 8)
+                                .padding(.trailing, 16)
+                                .transition(.opacity.combined(with: .offset(y: -6)))
+                        }
+                    }
+                    .animation(Theme.quick, value: find.isOpen)
                 ForEach(Array(PluginHost.shared.bottomPanels(ChatContext.current(model)).enumerated()), id: \.offset) { $0.element }
                 if let host = model.selectedRoom?.guest {
                     // a mirror of a mixed channel: written where it lives
@@ -39,6 +49,8 @@ struct ChatView: View {
             }
             .overlay { if dropTargeted { ChatDropOverlay() } }
             .animation(Theme.quick, value: dropTargeted)
+            // the bar belongs to the chat it searched
+            .onChange(of: threadId) { find.close() }
         }
     }
 }
@@ -55,6 +67,7 @@ struct TranscriptView: View {
     static let page = 300
     /// Tool groups the user opened, by their first call's id.
     @State private var openToolGroups: Set<String> = []
+    @State private var find = ChatFind.shared
 
     /// Whether a plugin is on for the open chat, so its turns are worked out.
     private var transcriptPlugins: Bool {
@@ -109,6 +122,7 @@ struct TranscriptView: View {
                     let message = row.first
                     MessageRow(message: message, threadId: threadId, isRoom: model.selectedRoom != nil,
                                turn: turnEnds.map { .init(isTurnEnd: $0.ids.contains(message.id), isLatest: $0.latest == message.id) })
+                        .environment(\.findHighlight, find.highlight(for: message.id))
                         .id(message.id)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
@@ -131,22 +145,31 @@ struct TranscriptView: View {
         .animation(Theme.appear, value: messages.count)
         .onChange(of: model.focusMessageId, initial: true) { _, id in
             guard let id else { return }
-            // a search hit above the window: widen it to include the hit
-            if let index = all.firstIndex(where: { $0.id == id }) {
-                if index < all.count - window {
-                    window = all.count - index + 20
-                } else if index >= all.count - TranscriptView.page {
-                    // back among the newest: shrink to the cheap window again
-                    window = TranscriptView.page
-                }
-            }
+            reveal(id, in: all)
             withAnimation { proxy.scrollTo(id, anchor: .center) }
             Task {
                 try? await Task.sleep(for: .seconds(2.5))
                 if model.focusMessageId == id { model.focusMessageId = nil }
             }
         }
+        .onChange(of: find.currentMatch?.messageId) { _, id in
+            guard let id else { return }
+            reveal(id, in: all)
+            // no animation: a reply taller than the transcript then scrolls on to the match
+            proxy.scrollTo(id, anchor: .center)
         }
+        }
+        }
+    }
+
+    /// A message above the window (a search hit, a find match): widen the
+    /// window to include it; back among the newest, shrink it again.
+    private func reveal(_ id: String, in all: [Message]) {
+        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
+        if index < all.count - window {
+            window = all.count - index + 20
+        } else if index >= all.count - TranscriptView.page {
+            window = TranscriptView.page
         }
     }
 
@@ -556,12 +579,13 @@ struct UserBubble: View {
     let text: String
     var queued = false
     @Environment(\.transcriptColumn) private var column
+    @Environment(\.findHighlight) private var highlight
     @State private var expanded = false
 
     var body: some View {
         let long = text.count > 900 || text.filter { $0 == "\n" }.count > 8
         VStack(alignment: .trailing, spacing: 4) {
-            Text(text)
+            Text(FindText.marked(AttributedString(text), highlight))
                 .font(.system(size: Theme.bodySize))
                 .lineSpacing(Theme.bodyLineSpacing)
                 .foregroundStyle(Theme.ink)
@@ -592,6 +616,10 @@ struct UserBubble: View {
             }
         }
         .modifier(WidthCap(cap: column * 0.7))
+        // the current find match may be in the part a long message hides
+        .onChange(of: highlight?.current, initial: true) { _, current in
+            if current != nil { expanded = true }
+        }
     }
 }
 
