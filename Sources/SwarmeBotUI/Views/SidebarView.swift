@@ -15,6 +15,7 @@ struct SidebarView: View {
     @State private var confirmingDelete: Bot?
     @State private var collapsed: Set<String> = []
     @State private var layout = SectionLayout.shared
+    @State private var botOrder = BotOrder.shared
     @State private var naming: SectionNaming?
     @State private var dropTarget: String?
     @State private var moving: BotTransferRequest?
@@ -24,14 +25,13 @@ struct SidebarView: View {
             header
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
-                    if model.engineChoice == .local {
-                        localSections
-                    } else if let peer = model.peer(.local) {
-                        peerSections(peer)
+                    let blocks = visibleBlocks
+                    // ids of their own while this Mac is a peer (see peerSection)
+                    let mode = model.engineChoice == .local ? "local|" : "peer|"
+                    ForEach(blocks.indices.map { (id: mode + blocks[$0].stored, index: $0) }, id: \.id) { entry in
+                        block(blocks[entry.index], first: entry.index == 0, blocks: blocks)
                     }
-                    ForEach(model.remoteEngines) { engine in
-                        remoteSection(engine)
-                    }
+                    if model.engineChoice == .local { hiddenBots }
                 }
                 .padding(.horizontal, 6)
                 .padding(.bottom, 12)
@@ -45,10 +45,14 @@ struct SidebarView: View {
         }
         .sheet(item: $moving) { request in BotTransferSheet(request: request) }
         // a server's bots have no sections here, whatever label they carry
-        .onAppear { if model.engineChoice == .local { layout.sync(model.sections.compactMap(\.name)) } }
+        .onAppear {
+            if model.engineChoice == .local { layout.sync(model.sections.compactMap(\.name)) }
+            layout.syncEngines(model.remoteEngines.map(\.id))
+        }
         .onChange(of: model.sections.compactMap(\.name)) { _, names in
             if model.engineChoice == .local { layout.sync(names) }
         }
+        .onChange(of: model.remoteEngines.map(\.id)) { _, ids in layout.syncEngines(ids) }
         .confirmationDialog(
             tr("Eliminare %@?", confirmingDelete?.name ?? ""),
             isPresented: Binding(get: { confirmingDelete != nil }, set: { if !$0 { confirmingDelete = nil } }),
@@ -60,44 +64,129 @@ struct SidebarView: View {
         }
     }
 
-    // MARK: Engines
+    // MARK: Blocks
 
-    /// This Mac's bots while its chats are the ones open: sections that can
-    /// be dragged, renamed and filled, then channels and hidden bots.
+    /// The blocks with something to show, in the order the user gave them:
+    /// this Mac's sections (from its peer while a server's chat is open),
+    /// its channels, and every server.
+    private var visibleBlocks: [SidebarItem] {
+        var visible: [SidebarItem] = []
+        let local = model.engineChoice == .local
+        let peer = local ? nil : model.peer(.local)
+        let sections = local ? filteredSections : peer.map(peerSections) ?? []
+        visible += sections.map { $0.name.map(SidebarItem.section) ?? .unassigned }
+        if !(local ? filteredRooms : peer.map(peerRooms) ?? []).isEmpty { visible.append(.rooms) }
+        visible += model.remoteEngines.filter { query.isEmpty || !remoteBots($0).isEmpty }.map { .engine($0.id) }
+        return layout.blocks(visible)
+    }
+
     @ViewBuilder
-    private var localSections: some View {
-        ForEach(Array(filteredSections.enumerated()), id: \.element.name) { index, section in
-            let key = section.name ?? ""
-            if section.name != nil || filteredSections.count > 1 {
-                sectionHeader(section.name, count: section.bots.count, first: index == 0)
+    private func block(_ item: SidebarItem, first: Bool, blocks: [SidebarItem]) -> some View {
+        switch item {
+        case .section, .unassigned:
+            if model.engineChoice == .local {
+                localSection(item.sectionName, first: first, blocks: blocks)
+            } else if let peer = model.peer(.local) {
+                peerSection(item.sectionName, of: peer, first: first, blocks: blocks)
             }
-            if section.bots.isEmpty, let name = section.name, !collapsed.contains(key) {
-                Text(tr("Trascina qui un bot"))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous)
-                        .strokeBorder(dropTarget == name ? Theme.accent : Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
-                    .dropDestination(for: String.self) { items, _ in drop(items, on: name) } isTargeted: { dropTarget = $0 ? name : nil }
-            }
-            if !collapsed.contains(key) {
-                ForEach(section.bots) { bot in
-                    row(for: bot, on: .local).padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
-                }
+        case .rooms:
+            roomsSection(first: first, blocks: blocks)
+        case let .engine(id):
+            if let engine = model.remoteEngines.first(where: { $0.id == id }) {
+                remoteSection(engine, first: first, blocks: blocks)
             }
         }
-        if !filteredRooms.isEmpty {
-            SectionHeader(title: tr("Canali"), count: filteredRooms.count, first: filteredSections.isEmpty,
-                          collapsed: collapsed.contains("#rooms")) { flip("#rooms") }
-            if !collapsed.contains("#rooms") {
-                ForEach(filteredRooms) { room in
+    }
+
+    /// A section of this Mac's bots while its chats are the ones open: it can
+    /// be dragged, renamed and filled.
+    @ViewBuilder
+    private func localSection(_ name: String?, first: Bool, blocks: [SidebarItem]) -> some View {
+        let sections = filteredSections
+        let bots = sections.first { $0.name == name }?.bots ?? []
+        let key = name ?? ""
+        if name != nil || sections.count > 1 {
+            sectionHeader(name, count: bots.count, first: first, blocks: blocks)
+        }
+        if bots.isEmpty, let name, !collapsed.contains(key) {
+            let target = SidebarItem.section(name).stored
+            Text(tr("Trascina qui un bot"))
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous)
+                    .strokeBorder(dropTarget == target ? Theme.accent : Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+                .dropDestination(for: String.self) { items, _ in
+                    drop(items, on: .section(name), blocks: blocks, bots: true)
+                } isTargeted: { dropTarget = $0 ? target : nil }
+        }
+        if !collapsed.contains(key) {
+            ForEach(bots) { bot in
+                row(for: bot, on: .local, list: bots).padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
+            }
+        }
+    }
+
+    /// A section of this Mac's bots while a server's chat is open, read from
+    /// its peer; a click switches back to this Mac.
+    @ViewBuilder
+    private func peerSection(_ name: String?, of peer: EnginePeer, first: Bool, blocks: [SidebarItem]) -> some View {
+        let sections = peerSections(peer)
+        let bots = sections.first { $0.name == name }?.bots ?? []
+        let key = name ?? ""
+        let item = name.map(SidebarItem.section) ?? .unassigned
+        if name != nil || sections.count > 1 {
+            reorderable(SectionHeader(title: name ?? tr("Non assegnati"), count: bots.count, first: first,
+                                      collapsed: collapsed.contains(key)) { flip(key) }, item, blocks: blocks)
+                .contextMenu { moveButtons(item, blocks: blocks) }
+        }
+        if !collapsed.contains(key) {
+            // ids of their own: the lazy stack keys its rows by id, and with the
+            // shown engine's ids it reused those rows — their tap and menu
+            // included — after a switch (a click then selected a chat the shown
+            // engine does not have: "Nessuna chat selezionata")
+            ForEach(bots, id: \.peerKey) { bot in
+                peerRow(bot, of: peer, on: .local, list: bots)
+                    .padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
+            }
+        }
+    }
+
+    /// This Mac's channels, from its peer while a server's chat is open.
+    @ViewBuilder
+    private func roomsSection(first: Bool, blocks: [SidebarItem]) -> some View {
+        let local = model.engineChoice == .local
+        let peer = local ? nil : model.peer(.local)
+        let rooms = local ? filteredRooms : peer.map(peerRooms) ?? []
+        reorderable(SectionHeader(title: tr("Canali"), count: rooms.count, first: first,
+                                  collapsed: collapsed.contains("#rooms")) { flip("#rooms") }, .rooms, blocks: blocks)
+            .contextMenu {
+                if local {
+                    Button(tr("Nuovo canale…")) { model.showNewRoom = true }
+                    Divider()
+                }
+                moveButtons(.rooms, blocks: blocks)
+            }
+        if !collapsed.contains("#rooms") {
+            if let peer {
+                ForEach(rooms, id: \.peerKey) { room in
+                    RoomRow(room: room, selected: false, peer: peer)
+                        .onTapGesture { model.open(room: room.id, on: .local) }
+                }
+            } else {
+                ForEach(rooms) { room in
                     RoomRow(room: room, selected: model.selection == .room(room.id))
                         .onTapGesture { model.selection = .room(room.id) }
                 }
             }
         }
+    }
+
+    /// This Mac's hidden bots, at the bottom, while its chats are the ones open.
+    @ViewBuilder
+    private var hiddenBots: some View {
         let hidden = model.state.bots.filter { $0.hidden == true }
         if !hidden.isEmpty, query.isEmpty {
             SectionHeader(title: tr("Nascosti"), count: hidden.count, first: false,
@@ -115,95 +204,113 @@ struct SidebarView: View {
         }
     }
 
-    /// This Mac's bots while a server's chat is open: same sections, read
-    /// from its peer; a click switches back to this Mac.
+    /// A server: one section named after it, all its bots, no sections of its own.
     @ViewBuilder
-    private func peerSections(_ peer: EnginePeer) -> some View {
-        let sections = filter(layout.arrange(AppModel.sections(of: peer.visibleBots)))
-            .filter { !$0.bots.isEmpty }
-        // ids of their own: the lazy stack keys its rows by id, and with the
-        // shown engine's ids it reused those rows — their tap and menu
-        // included — after a switch (a click then selected a chat the shown
-        // engine does not have: "Nessuna chat selezionata")
-        ForEach(Array(sections.enumerated()), id: \.element.name.peerKey) { index, section in
-            let key = section.name ?? ""
-            if section.name != nil || sections.count > 1 {
-                SectionHeader(title: section.name ?? tr("Non assegnati"), count: section.bots.count, first: index == 0,
-                              collapsed: collapsed.contains(key)) { flip(key) }
+    private func remoteSection(_ engine: RemoteEngine, first: Bool, blocks: [SidebarItem]) -> some View {
+        let choice = EngineChoice.remote(engine.id)
+        let shown = model.engineChoice == choice
+        let peer = shown ? nil : model.peer(choice)
+        let bots = remoteBots(engine)
+        let key = "#engine:\(engine.id)"
+        reorderable(SectionHeader(title: engine.name, count: bots.count, first: first, collapsed: collapsed.contains(key),
+                                  icon: "server.rack", status: shown ? model.status == .live : peer?.reachable ?? false) { flip(key) },
+                    .engine(engine.id), blocks: blocks)
+            .contextMenu {
+                Button(tr("Nuovo bot su %@", engine.name)) { Task { await model.createBot(on: choice) } }
+                Divider()
+                moveButtons(.engine(engine.id), blocks: blocks)
+                Divider()
+                Button(tr("Impostazioni dei server remoti…")) { openSettings() }
             }
-            if !collapsed.contains(key) {
-                ForEach(section.bots, id: \.peerKey) { bot in
-                    BotRow(bot: bot, selected: false, peer: peer)
-                        .onTapGesture { model.open(bot: bot.id, on: .local) }
-                        .padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
+        if !collapsed.contains(key) {
+            if bots.isEmpty {
+                Text(shown || peer?.reachable == true ? tr("Nessun bot") : tr("Collegamento in corso…"))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.tertiary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
+            // two ForEach, not one with a branch inside: the same ids
+            // would let the lazy stack reuse a row across a switch
+            if shown {
+                ForEach(bots) { bot in
+                    row(for: bot, on: choice, list: bots, sections: false)
+                }
+            } else if let peer {
+                ForEach(bots, id: \.peerKey) { bot in
+                    peerRow(bot, of: peer, on: choice, list: bots)
                 }
             }
         }
     }
 
-    /// A server: one section named after it, all its bots, no sections of its own.
-    @ViewBuilder
-    private func remoteSection(_ engine: RemoteEngine) -> some View {
+    /// A server's bots that match the search, pinned first, then in the user's order.
+    private func remoteBots(_ engine: RemoteEngine) -> [Bot] {
         let choice = EngineChoice.remote(engine.id)
-        let shown = model.engineChoice == choice
-        let peer = shown ? nil : model.peer(choice)
-        let all = shown ? model.visibleBots.filter { $0.pinned == true } + model.visibleBots.filter { $0.pinned != true }
-                        : peer?.visibleBots ?? []
-        let bots = query.isEmpty ? all : all.filter { matches($0.name) || matches($0.title) }
-        let key = "#engine:\(engine.id)"
-        if query.isEmpty || !bots.isEmpty {
-            SectionHeader(title: engine.name, count: bots.count, first: false, collapsed: collapsed.contains(key),
-                          icon: "server.rack", status: shown ? model.status == .live : peer?.reachable ?? false) { flip(key) }
-                .contextMenu {
-                    Button(tr("Nuovo bot su %@", engine.name)) { Task { await model.createBot(on: choice) } }
-                    Divider()
-                    Button(tr("Impostazioni dei server remoti…")) { openSettings() }
-                }
-            if !collapsed.contains(key) {
-                if bots.isEmpty {
-                    Text(shown || peer?.reachable == true ? tr("Nessun bot") : tr("Collegamento in corso…"))
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.tertiary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                }
-                // two ForEach, not one with a branch inside: the same ids
-                // would let the lazy stack reuse a row across a switch
-                if shown {
-                    ForEach(bots) { bot in
-                        row(for: bot, on: choice, sections: false)
-                    }
-                } else {
-                    ForEach(bots, id: \.peerKey) { bot in
-                        BotRow(bot: bot, selected: false, peer: peer)
-                            .onTapGesture { model.open(bot: bot.id, on: choice) }
-                    }
-                }
+        let all = botOrder.sorted(model.engineChoice == choice ? model.visibleBots : model.peer(choice)?.visibleBots ?? [])
+        return query.isEmpty ? all : all.filter { matches($0.name) || matches($0.title) }
+    }
+
+    private func peerSections(_ peer: EnginePeer) -> [(name: String?, bots: [Bot])] {
+        filter(arranged(AppModel.sections(of: peer.visibleBots))).filter { !$0.bots.isEmpty }
+    }
+
+    /// Sections in the user's order, and the bots of each in theirs.
+    private func arranged(_ sections: [(name: String?, bots: [Bot])]) -> [(name: String?, bots: [Bot])] {
+        layout.arrange(sections).map { ($0.name, botOrder.sorted($0.bots)) }
+    }
+
+    private func peerRooms(_ peer: EnginePeer) -> [Room] {
+        filter(peer.state.rooms.filter { $0.dm != true && $0.guest == nil })
+    }
+
+    // MARK: Order
+
+    /// A header that can be dragged onto another one, and takes one dropped on it.
+    private func reorderable(_ header: some View, _ item: SidebarItem, blocks: [SidebarItem], bots: Bool = false) -> some View {
+        header
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(dropTarget == item.stored ? Theme.accent.opacity(0.18) : .clear))
+            .draggable("item:" + item.stored) {
+                Text(title(of: item)).font(.system(size: 12)).padding(6)
             }
+            .dropDestination(for: String.self) { items, _ in
+                drop(items, on: item, blocks: blocks, bots: bots)
+            } isTargeted: { dropTarget = $0 ? item.stored : nil }
+    }
+
+    @ViewBuilder
+    private func moveButtons(_ item: SidebarItem, blocks: [SidebarItem]) -> some View {
+        Button(tr("Sposta su")) { layout.move(item, by: -1, among: blocks) }
+            .disabled(!SectionLayout.canMove(item, by: -1, among: blocks))
+        Button(tr("Sposta giù")) { layout.move(item, by: 1, among: blocks) }
+            .disabled(!SectionLayout.canMove(item, by: 1, among: blocks))
+    }
+
+    private func title(of item: SidebarItem) -> String {
+        switch item {
+        case let .section(name): return name
+        case .unassigned: return tr("Non assegnati")
+        case .rooms: return tr("Canali")
+        case let .engine(id): return model.remoteEngines.first { $0.id == id }?.name ?? id
         }
     }
 
     // MARK: Sections
 
     /// Header with its menu; a bot dropped on it moves in, a header dropped
-    /// on it moves above it.
-    private func sectionHeader(_ name: String?, count: Int, first: Bool) -> some View {
+    /// on it takes its place.
+    private func sectionHeader(_ name: String?, count: Int, first: Bool, blocks: [SidebarItem]) -> some View {
         let key = name ?? ""
-        return SectionHeader(title: name ?? tr("Non assegnati"), count: count, first: first,
-                             collapsed: collapsed.contains(key)) { flip(key) }
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(dropTarget == key ? Theme.accent.opacity(0.18) : .clear))
-            .draggable(name.map { "section:\($0)" } ?? "section:") {
-                Text(name ?? tr("Non assegnati")).font(.system(size: 12)).padding(6)
-            }
-            .dropDestination(for: String.self) { items, _ in drop(items, on: name) } isTargeted: { dropTarget = $0 ? key : nil }
+        let item = name.map(SidebarItem.section) ?? .unassigned
+        return reorderable(SectionHeader(title: name ?? tr("Non assegnati"), count: count, first: first,
+                                         collapsed: collapsed.contains(key)) { flip(key) }, item, blocks: blocks, bots: true)
             .contextMenu {
                 if let name {
                     Button(tr("Rinomina sezione…")) { naming = .rename(name) }
-                    Button(tr("Sposta su")) { layout.move(name, by: -1) }.disabled(!layout.canMove(name, by: -1))
-                    Button(tr("Sposta giù")) { layout.move(name, by: 1) }.disabled(!layout.canMove(name, by: 1))
-                    Divider()
                 }
+                moveButtons(item, blocks: blocks)
+                Divider()
                 Button(tr("Nuova sezione…")) { naming = .new }
                 if let name {
                     Divider()
@@ -213,17 +320,19 @@ struct SidebarView: View {
             }
     }
 
-    /// `bot:<id>` moves that bot into `section` (nil clears it);
-    /// `section:<name>` reorders.
-    private func drop(_ items: [String], on section: String?) -> Bool {
+    /// `bot:<id>` moves that bot into the section dropped on (when `bots`,
+    /// on this Mac's own sections); `item:<item>` reorders.
+    private func drop(_ items: [String], on target: SidebarItem, blocks: [SidebarItem], bots: Bool) -> Bool {
         var handled = false
-        for item in items {
-            if item.hasPrefix("bot:"), let bot = model.state.bot(String(item.dropFirst(4))) {
-                if (bot.section ?? "") != (section ?? "") { Task { await model.patch(bot, BotPatch(section: section ?? "")) } }
+        for payload in items {
+            if payload.hasPrefix("bot:") {
+                guard bots, target.isSection || target == .unassigned,
+                      let bot = model.state.bot(String(payload.dropFirst(4))) else { continue }
+                let section = target.sectionName ?? ""
+                if (bot.section ?? "") != section { Task { await model.patch(bot, BotPatch(section: section)) } }
                 handled = true
-            } else if item.hasPrefix("section:"), let section {
-                let moving = String(item.dropFirst(8))
-                if !moving.isEmpty { layout.move(moving, before: section) }
+            } else if payload.hasPrefix("item:"), let moving = SidebarItem(stored: String(payload.dropFirst(5))) {
+                layout.move(moving, to: target, among: blocks)
                 handled = true
             }
         }
@@ -339,22 +448,16 @@ struct SidebarView: View {
     /// A row of the engine shown. `sections` is false for a server's bots:
     /// they have none. The tap goes through `open`, which switches engine
     /// when needed, so even a row SwiftUI kept from before a switch opens
-    /// the right chat.
+    /// the right chat. `list` is the block the row is in, for reordering.
     @ViewBuilder
-    private func row(for bot: Bot, on engine: EngineChoice, sections: Bool = true) -> some View {
-        BotRow(bot: bot, selected: model.selection == .bot(bot.id))
-            .onTapGesture { model.open(bot: bot.id, on: engine) }
-            .draggable("bot:\(bot.id)") {
-                HStack(spacing: 6) {
-                    BotAvatar(bot: bot, size: 20, animated: false)
-                    Text(bot.name).font(.system(size: 13, weight: .medium))
-                }
-                .padding(6)
-            }
+    private func row(for bot: Bot, on engine: EngineChoice, list: [Bot], sections: Bool = true) -> some View {
+        botReorder(BotRow(bot: bot, selected: model.selection == .bot(bot.id))
+            .onTapGesture { model.open(bot: bot.id, on: engine) }, bot, list: list, sections: sections)
             .contextMenu {
                 Button(bot.pinned == true ? tr("Rimuovi dai fissati") : tr("Fissa in alto")) {
                     Task { await model.patch(bot, BotPatch(pinned: !(bot.pinned ?? false))) }
                 }
+                botMoveButtons(bot, list: list)
                 if sections {
                 Menu(tr("Sposta in")) {
                     ForEach(layout.names, id: \.self) { name in
@@ -393,7 +496,66 @@ struct SidebarView: View {
             }
     }
 
-    private var filteredSections: [(name: String?, bots: [Bot])] { filter(layout.arrange(model.sections)) }
+    /// A bot of an engine the window is not showing: a click opens it there;
+    /// it can be reordered among `list`, nothing else.
+    private func peerRow(_ bot: Bot, of peer: EnginePeer, on engine: EngineChoice, list: [Bot]) -> some View {
+        botReorder(BotRow(bot: bot, selected: false, peer: peer)
+            .onTapGesture { model.open(bot: bot.id, on: engine) }, bot, list: list, sections: false)
+            .contextMenu { botMoveButtons(bot, list: list) }
+    }
+
+    /// Drag a row onto another of its block to take its place; on this Mac's
+    /// sections (`sections`) a bot from another section joins this one there.
+    private func botReorder(_ row: some View, _ bot: Bot, list: [Bot], sections: Bool) -> some View {
+        let key = "bot:" + bot.id
+        return row
+            .overlay(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous)
+                .stroke(dropTarget == key ? Theme.accent : .clear, lineWidth: 1.5))
+            .draggable(key) {
+                HStack(spacing: 6) {
+                    BotAvatar(bot: bot, size: 20, animated: false)
+                    Text(bot.name).font(.system(size: 13, weight: .medium))
+                }
+                .padding(6)
+            }
+            .dropDestination(for: String.self) { items, _ in
+                dropBots(items, onto: bot, list: list, sections: sections)
+            } isTargeted: { dropTarget = $0 && query.isEmpty ? key : nil }
+    }
+
+    @ViewBuilder
+    private func botMoveButtons(_ bot: Bot, list: [Bot]) -> some View {
+        // a search shows part of the block: no reordering then
+        Button(tr("Sposta su")) { botOrder.move(bot.id, by: -1, in: list) }
+            .disabled(!query.isEmpty || !BotOrder.canMove(bot.id, by: -1, in: list))
+        Button(tr("Sposta giù")) { botOrder.move(bot.id, by: 1, in: list) }
+            .disabled(!query.isEmpty || !BotOrder.canMove(bot.id, by: 1, in: list))
+        Divider()
+    }
+
+    private func dropBots(_ payloads: [String], onto target: Bot, list: [Bot], sections: Bool) -> Bool {
+        defer { dropTarget = nil }
+        guard query.isEmpty else { return false }
+        for payload in payloads where payload.hasPrefix("bot:") {
+            let id = String(payload.dropFirst(4))
+            guard id != target.id else { return false }
+            if let moved = list.first(where: { $0.id == id }) {
+                // pinned bots stay above the others whatever the order says
+                guard (moved.pinned == true) == (target.pinned == true) else { return false }
+                botOrder.move(id, to: target.id, in: list.map(\.id))
+                return true
+            }
+            if sections, let bot = model.state.bot(id) {
+                botOrder.move(id, to: target.id, in: list.map(\.id))
+                let section = target.section ?? ""
+                if (bot.section ?? "") != section { Task { await model.patch(bot, BotPatch(section: section)) } }
+                return true
+            }
+        }
+        return false
+    }
+
+    private var filteredSections: [(name: String?, bots: [Bot])] { filter(arranged(model.sections)) }
 
     private func filter(_ sections: [(name: String?, bots: [Bot])]) -> [(name: String?, bots: [Bot])] {
         guard !query.isEmpty else { return sections }
@@ -405,7 +567,9 @@ struct SidebarView: View {
     private var filteredRooms: [Room] {
         // not the mirrors of this Mac's own mixed channels on the server shown
         let me = model.activeRemoteEngine?.deviceId
-        let rooms = model.state.rooms.filter { $0.dm != true && ($0.guest == nil || $0.guest?.deviceId != me) }
+        return filter(model.state.rooms.filter { $0.dm != true && ($0.guest == nil || $0.guest?.deviceId != me) })
+    }
+    private func filter(_ rooms: [Room]) -> [Room] {
         guard !query.isEmpty else { return rooms }
         return rooms.filter { matches($0.name) }
     }
@@ -579,10 +743,12 @@ struct BotRow: View {
 private struct RoomRow: View {
     let room: Room
     let selected: Bool
+    /// Set for a channel of an engine the window is not showing: its members are read from it.
+    var peer: EnginePeer?
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let members = room.memberIds.compactMap { model.state.bot($0) }
+        let members = room.memberIds.compactMap { (peer?.state ?? model.state).bot($0) }
         HStack(spacing: 8) {
             Group {
                 if members.count == 1, let only = members.first {
@@ -690,6 +856,6 @@ private extension Bot {
     var peerKey: String { "peer:" + id }
 }
 
-private extension Optional where Wrapped == String {
-    var peerKey: String { "peer-section:" + (self ?? "") }
+private extension Room {
+    var peerKey: String { "peer-room:" + id }
 }

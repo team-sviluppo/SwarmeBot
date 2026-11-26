@@ -3,6 +3,18 @@
 Release notes describe user-visible changes since the previous version and must always be written in English.
 Before publishing a release, add a section with its exact version number.
 
+## [Unreleased]
+
+### Sidebar
+
+- Arrange the sidebar the way you like. Sections, Unassigned, Channels and each remote server can go anywhere: drag a header onto another one, or use Move Up and Move Down in its menu. The order you had is kept, new sections join the other sections and new servers go at the bottom.
+- Reorder the bots inside a section, or inside a server, by dragging one onto another or with Move Up and Move Down in the bot's menu. Pinned bots stay on top, and new bots go at the bottom of their section. Dropping a bot on a bot of another section moves it there, at that place.
+- The order is kept on this Mac.
+
+### Fixes
+
+- Keep this Mac's channels in the sidebar while a remote bot's chat is open. Before, the Channels section disappeared until you went back to a bot on this Mac.
+
 ## [0.7.2]
 
 ### Chat
