@@ -58,6 +58,12 @@ extension AppModel {
         selection = .bot(id)
     }
 
+    /// Open a channel, switching the window to its engine first.
+    public func open(room id: String, on choice: EngineChoice) {
+        if choice != engineChoice { select(engine: choice) }
+        selection = .room(id)
+    }
+
     /// A new bot on this Mac (the default) or on a server, then its chat,
     /// switching the window to that engine when it is not the one shown.
     public func createBot(on choice: EngineChoice = .local) async {

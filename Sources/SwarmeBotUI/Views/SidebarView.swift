@@ -139,6 +139,18 @@ struct SidebarView: View {
                 }
             }
         }
+        // this Mac's channels stay listed while a server's chat is open
+        let rooms = filter(peer.state.rooms.filter { $0.dm != true && $0.guest == nil })
+        if !rooms.isEmpty {
+            SectionHeader(title: tr("Canali"), count: rooms.count, first: sections.isEmpty,
+                          collapsed: collapsed.contains("#rooms")) { flip("#rooms") }
+            if !collapsed.contains("#rooms") {
+                ForEach(rooms, id: \.peerKey) { room in
+                    RoomRow(room: room, selected: false, peer: peer)
+                        .onTapGesture { model.open(room: room.id, on: .local) }
+                }
+            }
+        }
     }
 
     /// A server: one section named after it, all its bots, no sections of its own.
@@ -405,7 +417,9 @@ struct SidebarView: View {
     private var filteredRooms: [Room] {
         // not the mirrors of this Mac's own mixed channels on the server shown
         let me = model.activeRemoteEngine?.deviceId
-        let rooms = model.state.rooms.filter { $0.dm != true && ($0.guest == nil || $0.guest?.deviceId != me) }
+        return filter(model.state.rooms.filter { $0.dm != true && ($0.guest == nil || $0.guest?.deviceId != me) })
+    }
+    private func filter(_ rooms: [Room]) -> [Room] {
         guard !query.isEmpty else { return rooms }
         return rooms.filter { matches($0.name) }
     }
@@ -579,10 +593,12 @@ struct BotRow: View {
 private struct RoomRow: View {
     let room: Room
     let selected: Bool
+    /// Set for a channel of an engine the window is not showing: its members are read from it.
+    var peer: EnginePeer?
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let members = room.memberIds.compactMap { model.state.bot($0) }
+        let members = room.memberIds.compactMap { (peer?.state ?? model.state).bot($0) }
         HStack(spacing: 8) {
             Group {
                 if members.count == 1, let only = members.first {
@@ -688,6 +704,10 @@ private struct SectionNameSheet: View {
 /// engine's (see peerSections).
 private extension Bot {
     var peerKey: String { "peer:" + id }
+}
+
+private extension Room {
+    var peerKey: String { "peer-room:" + id }
 }
 
 private extension Optional where Wrapped == String {
