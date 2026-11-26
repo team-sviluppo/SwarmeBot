@@ -166,3 +166,72 @@ final class SectionLayout {
         AppPaths.defaults.set(next.map(\.stored), forKey: Self.key)
     }
 }
+
+/// The order of the bots inside each sidebar block, per Mac: one list of
+/// bot ids, read section by section. Bots it does not know yet keep the
+/// engine's order below the ones it does; pinned bots stay on top.
+@MainActor
+@Observable
+final class BotOrder {
+    static let shared = BotOrder()
+    private static let key = "swarmebot.botOrder"
+
+    private(set) var ids: [String]
+
+    private init() {
+        ids = AppPaths.defaults.stringArray(forKey: Self.key) ?? []
+    }
+
+    func sorted(_ bots: [Bot]) -> [Bot] { Self.sorted(bots, by: ids) }
+
+    /// Menu: swap places with the bot shown above or below in `list`.
+    func move(_ id: String, by offset: Int, in list: [Bot]) {
+        guard Self.canMove(id, by: offset, in: list), let index = list.firstIndex(where: { $0.id == id }) else { return }
+        move(id, to: list[index + offset].id, in: list.map(\.id))
+    }
+
+    /// Drag and drop inside `list`: the bot takes `target`'s place; one from
+    /// elsewhere lands just above it.
+    func move(_ id: String, to target: String, in list: [String]) {
+        save(Self.reordered(ids, list: list, moving: id, to: target))
+    }
+
+    /// Pinned and unpinned bots move each among their own.
+    static func canMove(_ id: String, by offset: Int, in list: [Bot]) -> Bool {
+        guard let index = list.firstIndex(where: { $0.id == id }), list.indices.contains(index + offset) else { return false }
+        return (list[index].pinned == true) == (list[index + offset].pinned == true)
+    }
+
+    static func sorted(_ bots: [Bot], by ids: [String]) -> [Bot] {
+        let rank = Dictionary(ids.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        func ordered(_ group: [Bot]) -> [Bot] {
+            group.enumerated().sorted { a, b in
+                let ra = rank[a.element.id] ?? .max, rb = rank[b.element.id] ?? .max
+                return ra != rb ? ra < rb : a.offset < b.offset
+            }.map(\.element)
+        }
+        return ordered(bots.filter { $0.pinned == true }) + ordered(bots.filter { $0.pinned != true })
+    }
+
+    /// `list` is the block as shown; its new order goes at the end of `ids`,
+    /// which keeps every other block's relative order untouched.
+    static func reordered(_ ids: [String], list: [String], moving id: String, to target: String) -> [String] {
+        guard id != target, let to = list.firstIndex(of: target) else { return ids }
+        var next = list
+        if let from = next.firstIndex(of: id) {
+            next.remove(at: from)
+            let at = next.firstIndex(of: target) ?? next.endIndex
+            // dragged down, it goes below the target; dragged up, above it
+            next.insert(id, at: from < to ? at + 1 : at)
+        } else {
+            next.insert(id, at: to)
+        }
+        let moved = Set(next)
+        return ids.filter { !moved.contains($0) } + next
+    }
+
+    private func save(_ next: [String]) {
+        ids = next
+        AppPaths.defaults.set(next, forKey: Self.key)
+    }
+}

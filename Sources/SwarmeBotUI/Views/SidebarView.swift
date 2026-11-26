@@ -15,6 +15,7 @@ struct SidebarView: View {
     @State private var confirmingDelete: Bot?
     @State private var collapsed: Set<String> = []
     @State private var layout = SectionLayout.shared
+    @State private var botOrder = BotOrder.shared
     @State private var naming: SectionNaming?
     @State private var dropTarget: String?
     @State private var moving: BotTransferRequest?
@@ -123,7 +124,7 @@ struct SidebarView: View {
         }
         if !collapsed.contains(key) {
             ForEach(bots) { bot in
-                row(for: bot, on: .local).padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
+                row(for: bot, on: .local, list: bots).padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
             }
         }
     }
@@ -147,8 +148,7 @@ struct SidebarView: View {
             // included — after a switch (a click then selected a chat the shown
             // engine does not have: "Nessuna chat selezionata")
             ForEach(bots, id: \.peerKey) { bot in
-                BotRow(bot: bot, selected: false, peer: peer)
-                    .onTapGesture { model.open(bot: bot.id, on: .local) }
+                peerRow(bot, of: peer, on: .local, list: bots)
                     .padding(.bottom, bot.chiefOfStaff == true ? 5 : 0)
             }
         }
@@ -234,28 +234,30 @@ struct SidebarView: View {
             // would let the lazy stack reuse a row across a switch
             if shown {
                 ForEach(bots) { bot in
-                    row(for: bot, on: choice, sections: false)
+                    row(for: bot, on: choice, list: bots, sections: false)
                 }
-            } else {
+            } else if let peer {
                 ForEach(bots, id: \.peerKey) { bot in
-                    BotRow(bot: bot, selected: false, peer: peer)
-                        .onTapGesture { model.open(bot: bot.id, on: choice) }
+                    peerRow(bot, of: peer, on: choice, list: bots)
                 }
             }
         }
     }
 
-    /// A server's bots that match the search, pinned first.
+    /// A server's bots that match the search, pinned first, then in the user's order.
     private func remoteBots(_ engine: RemoteEngine) -> [Bot] {
         let choice = EngineChoice.remote(engine.id)
-        let all = model.engineChoice == choice
-            ? model.visibleBots.filter { $0.pinned == true } + model.visibleBots.filter { $0.pinned != true }
-            : model.peer(choice)?.visibleBots ?? []
+        let all = botOrder.sorted(model.engineChoice == choice ? model.visibleBots : model.peer(choice)?.visibleBots ?? [])
         return query.isEmpty ? all : all.filter { matches($0.name) || matches($0.title) }
     }
 
     private func peerSections(_ peer: EnginePeer) -> [(name: String?, bots: [Bot])] {
-        filter(layout.arrange(AppModel.sections(of: peer.visibleBots))).filter { !$0.bots.isEmpty }
+        filter(arranged(AppModel.sections(of: peer.visibleBots))).filter { !$0.bots.isEmpty }
+    }
+
+    /// Sections in the user's order, and the bots of each in theirs.
+    private func arranged(_ sections: [(name: String?, bots: [Bot])]) -> [(name: String?, bots: [Bot])] {
+        layout.arrange(sections).map { ($0.name, botOrder.sorted($0.bots)) }
     }
 
     private func peerRooms(_ peer: EnginePeer) -> [Room] {
@@ -446,22 +448,16 @@ struct SidebarView: View {
     /// A row of the engine shown. `sections` is false for a server's bots:
     /// they have none. The tap goes through `open`, which switches engine
     /// when needed, so even a row SwiftUI kept from before a switch opens
-    /// the right chat.
+    /// the right chat. `list` is the block the row is in, for reordering.
     @ViewBuilder
-    private func row(for bot: Bot, on engine: EngineChoice, sections: Bool = true) -> some View {
-        BotRow(bot: bot, selected: model.selection == .bot(bot.id))
-            .onTapGesture { model.open(bot: bot.id, on: engine) }
-            .draggable("bot:\(bot.id)") {
-                HStack(spacing: 6) {
-                    BotAvatar(bot: bot, size: 20, animated: false)
-                    Text(bot.name).font(.system(size: 13, weight: .medium))
-                }
-                .padding(6)
-            }
+    private func row(for bot: Bot, on engine: EngineChoice, list: [Bot], sections: Bool = true) -> some View {
+        botReorder(BotRow(bot: bot, selected: model.selection == .bot(bot.id))
+            .onTapGesture { model.open(bot: bot.id, on: engine) }, bot, list: list, sections: sections)
             .contextMenu {
                 Button(bot.pinned == true ? tr("Rimuovi dai fissati") : tr("Fissa in alto")) {
                     Task { await model.patch(bot, BotPatch(pinned: !(bot.pinned ?? false))) }
                 }
+                botMoveButtons(bot, list: list)
                 if sections {
                 Menu(tr("Sposta in")) {
                     ForEach(layout.names, id: \.self) { name in
@@ -500,7 +496,66 @@ struct SidebarView: View {
             }
     }
 
-    private var filteredSections: [(name: String?, bots: [Bot])] { filter(layout.arrange(model.sections)) }
+    /// A bot of an engine the window is not showing: a click opens it there;
+    /// it can be reordered among `list`, nothing else.
+    private func peerRow(_ bot: Bot, of peer: EnginePeer, on engine: EngineChoice, list: [Bot]) -> some View {
+        botReorder(BotRow(bot: bot, selected: false, peer: peer)
+            .onTapGesture { model.open(bot: bot.id, on: engine) }, bot, list: list, sections: false)
+            .contextMenu { botMoveButtons(bot, list: list) }
+    }
+
+    /// Drag a row onto another of its block to take its place; on this Mac's
+    /// sections (`sections`) a bot from another section joins this one there.
+    private func botReorder(_ row: some View, _ bot: Bot, list: [Bot], sections: Bool) -> some View {
+        let key = "bot:" + bot.id
+        return row
+            .overlay(RoundedRectangle(cornerRadius: Theme.radiusRow, style: .continuous)
+                .stroke(dropTarget == key ? Theme.accent : .clear, lineWidth: 1.5))
+            .draggable(key) {
+                HStack(spacing: 6) {
+                    BotAvatar(bot: bot, size: 20, animated: false)
+                    Text(bot.name).font(.system(size: 13, weight: .medium))
+                }
+                .padding(6)
+            }
+            .dropDestination(for: String.self) { items, _ in
+                dropBots(items, onto: bot, list: list, sections: sections)
+            } isTargeted: { dropTarget = $0 && query.isEmpty ? key : nil }
+    }
+
+    @ViewBuilder
+    private func botMoveButtons(_ bot: Bot, list: [Bot]) -> some View {
+        // a search shows part of the block: no reordering then
+        Button(tr("Sposta su")) { botOrder.move(bot.id, by: -1, in: list) }
+            .disabled(!query.isEmpty || !BotOrder.canMove(bot.id, by: -1, in: list))
+        Button(tr("Sposta giù")) { botOrder.move(bot.id, by: 1, in: list) }
+            .disabled(!query.isEmpty || !BotOrder.canMove(bot.id, by: 1, in: list))
+        Divider()
+    }
+
+    private func dropBots(_ payloads: [String], onto target: Bot, list: [Bot], sections: Bool) -> Bool {
+        defer { dropTarget = nil }
+        guard query.isEmpty else { return false }
+        for payload in payloads where payload.hasPrefix("bot:") {
+            let id = String(payload.dropFirst(4))
+            guard id != target.id else { return false }
+            if let moved = list.first(where: { $0.id == id }) {
+                // pinned bots stay above the others whatever the order says
+                guard (moved.pinned == true) == (target.pinned == true) else { return false }
+                botOrder.move(id, to: target.id, in: list.map(\.id))
+                return true
+            }
+            if sections, let bot = model.state.bot(id) {
+                botOrder.move(id, to: target.id, in: list.map(\.id))
+                let section = target.section ?? ""
+                if (bot.section ?? "") != section { Task { await model.patch(bot, BotPatch(section: section)) } }
+                return true
+            }
+        }
+        return false
+    }
+
+    private var filteredSections: [(name: String?, bots: [Bot])] { filter(arranged(model.sections)) }
 
     private func filter(_ sections: [(name: String?, bots: [Bot])]) -> [(name: String?, bots: [Bot])] {
         guard !query.isEmpty else { return sections }
